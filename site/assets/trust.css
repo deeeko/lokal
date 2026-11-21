@@ -1,0 +1,26 @@
+/* "Who am I paying?" on the tag page (js/tag.js, assets/trust.js). Warnings are calm amber notes, checks that passed
+   are one quiet line each, and anything that couldn't be read is shown as such (dashed, never green). */
+.trust-checks { display: grid; gap: 10px; min-width: 0; }
+.trust-loading { display: flex; align-items: center; gap: 10px; margin: 0; }
+.trust-sum { margin: 0; font-size: 14px; color: var(--text-2); }
+.trust-sum b { color: var(--text); font-weight: 600; }
+.trust-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.trust-list li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; align-items: start; padding: 9px 12px; border-radius: 12px; border: 1px solid transparent; font-size: 13.5px; line-height: 1.45; }
+.trust-list li b { display: block; font-weight: 500; color: var(--text); }
+.trust-list li span:not(.trust-mark):not(.sr-only) { display: block; margin-top: 2px; color: var(--text-2); }
+.trust-mark { display: grid; place-items: center; height: 20px; }
+.trust-mark svg.i { width: 16px; height: 16px; }
+.trust-list li.trust-warn { background: rgba(255, 204, 122, .07); border-color: rgba(255, 204, 122, .26); box-shadow: inset 3px 0 0 var(--warn); }
+.trust-list li.trust-warn .trust-mark { color: var(--warn); }
+.trust-list li.trust-unknown { border: 1px dashed var(--line-strong); }
+.trust-list li.trust-unknown .trust-mark { color: var(--text-3); }
+.trust-list li.trust-unknown b { color: var(--text-2); font-weight: 400; }
+.trust-list li.trust-ok { padding-top: 3px; padding-bottom: 3px; }
+.trust-list li.trust-ok .trust-mark { color: var(--mint); }
+.trust-list li.trust-ok b { color: var(--text-2); font-weight: 400; }
+.trust-owner { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.trust-owner .icon-btn { flex: none; }
+.trust-before:empty { display: none; }
+.trust-before .alert p { margin: 0; }
+.trust-before .alert b { color: var(--text); }
+.trust-card .nt-namecell small { max-width: 26ch; }
