@@ -4,9 +4,13 @@
 //
 //   node src/ntag.mjs <command>      npm run lokal -- <command>      lokal <command>   (after `npm link`; `ntag` works too)
 //
-// Paying @ada is an ordinary USD₮ (or cNGN) transfer to the agent with "NTP:ada" (or "NTP:ada:idrx", naming the currency
-// they receive) appended to the calldata (see site/_spec/NTAGS.md). The agent then pays @ada's wallet in naira, rupiah or
-// pesos (or dollars, for cNGN). This tool uses YOUR wallet only:
+// Tags live on the LokalTags contract: `lokal claim` calls claim / setName / setReceiveToken, `lokal release` calls
+// release, and `lokal send ada 10` pays through the contract (payTagWithPermit after one permit signature for USD₮,
+// approve + payTag for cNGN), with the currency the payer chose in the payment's ref ("cur:<code>"). Every call is
+// simulated first and a refusal is explained before anything is signed; every call carries the attribution suffix.
+// A tag claimed with the older memo protocol before the cutover (and not on the contract) is still paid the old way:
+// a USD₮ (or cNGN) transfer to the agent with "NTP:ada" (or "NTP:ada:idrx") appended (see site/_spec/NTAGS.md).
+// The agent then pays @ada's wallet in naira, rupiah or pesos (or dollars). This tool uses YOUR wallet only:
 // it never touches the agent's key, never prints a key, and asks you to type the tag before any money moves.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -15,7 +19,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createPublicClient, createWalletClient, erc20Abi, formatUnits, getAddress, http, isAddress, parseEventLogs } from "viem";
+import { createPublicClient, createWalletClient, erc20Abi, formatUnits, getAddress, http, isAddress, parseAbi, parseEventLogs } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { celo } from "viem/chains";
 import {
@@ -24,8 +28,13 @@ import {
 import {
   decodeNtagPayment, decodeNtagOp, encodeNtagClaim, encodeNtagRelease, encodeNtagTransfer, loadNtagOpsCache, ntagAvailability,
   ntagError, ntagNameError, ntagOf, normalizeNtag, ownerOf, refreshNtagOpsCache, resolveNtags, resolveNtagsBefore,
-  verifyNtagOpOnchain, RELEASE_LOCK_DAYS,
+  verifyNtagOpOnchain, RELEASE_LOCK_DAYS, legacyNtagOps,
 } from "./ntags.mjs";
+import {
+  LOKAL_TAGS, PAYOUT_WALLET, USDT_DOMAIN_SEPARATOR, USDT_PERMIT_DOMAIN, ZERO_ADDRESS, approveData, availabilityName, claimData, currencyOfRef,
+  currencyRef, decodeTagPaid, explainRevert, payTagData, payTagWithPermitData, releaseData, revertDataOf, setNameData, setReceiveTokenData,
+  tokenAmountText, tokenCode, tokenOfCode,
+} from "../site/assets/lokal-contracts.js";
 import { receiptNo, receiptNoLink } from "./requests.mjs";
 import { CURRENCIES, currencyOf, findCurrency, formatCurrency, formatCurrencyUnits } from "./currencies.mjs";
 
@@ -687,7 +696,7 @@ async function discoverOps() {
 
 /** Resolves a tag NOW and verifies the winning claim over RPC. Returns { entry, op, state, ops } or { entry: null, state }. */
 async function resolveVerified(pub, tag) {
-  const ops = await discoverOps();
+  const ops = legacyNtagOps(await discoverOps()); // legacy claims count only before the cutover
   const state = resolveNtags(ops);
   const entry = ownerOf(state, tag);
   if (!entry) return { entry: null, state, ops };
@@ -916,6 +925,148 @@ export function explainError(e) {
   return e?.shortMessage ?? e?.message ?? String(e);
 }
 
+// ---------- the LokalTags contract ----------
+
+const TAGS_READ_ABI = parseAbi([
+  "function tagInfo(string tag) view returns (address owner, string name, uint256 since, address lockedFor, uint256 lockedUntil, address receiveToken)",
+  "function tagOf(address holder) view returns (string)",
+  "function availability(string tag, address claimer) view returns (uint8)",
+  "function remainingToday(address token, address recipient, address payer) view returns (uint256 forRecipient, uint256 forPayer, uint256 overall)",
+  "function validatePayment(string tag, address token, uint256 amount, address payer) view returns (address recipient, uint256 dayIndex)",
+  "function nonces(address owner) view returns (uint256)",
+  "function DOMAIN_SEPARATOR() view returns (bytes32)",
+]);
+const ZERO = ZERO_ADDRESS;
+/** "usdt" or a currency code -> the picker text ("🇮🇩 Rupiah (IDRX)" or "dollars (USD₮)"). */
+const receiveText = (code) => (code === "usdt" ? "💵 Dollars (USD₮)" : currencyText(code));
+
+/** The holder of `tag` on LokalTags: { owner, name, since, receive ("usdt" | code | null), receiveToken, lock } or { owner: null, lock }. */
+export async function contractTag(pub, tag) {
+  const [owner, name, since, lockedFor, lockedUntil, receiveToken] = await pub.readContract({ address: LOKAL_TAGS, abi: TAGS_READ_ABI, functionName: "tagInfo", args: [tag] });
+  const none = (a) => (lc(a) === lc(ZERO) ? null : a);
+  const rt = none(receiveToken);
+  return {
+    owner: none(owner) ? getAddress(owner) : null, name: name || null, since: Number(since), receiveToken: rt, receive: rt ? tokenCode(rt) : null,
+    lock: none(lockedFor) ? { owner: lockedFor, until: Number(lockedUntil) } : null,
+  };
+}
+const contractTagOf = async (pub, address) => (await pub.readContract({ address: LOKAL_TAGS, abi: TAGS_READ_ABI, functionName: "tagOf", args: [address] })) || null;
+const contractAvailability = async (pub, tag, me) => availabilityName(await pub.readContract({ address: LOKAL_TAGS, abi: TAGS_READ_ABI, functionName: "availability", args: [tag, me ?? ZERO] }));
+
+/**
+ * Runs `call` ({ to, data }) as an eth_call from `from`. Resolves when the contract would accept it; throws a CliError
+ * with the refusal in plain English (nothing is signed or sent) when it would revert. ctx: { tag, token }.
+ */
+export async function simulateCall(pub, from, call, ctx = {}) {
+  try {
+    await pub.call({ account: from, to: call.to, data: call.data });
+  } catch (e) {
+    const data = revertDataOf(e);
+    if (!data && /fetch failed|timeout|network|ECONN/i.test(String(e?.message))) throw new CliError(explainError(e));
+    throw new CliError(explainRevert(data, ctx).message);
+  }
+}
+/** The contract's own dry run of a payment (every limit except balance and allowance). Throws a CliError when refused. */
+async function checkContractPayment(pub, { tag, token, units, payer }) {
+  try {
+    await pub.readContract({ address: LOKAL_TAGS, abi: TAGS_READ_ABI, functionName: "validatePayment", args: [tag, token, units, payer ?? ZERO] });
+  } catch (e) {
+    throw new CliError(explainRevert(revertDataOf(e), { tag, token }).message);
+  }
+}
+/** "Contract room today": what the contract still lets `owner` receive (and `payer` pay) in `token`, as text. */
+async function contractRoomText(pub, tag, token, owner, payer) {
+  try {
+    const [forRecipient, forPayer] = await pub.readContract({ address: LOKAL_TAGS, abi: TAGS_READ_ABI, functionName: "remainingToday", args: [token, owner, payer ?? ZERO] });
+    return `@${tag} can receive ${tokenAmountText(forRecipient, token)} more today${payer ? `; you can pay ${tokenAmountText(forPayer, token)} more` : ""} (contract limits)`;
+  } catch { return "could not read the contract's limits; it still checks them before any money moves"; }
+}
+
+/**
+ * Builds and sends a payment through LokalTags with the unlocked account: USD₮ = one permit signature (EIP-2612, exactly
+ * `units`, 30 minutes) and one payTagWithPermit; cNGN = approve exactly `units` (if needed) then payTag. Each call is
+ * simulated first. Returns the payment's tx hash.
+ */
+async function payThroughContract(pub, account, { tag, token, units, ref }) {
+  const wallet = createWalletClient({ account, chain: celo, transport: http(RPC_URL, { timeout: 30_000 }) });
+  const ctx = { tag, token: token.address };
+  let data;
+  const permitOk = lc(token.address) === lc(USDT.address)
+    && lc(await pub.readContract({ address: token.address, abi: TAGS_READ_ABI, functionName: "DOMAIN_SEPARATOR" }).catch(() => "")) === USDT_DOMAIN_SEPARATOR;
+  if (permitOk) {
+    const nonce = await pub.readContract({ address: token.address, abi: TAGS_READ_ABI, functionName: "nonces", args: [account.address] });
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60);
+    const signature = await account.signTypedData({
+      domain: USDT_PERMIT_DOMAIN, primaryType: "Permit",
+      types: { Permit: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }, { name: "value", type: "uint256" }, { name: "nonce", type: "uint256" }, { name: "deadline", type: "uint256" }] },
+      message: { owner: account.address, spender: LOKAL_TAGS, value: units, nonce, deadline },
+    });
+    const sig = signature.replace(/^0x/, "");
+    let v = parseInt(sig.slice(128, 130), 16);
+    if (v < 27) v += 27;
+    data = payTagWithPermitData({ tag, token: token.address, amount: units, ref, deadline, v, r: "0x" + sig.slice(0, 64), s: "0x" + sig.slice(64, 128) });
+  } else {
+    const allowance = await pub.readContract({ address: token.address, abi: erc20Abi, functionName: "allowance", args: [account.address, LOKAL_TAGS] });
+    if (allowance < units) {
+      const approve = { to: token.address, data: approveData(LOKAL_TAGS, units) };
+      await simulateCall(pub, account.address, approve, ctx);
+      out(c.dim(`Approving exactly ${fmtToken(units, token === CNGN ? "CNGN" : "USDT")} for the LokalTags contract…`));
+      let ah;
+      try { ah = await wallet.sendTransaction({ to: approve.to, data: approve.data, value: 0n }); } catch (e) { throw new CliError(explainError(e)); }
+      const ar = await pub.waitForTransactionReceipt({ hash: ah, timeout: 180_000 });
+      if (ar.status !== "success") throw new CliError(`The approval failed onchain, so nothing was paid. ${celoscanTx(ah)}`);
+      ok(`Approved. ${celoscanTx(ah)}`);
+    }
+    data = payTagData({ tag, token: token.address, amount: units, ref });
+  }
+  await simulateCall(pub, account.address, { to: LOKAL_TAGS, data }, ctx);
+  try { return await wallet.sendTransaction({ to: LOKAL_TAGS, data, value: 0n }); } catch (e) { throw new CliError(explainError(e)); }
+}
+
+/**
+ * Sends one LokalTags call (claim, setName, setReceiveToken, release) from your wallet: shows it, simulates it (a refusal
+ * is explained and nothing is sent), asks you to confirm, signs after your password, waits, then runs `after()`.
+ */
+async function sendTagCall(pub, account, calls, flags, { notice, confirmWord, after, ctx = {} }) {
+  const first = calls[0];
+  const [celoBal, { fee }] = await Promise.all([pub.getBalance({ address: account.address }), estimateFee(pub, { to: LOKAL_TAGS, data: first.data, value: 0n }, account.address)]);
+  out(formatBox("Transaction", [
+    ["To", `${shortAddr(LOKAL_TAGS)} (the LokalTags contract)`], ["Calls", calls.map((x) => x.label).join(", then ")], ["Value", "0 (free apart from the network fee)"],
+    ["Network fee", `≈ ${fmtCelo(fee * BigInt(calls.length), 5)}`], ["From", shortAddr(account.address)],
+  ], { color: useColor() }));
+  warn(notice);
+  await simulateCall(pub, account.address, { to: LOKAL_TAGS, data: first.data }, ctx); // the first call; later ones depend on it
+  if (flags.dryRun) {
+    out(c.bold("Dry run: nothing sent. The contract accepts it (simulated)."));
+    for (const x of calls) out(`  ${x.label}
+    to:    ${LOKAL_TAGS}
+    value: 0
+    data:  ${x.data}`);
+    return;
+  }
+  if (celoBal < fee) throw new CliError(`No CELO for gas: the fee is about ${fmtCelo(fee, 5)} and you have ${fmtCelo(celoBal, 5)}.`);
+  if (!flags.yes) {
+    const label = confirmWord === "yes" ? `"yes"` : `@${confirmWord}`;
+    const a = await ask(`Type ${c.bold(label)} to continue: `);
+    const good = confirmWord === "yes" ? a.toLowerCase() === "yes" : typedTagMatches(a, confirmWord);
+    if (!good) throw new CliError("Cancelled. Nothing was sent.");
+  }
+  let unlocked = await unlockWallet(account.file);
+  try {
+    const wallet = createWalletClient({ account: unlocked, chain: celo, transport: http(RPC_URL, { timeout: 30_000 }) });
+    for (const [i, x] of calls.entries()) {
+      if (i > 0) await simulateCall(pub, account.address, { to: LOKAL_TAGS, data: x.data }, ctx);
+      let hash;
+      try { hash = await wallet.sendTransaction({ to: LOKAL_TAGS, data: x.data, value: 0n }); } catch (e) { throw new CliError(explainError(e)); }
+      out(`Sent ${x.label}. Waiting for confirmation… ${c.dim(hash)}`);
+      const rc = await pub.waitForTransactionReceipt({ hash, timeout: 180_000 }).catch((e) => { throw new CliError(`Not confirmed yet (${explainError(e)}). Check later: lokal status ${hash}`); });
+      if (rc.status !== "success") throw new CliError(`The contract refused it onchain (someone may have acted a moment before you). ${celoscanTx(hash)}`);
+      ok(`Confirmed. ${celoscanTx(hash)}`);
+    }
+  } finally { unlocked = null; }
+  return after();
+}
+
 // ---------- commands ----------
 
 const out = (...a) => console.log(...a);
@@ -940,9 +1091,11 @@ ${c.bold("Pay someone")}
   In PowerShell a leading @ is special: write ada, or put it in quotes ('@ada').
 
 ${c.bold("Your own tag")}
-  lokal claim ada --name "Ada Obi"  claim @ada for your wallet (public and permanent)
-  lokal claim ada --to rupiah       set (or change) the currency you prefer to receive
+  lokal claim ada --name "Ada Obi"  claim @ada for your wallet on the LokalTags contract (public and permanent)
+  lokal claim ada --to rupiah       set (or change) your optional default currency; payers can still choose
   lokal release                     give up your tag (locked for you for ${RELEASE_LOCK_DAYS} days)
+  Tags live on the LokalTags contract (${LOKAL_TAGS}); payments go through it and every call is checked
+  (simulated) before you sign. Tags claimed the old memo way before the cutover are still paid the old way.
 
 ${c.bold("Send password")}
   Your key is stored encrypted. send, claim and release ask for your send password after you confirm,
@@ -1063,21 +1216,39 @@ async function cmdWhois(args) {
   if (!args[0]) throw new UsageError("Usage: lokal whois ada");
   const pub = makePublic();
   if (isAddress(args[0])) {
-    const tag = ntagOf(resolveNtags(await discoverOps()), args[0]);
-    out(tag ? `${getAddress(args[0])} is @${tag}` : `${getAddress(args[0])} has no Lokal tag.`);
+    let tag = await contractTagOf(pub, args[0]);
+    let older = false;
+    if (!tag) { tag = ntagOf(resolveNtags(legacyNtagOps(await discoverOps())), args[0]); older = Boolean(tag); }
+    out(tag ? `${getAddress(args[0])} is @${tag}${older ? " (an older memo tag)" : ""}` : `${getAddress(args[0])} has no Lokal tag.`);
     return;
   }
   const tag = parseTag(args[0]);
+  // the LokalTags contract first: its holder is who gets paid
+  const ct = await contractTag(pub, tag);
+  if (ct.owner) {
+    const allowance = await dailyAllowance(ct.owner, await loadRate());
+    out(formatBox(`@${tag}`, [
+      ["Name", ct.name ?? c.dim("(no display name)")],
+      ["Owner", ct.owner],
+      ["Prefers", ct.receive ? receiveText(ct.receive) : `${currencyText("cngn")}${c.dim("  (not set; payers choose, naira by default)")}`],
+      ["Since", isoDay(ct.since)],
+      ["Registry", `LokalTags ${celoscanAddr(LOKAL_TAGS)}`],
+      ["Contract", await contractRoomText(pub, tag, USDT.address, ct.owner, null)],
+      ["Today", todayText(tag, allowance)],
+      ["Limits", LIMITS_TEXT],
+    ], { color: useColor() }));
+    return;
+  }
   const { entry, state } = await resolveVerified(pub, tag);
   if (!entry) {
-    const a = ntagAvailability(state, tag, null);
+    const a = await contractAvailability(pub, tag, null);
     const why = { reserved: "It is reserved and can't be claimed.", locked: "It was released recently and is locked for its previous owner for now.", free: `Anyone can claim it: lokal claim ${tag}` }[a] ?? "";
     out(`@${tag} is not claimed. ${why}`.trim());
     process.exitCode = 1;
     return;
   }
   const allowance = await dailyAllowance(entry.owner, await loadRate());
-  out(formatBox(`@${tag}`, [
+  out(formatBox(`@${tag} (older memo tag)`, [
     ["Name", entry.name ?? c.dim("(no display name)")],
     ["Owner", entry.owner],
     ["Prefers", `${currencyText(entry.currency)}${entry.currency ? "" : c.dim("  (the default; the owner hasn't chosen)")}`],
@@ -1106,6 +1277,8 @@ async function cmdSend(args, flags) {
   try { account = loadWallet(); } catch (e) { if (!flags.dryRun) throw e; }
 
   out(c.dim(`Looking up @${tag}…`));
+  const ct = await contractTag(pub, tag);
+  if (ct.owner) return sendViaContract(pub, account, { tag, ct, token, chosen, units, rate, usdUnits, flags });
   const { entry } = await resolveVerified(pub, tag);
   if (!entry) throw new CliError(`@${tag} is not claimed by anyone, so there is nobody to pay. Nothing was sent.`);
   if (account && account.address.toLowerCase() === entry.owner.toLowerCase()) throw new CliError(`@${tag} is your own tag. You can't pay yourself.`);
@@ -1187,6 +1360,83 @@ async function cmdSend(args, flags) {
   await waitForPayout(pub, { owner: entry.owner, token, tag, dep, claimBlock: Number(entry.block), rate, currency: currency ?? "cngn" });
 }
 
+/**
+ * `lokal send` to a tag held on LokalTags: the same checks and prompts as before, then one call to the contract. What
+ * they get is the payer's choice (--to / --dollars), else the holder's default, else naira; it travels in the ref.
+ */
+async function sendViaContract(pub, account, { tag, ct, token, chosen, units, rate, usdUnits, flags }) {
+  if (account && lc(account.address) === lc(ct.owner)) throw new CliError(`@${tag} is your own tag. You can't pay yourself.`);
+  // what they receive on this payment: --to, else (USD₮ payments) the holder's default, else naira. cNGN pays dollars.
+  const currency = token === "CNGN" ? null : chosen ?? (ct.receive && ct.receive !== "usdt" ? ct.receive : null) ?? (ct.receive === "usdt" ? "usdt" : "cngn");
+  const refCode = currency ?? "usdt";
+  if (currency && currency !== "usdt" && rate && !rateFor(rate, currency)) {
+    throw new CliError(`${currencyText(currency)} isn't available on Textile FX right now, so the agent couldn't pay it out. Nothing was sent. Try again later or pick another currency with --to.`);
+  }
+  const maxUsd = currency && currency !== "usdt" ? Number(rate?.maxUsd?.[currency]) : 0;
+  if (maxUsd > 0 && Number(units) / 1e6 > maxUsd) {
+    throw new CliError(`Right now Textile FX can convert at most about $${maxUsd.toFixed(2)} into ${currencyOf(currency).plural}. Send less, or choose another currency with --to. Nothing was sent.`);
+  }
+  const tok = token === "CNGN" ? CNGN : USDT;
+  // the contract's own checks first: every limit (per payment, per recipient and per payer today, overall), paused, self
+  await checkContractPayment(pub, { tag, token: tok.address, units, payer: account?.address });
+  let feeWei = null;
+  if (account) {
+    const [bal, celoBal] = await Promise.all([balanceOf(pub, tok.address, account.address), pub.getBalance({ address: account.address })]);
+    if (bal < units) throw new CliError(`Not enough ${token === "CNGN" ? "cNGN" : "USD₮"}: you have ${fmtToken(bal, token)} and this payment is ${fmtToken(units, token)}.`);
+    feeWei = (await estimateFee(pub, { to: LOKAL_TAGS, data: payTagData({ tag, token: tok.address, amount: units }), value: 0n }, AGENT)).fee * (token === "CNGN" ? 2n : 1n);
+    if (celoBal < feeWei) throw new CliError(`No CELO for gas: the network fee is about ${fmtCelo(feeWei, 5)} and you have ${fmtCelo(celoBal, 5)}. Add a little CELO and try again.`);
+  }
+  const allowance = await dailyAllowance(ct.owner, rate);
+  if (!allowance.error && usdUnits > allowance.leftUnits) {
+    throw new CliError(
+      `${todayText(tag, allowance)}, and this payment is about ${fmtUsd(usdUnits)}. The agent would not pay it out automatically. ` +
+      `${allowance.leftUnits >= BigInt(MIN_USD * 1e6) ? `Send at most about ${fmtUsd(allowance.leftUnits)}, or try again tomorrow.` : "Try again tomorrow."} Nothing was sent.`,
+    );
+  }
+  const est = currency === "usdt" ? { text: `${fmtUsd(units)} in dollars (USD₮), passed on as is`, rateText: null } : estimateReceive(token, units, rate, currency ?? "cngn");
+  const preferText = token === "USDT" && ct.receive && ct.receive !== refCode ? `${receiveText(ct.receive)}; you chose ${refCode === "usdt" ? "dollars" : currencyOf(refCode).plural}` : null;
+  out("");
+  out(formatSummary({ tag, name: ct.name, owner: ct.owner, token, units, receiveText: est.text, rateText: est.rateText, feeWei, fromAddress: account?.address, todayText: todayText(tag, allowance), preferText }, { color: useColor() }));
+  out(c.dim(`  ${await contractRoomText(pub, tag, tok.address, ct.owner, account?.address)}.`));
+  out(c.dim(`  Paid through the LokalTags contract (${shortAddr(LOKAL_TAGS)}), which checks every limit before the money moves to the agent.`));
+
+  if (flags.dryRun) {
+    out("");
+    out(c.bold("Dry run: nothing sent. The contract accepts this payment (its own dry run). The call is:"));
+    out(`  to:    ${LOKAL_TAGS}   (LokalTags)`);
+    out("  value: 0");
+    out(`  data:  ${payTagData({ tag, token: tok.address, amount: units, ref: currencyRef(refCode) })}`);
+    out(c.dim(token === "USDT"
+      ? `  USD₮ is sent as payTagWithPermit: the same call plus a permit you sign for exactly ${fmtToken(units, token)} (no separate approval). ref = "cur:${refCode}".`
+      : `  cNGN: first approve(LokalTags, ${units}) on the cNGN contract if needed, then this payTag. ref = "cur:${refCode}".`));
+    return;
+  }
+  if (!flags.yes) {
+    const answer = await ask(`\nType ${c.bold("@" + tag)} to send ${fmtToken(units, token)}, or press Enter to cancel: `);
+    if (!typedTagMatches(answer, tag)) throw new CliError(answer ? `You typed "${answer}", which is not @${tag}. Nothing was sent.` : "Cancelled. Nothing was sent.");
+  }
+  let unlocked = await unlockWallet(account.file);
+  let hash;
+  try {
+    const again = await contractTag(pub, tag);
+    if (!again.owner || lc(again.owner) !== lc(ct.owner)) throw new CliError(`@${tag} changed owner a moment ago. Nothing was sent; run the command again to see the new owner.`);
+    hash = await payThroughContract(pub, unlocked, { tag, token: tok, units, ref: currencyRef(refCode) });
+  } finally { unlocked = null; }
+  out(`Sent. Waiting for confirmation… ${c.dim(hash)}`);
+  let rc;
+  try { rc = await pub.waitForTransactionReceipt({ hash, timeout: 180_000 }); } catch (e) {
+    throw new CliError(`Sent, but not confirmed yet (${explainError(e)}). Check it later with: lokal status ${hash}`);
+  }
+  if (rc.status !== "success") throw new CliError(`The contract refused the payment onchain and no tokens moved. See ${celoscanTx(hash)}`);
+  ok(`Confirmed in block ${rc.blockNumber}. ${celoscanTx(hash)}`);
+  if (!flags.wait) {
+    out(`  @${tag} is paid when the agent's autopilot runs. Follow it with: lokal status ${hash}`);
+    return;
+  }
+  const dep = depositFromReceipt(rc, tok.address) ?? { hash, block: Number(rc.blockNumber), logIndex: 0, units, payer: account.address };
+  await waitForPayout(pub, { owner: ct.owner, token, tag, dep, claimBlock: Number(rc.blockNumber) - 1, rate, currency: currency === "usdt" || !currency ? "cngn" : currency });
+}
+
 /** One line about a payout check, for status and --wait. */
 function payoutRows(tag, r, buyToken) {
   if (r.status === "paid") {
@@ -1250,48 +1500,47 @@ async function cmdClaim(args, flags) {
     const e = ntagNameError(flags.name);
     if (e) throw new UsageError(`Display name: ${e}.`);
   }
-  const prefer = flags.to != null ? parseCurrencyArg(flags.to) : null;
-  const data = encodeNtagClaim({ t: tag, ...(flags.name != null ? { n: flags.name } : {}), ...(prefer ? { c: prefer } : {}) });
+  const prefer = flags.to != null ? parseCurrencyArg(flags.to) : null; // the optional default currency on your pay page
   const account = loadWallet();
   const pub = makePublic();
-  const ops = await discoverOps();
-  const state = resolveNtags(ops);
-  const avail = ntagAvailability(state, tag, account.address);
-  const current = ntagOf(state, account.address);
+  // claims go to the LokalTags contract only (from the cutover on, a memo claim changes nothing)
+  const ct = await contractTag(pub, tag);
+  const avail = await contractAvailability(pub, tag, account.address);
+  const current = await contractTagOf(pub, account.address);
   const msg = {
     free: `@${tag} is free.`,
     yours: `@${tag} is already yours.`,
-    taken: `@${tag} is taken by ${shortAddr(ownerOf(state, tag)?.owner)}.`,
+    taken: `@${tag} is taken by ${shortAddr(ct.owner)}.`,
     reserved: `@${tag} is reserved and can't be claimed.`,
     locked: `@${tag} was released recently and is locked for its previous owner (up to ${RELEASE_LOCK_DAYS} days).`,
     invalid: `@${tag} is not a valid tag.`,
   }[avail];
   if (avail !== "free" && avail !== "yours") throw new CliError(msg);
+  const calls = [];
+  const name = flags.name != null ? flags.name.trim() : null;
   if (avail === "yours") {
-    const cur = ownerOf(state, tag);
-    const rename = flags.name != null && flags.name.trim() !== cur?.name;
-    const recur = prefer != null && prefer !== (cur?.currency ?? null);
+    const rename = name != null && name !== (ct.name ?? "");
+    const recur = prefer != null && prefer !== ct.receive;
     if (!rename && !recur) { ok(`${msg} Nothing to do.`); return; }
-    if (rename) out(`${msg} This will change its display name to "${flags.name.trim()}".`);
-    if (recur) out(`${rename ? "It" : msg + " This"} will set the currency you prefer to receive to ${currencyText(prefer)}.`);
+    if (rename) { out(`${msg} This will change its display name to "${name}".`); calls.push({ label: "setName", data: setNameData(name) }); }
+    if (recur) { out(`${rename ? "It" : msg + " This"} will set your default currency to ${currencyText(prefer)} (payers can still choose another).`); calls.push({ label: "setReceiveToken", data: setReceiveTokenData(tokenOfCode(prefer)) }); }
   } else {
     ok(msg);
     if (current) warn(`Claiming @${tag} releases your current tag @${current}, which then stays locked for you for ${RELEASE_LOCK_DAYS} days.`);
+    calls.push({ label: "claim", data: claimData(tag, name ?? "") });
+    if (prefer) calls.push({ label: "setReceiveToken", data: setReceiveTokenData(tokenOfCode(prefer)) });
   }
-  await sendOp(pub, account, data, flags, {
-    notice: `Tags and display names are public and permanent: they are written to the Celo blockchain and can be seen by anyone, forever.`,
+  await sendTagCall(pub, account, calls, flags, {
+    notice: `Tags and display names are public and permanent: they are written to the LokalTags contract on Celo and can be seen by anyone, forever.`,
     confirmWord: "yes",
-    after: (st) => {
-      const now = resolveNtags(st.ops);
-      if (ntagOf(now, account.address) === tag) {
-        const e = ownerOf(now, tag);
-        ok(`@${tag} is yours${e?.name ? ` (${e.name})` : ""}${e?.currency ? `, and you prefer ${currencyText(e.currency)}` : ""}. People can now pay you with: lokal send ${tag} 10`);
+    ctx: { tag },
+    after: async () => {
+      const now = await contractTag(pub, tag);
+      if (now.owner && lc(now.owner) === lc(account.address)) {
+        ok(`@${tag} is yours${now.name ? ` (${now.name})` : ""}${now.receive ? `, and payers see ${now.receive === "usdt" ? "dollars" : currencyOf(now.receive).plural} first` : ""}. People can now pay you with: lokal send ${tag} 10`);
         return;
       }
-      const s = st.status;
-      if (s === "taken") throw new CliError(`Someone claimed @${tag} a moment before you, so it is not yours. Your transaction only cost a network fee. Try another tag.`);
-      if (s === "locked") throw new CliError(`@${tag} is locked for its previous owner, so the claim did not count.`);
-      throw new CliError(`The claim was recorded but did not take effect (${s ?? "unknown"}). Run "lokal whois @${tag}".`);
+      throw new CliError(`Confirmed, but the contract doesn't show @${tag} as yours yet. Run "lokal whois ${tag}" in a moment.`);
     },
   });
 }
@@ -1300,56 +1549,25 @@ async function cmdRelease(args, flags) {
   if (args.length) throw new UsageError("Usage: lokal release   (releases your current tag)");
   const account = loadWallet();
   const pub = makePublic();
-  const state = resolveNtags(await discoverOps());
-  const tag = ntagOf(state, account.address);
-  if (!tag) { out("This wallet has no Lokal tag, so there is nothing to release."); return; }
+  const tag = await contractTagOf(pub, account.address);
+  if (!tag) {
+    let older = null;
+    try { older = ntagOf(resolveNtags(legacyNtagOps(await discoverOps())), account.address); } catch { /* offline: nothing to add */ }
+    out(older
+      ? `This wallet holds @${older} only as an older memo tag. Memo tags can no longer be changed or released; claim a tag on the contract with: lokal claim <name>`
+      : "This wallet has no Lokal tag, so there is nothing to release.");
+    return;
+  }
   out(`Your tag is @${tag}.`);
-  await sendOp(pub, account, encodeNtagRelease(), flags, {
-    notice: `Releasing @${tag} stops payments to it. It stays locked for you for ${RELEASE_LOCK_DAYS} days, then anyone can claim it. The release is public and permanent onchain.`,
+  await sendTagCall(pub, account, [{ label: "release", data: releaseData() }], flags, {
+    notice: `Releasing @${tag} makes the contract refuse payments to it. It stays locked for you for ${RELEASE_LOCK_DAYS} days, then anyone can claim it. The release is public and permanent onchain.`,
     confirmWord: tag,
-    after: (st) => {
-      if (ntagOf(resolveNtags(st.ops), account.address)) throw new CliError(`The release was recorded but you still hold a tag. Run "lokal wallet".`);
+    ctx: { tag },
+    after: async () => {
+      if (await contractTagOf(pub, account.address)) throw new CliError(`Confirmed, but the contract still shows a tag for this wallet. Run "lokal wallet" in a moment.`);
       ok(`@${tag} released.`);
     },
   });
-}
-
-/** Sends a zero-value nTag op to the agent, waits for it, then re-resolves until Blockscout shows it. */
-async function sendOp(pub, account, data, flags, { notice, confirmWord, after }) {
-  const tx = { to: AGENT, data, value: 0n };
-  const [celoBal, { fee }] = await Promise.all([pub.getBalance({ address: account.address }), estimateFee(pub, tx, account.address)]);
-  out(formatBox("Transaction", [["To", `${shortAddr(AGENT)} (the payout agent)`], ["Value", "0 (free apart from the network fee)"], ["Network fee", `≈ ${fmtCelo(fee, 5)}`], ["From", shortAddr(account.address)]], { color: useColor() }));
-  warn(notice);
-  if (flags.dryRun) {
-    out(c.bold("Dry run: nothing sent."));
-    out(`  to:    ${tx.to}\n  value: 0\n  data:  ${tx.data}`);
-    return;
-  }
-  if (celoBal < fee) throw new CliError(`No CELO for gas: the fee is about ${fmtCelo(fee, 5)} and you have ${fmtCelo(celoBal, 5)}.`);
-  if (!flags.yes) {
-    const label = confirmWord === "yes" ? `"yes"` : `@${confirmWord}`;
-    const a = await ask(`Type ${c.bold(label)} to continue: `);
-    const good = confirmWord === "yes" ? a.toLowerCase() === "yes" : typedTagMatches(a, confirmWord);
-    if (!good) throw new CliError("Cancelled. Nothing was sent.");
-  }
-  const hash = await signAndSend(account.file, tx);
-  out(`Sent. Waiting for confirmation… ${c.dim(hash)}`);
-  const rc = await pub.waitForTransactionReceipt({ hash, timeout: 180_000 }).catch((e) => { throw new CliError(`Not confirmed yet (${explainError(e)}). Check later: lokal status ${hash}`); });
-  if (rc.status !== "success") throw new CliError(`The transaction failed onchain. ${celoscanTx(hash)}`);
-  ok(`Confirmed. ${celoscanTx(hash)}`);
-  out(c.dim("Waiting for the explorer to index it…"));
-  const until = Date.now() + 180_000;
-  while (Date.now() < until) {
-    try {
-      const ops = await discoverOps(); // incremental after the first load: cheap to poll
-      if (ops.some((o) => o.hash.toLowerCase() === hash.toLowerCase())) {
-        const status = resolveNtags(ops).statuses.get(ops.find((o) => o.hash.toLowerCase() === hash.toLowerCase()).hash);
-        return after({ ops, status });
-      }
-    } catch { /* retry */ }
-    await sleep(8_000);
-  }
-  warn(`Confirmed onchain, but the explorer has not shown it yet. Check in a minute with "lokal wallet".`);
 }
 
 async function cmdStatus(args) {
@@ -1373,6 +1591,19 @@ async function cmdStatus(args) {
       const found = ops.find((o) => o.hash.toLowerCase() === hash.toLowerCase());
       out(found ? `Result: ${resolveNtags(ops).statuses.get(found.hash) ?? "unknown"}` : "Not indexed by the explorer yet.");
     }
+    return;
+  }
+
+  if (to === LOKAL_TAGS.toLowerCase()) {
+    const paid = rc?.status === "success" ? (rc.logs ?? []).map((l) => decodeTagPaid({ ...l, topics: l.topics, data: l.data })).find(Boolean) : null;
+    const rows = [["Through", "the LokalTags contract"], ["From", tx.from], ["Status", confirmed]];
+    if (paid) {
+      const code = currencyOfRef(paid.ref);
+      rows.unshift(["Tag", `@${paid.tag}`], ["Paid", tokenAmountText(paid.amount, paid.token)], ["They get", code ? receiveText(code) : "their default currency (else naira)"], ["Owner then", getAddress(paid.recipient)]);
+    } else if (rc && rc.status !== "success") rows.push(["Result", c.red("refused by the contract: nothing moved")]);
+    rows.push(["Transaction", celoscanTx(hash)]);
+    out(formatBox("Lokal tag payment", rows, { color: useColor() }));
+    if (paid) out(c.dim(`  The agent pays @${paid.tag} when autopilot runs; the receipt shows on lokalpay.vercel.app/@${paid.tag} and in your wallet's activity.`));
     return;
   }
 
