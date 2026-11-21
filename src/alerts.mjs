@@ -141,8 +141,9 @@ function createAlerter({ ch, hidden, box, fetchImpl, now, say, timeoutMs, deboun
   /** POSTs one alert to one channel. Resolves true when it was accepted; never rejects. */
   async function sendTo(channel, a) {
     const c = typeof AbortController === "function" ? new AbortController() : null;
+    // Not unref()ed: this timer is what ends a hanging request, so it must keep the process awake until it fires or
+    // the request settles (it is always cleared then). It lasts at most timeoutMs.
     const t = setTimer(() => c?.abort(), timeoutMs);
-    t?.unref?.();
     try {
       const [url, body] = channel === "telegram"
         ? [`https://api.telegram.org/bot${ch.telegram.token}/sendMessage`, { chat_id: ch.telegram.chatId, text: a.text, disable_web_page_preview: true }]
