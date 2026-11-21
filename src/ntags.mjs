@@ -28,6 +28,8 @@ export const NTAG_RESERVED = new Set([
   "security", "celo", "minipay", "valora", "opera", "textile", "naira", "nairapayout", "payout", "payouts", "ntag", "ntags",
   "lokal", "lokalpay", "cngn", "usdt", "usdc", "tether", "cusd", "ceur", "wallet", "bank", "cbn", "null", "undefined",
   "anonymous", "everyone", "me", "you", "test", "demo", "api", "www", "app", "pay", "send", "receive",
+  "lokal_support", "lokalsupport", "lokal_help", "lokal_team", "lokal_official", "lokalofficial", "support_team",
+  "help_desk", "helpdesk", "admin1", "celo_team", "celoteam", "minipay_support", "textile_fx",
 ]);
 const NTAG_RESERVED_ERR = "this tag is reserved";
 const NTAG_LOCK_SEC = RELEASE_LOCK_DAYS * 86400;
@@ -53,6 +55,7 @@ export function ntagNameError(n) {
   if (!v) return "name can't be blank";
   if (v.length > 40) return "name must be 40 characters or fewer";
   if (/[\u0000-\u001f\u007f-\u009f]/.test(v)) return "name can't contain control characters";
+  if (/[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/.test(v)) return "name can't contain invisible or text-direction characters";
   return null;
 }
 /** Validates a decoded nTag op body: claim {t[,n]} or release {t:""}. Error string or null. */

@@ -40,13 +40,14 @@ Built for the **Agents Open for Business** hackathon on Celo, **Track 3: Stablec
 2. [Currencies](#currencies)
 3. [How people use it](#how-people-use-it)
 4. [How a payout works](#how-a-payout-works)
-5. [Safety and limits, enforced in code](#safety-and-limits-enforced-in-code)
-6. [Lokal tag rules](#lokal-tag-rules)
-7. [Architecture](#architecture)
-8. [Run it yourself](#run-it-yourself)
-9. [Progress log](#progress-log)
-10. [Status and roadmap](#status-and-roadmap)
-11. [License](#license)
+5. [The contract has the final say](#the-contract-has-the-final-say)
+6. [Safety and limits, enforced in code](#safety-and-limits-enforced-in-code)
+7. [Lokal tag rules](#lokal-tag-rules)
+8. [Architecture](#architecture)
+9. [Run it yourself](#run-it-yourself)
+10. [Progress log](#progress-log)
+11. [Status and roadmap](#status-and-roadmap)
+12. [License](#license)
 
 ---
 
@@ -564,6 +565,74 @@ server is unavailable or has no record, the site estimates from the Celo chain a
 
 ---
 
+## The contract has the final say
+
+**The agent decides; the contract has the final say.** Two Solidity contracts check the rules *before* any money moves,
+so a payment that breaks a limit is refused by Celo itself instead of being refunded later:
+
+- **`LokalTags`**: the Lokal tag registry and payment router. Claim a tag, choose the currency you want to receive,
+  and get paid with `payTag` / `payTagWithPermit` (USD₮ supports EIP-2612, so one signature replaces the approval).
+  Limits per payment, per recipient per day, per payer per day and overall per day, per token, in that token's own units.
+- **`LokalPots`**: one link, many payers (weddings, birthdays, group gifts). A pot has a dollar cap, a per-guest cap and
+  a closing time, and takes any allowed token.
+- **`LokalText`**: the text rules both contracts share, byte for byte the same as the site's.
+
+Neither contract ever holds money: every payment goes straight to the agent's payout wallet in the same transaction,
+and the agent converts it on Textile FX and pays the recipient. A new payout wallet waits 24 hours in public before it
+takes effect; the admin (a separate wallet from the agent) can pause everything with one switch.
+
+[![contracts](https://github.com/deeeko/lokal/actions/workflows/contracts.yml/badge.svg)](https://github.com/deeeko/lokal/actions/workflows/contracts.yml)
+Solidity 0.8.30 · OpenZeppelin 5.6.1 · Hardhat + TypeScript · 127 tests, including the independent audit's attack
+scenarios and a parity test that checks the contract against the site's live rules on thousands of random names.
+
+**One command, the whole story.** `cd contracts && npm ci && npm run demo` deploys both contracts on a local chain and
+plays out the table below. Every row is asserted, and CI runs it on every push, so this README can't drift from the code.
+
+| # | Who | Action | Result | Why |
+| --- | --- | --- | --- | --- |
+| 1 | ada | Claim @ada | **ALLOW** | `TagClaimed`: @ada is hers |
+| 2 | ada | Ask to be paid out in cNGN | **OK** | `ReceiveTokenSet`: the agent now knows her local currency |
+| 3 | bob | Claim @ada | **REFUSE** | `TagTaken` |
+| 4 | bob | Claim @lokal_support | **REFUSE** | `TagReserved` (brand names and lookalikes) |
+| 5 | carol | Pay @ada $10 USD₮ | **ALLOW** | $10 goes straight to the agent's payout wallet; the contract holds $0 |
+| 6 | carol | Pay @ada $30 USD₮ | **REFUSE** | `OverPaymentLimit` ($25): nothing moved |
+| 7 | carol | Pay @ada $0.50 USD₮ | **REFUSE** | `BelowMinimum` ($1) |
+| 8 | dave | Pay @ada $20 USD₮ ($10 already today, $25 per person per day) | **REFUSE** | `OverRecipientDailyLimit` ($15 left) |
+| 9 | carol | Pay @bob $20 USD₮ (she paid $10 today, $25 per payer per day) | **REFUSE** | `OverPayerDailyLimit` ($15 left) |
+| 10 | ada | Pay @ada $5 USD₮ | **REFUSE** | `SelfPayment` |
+| 11 | carol | Pay @nobody $5 USD₮ | **REFUSE** | `TagNotFound` |
+| 12 | carol | Pay @ada in a token the admin never allowed | **REFUSE** | `TokenNotAllowed` |
+| 13 | carol | Pay @ada 446,369 IDRX (2 decimals, about $24) | **ALLOW** | Limits are per token, in its own units |
+| 14 | 10 other payers | Pay @ada $15 and nine other tags $25 each in USD₮ | **ALLOW** | $250 in USD₮ today: the daily total, and it took 10 different payers |
+| 15 | dave | Pay @hank $1 USD₮ | **REFUSE** | `OverDailyLimit` |
+| 16 | carol | Next UTC day: pay @ada $25 USD₮ | **ALLOW** | A new day bucket: limits start again |
+| 17 | ada | Claim @ada_obi | **ALLOW** | One tag per wallet: @ada is released and locked for 30 days |
+| 18 | bob | Claim @ada | **REFUSE** | `TagLocked` |
+| 19 | bob | Claim @ada 30 days later | **ALLOW** | The lock has ended |
+| 20 | ada | Open a pot, "Ada & Tunde's wedding" ($20 cap, $5 per guest, closes in 6 hours) | **OK** | `PotCreated` #1: one link and QR code for every guest |
+| 21 | guest 1 | Spray $2 USD₮ into the pot | **ALLOW** | `PotPaid`: straight to the payout wallet, pot total $2 |
+| 22 | guest 1 | Spray $4 more | **REFUSE** | `OverPayerCap` ($3 left for this guest) |
+| 23 | guests 2-4 | Spray $5 each, in USD₮, cNGN and IDRX | **ALLOW** | One pot takes any allowed token: $17 from 4 guests |
+| 24 | guest 5 | Spray $5 | **REFUSE** | `PotFull` ($3 left of the $20 cap) |
+| 25 | admin | Switch the payout wallet right away | **REFUSE** | `PayoutWalletNotReady`: a new payout wallet waits 24 hours, in public |
+| 26 | admin | Pause | **OK** |  |
+| 27 | carol | Pay @ada_obi $5 USD₮ | **REFUSE** | `Paused` |
+| 28 | guest 5 | Spray $1 | **REFUSE** | `Paused`: one switch stops tags and pots |
+
+All 28 outcomes asserted. LokalTags and LokalPots held $0 at every step.
+
+**Who enforces what.** Not every rule can live onchain: the swap and the payout happen in the agent's code.
+[docs/WHO-ENFORCES-WHAT.md](docs/WHO-ENFORCES-WHAT.md) lists every rule and says whether the contract, the agent or
+the site enforces it.
+
+| | |
+|---|---|
+| Status | Built, audited, fixed and tested. **Mainnet deployment in progress**; addresses will appear here. Until the site and the agent switch over, tags still work through `NT1:` / `NTP:` transactions and the agent enforces these limits. |
+| Admin | [`0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070`](https://celoscan.io/address/0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070) (two-step ownership transfer; not the agent's key) |
+| Payout wallet | the agent, [`0x8a695cf54CB44753c8b784EB36d266f748617a1e`](https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e) |
+
+---
+
 ## Safety and limits, enforced in code
 
 All numbers are defaults from `src/config.mjs`; the language-parsing layer of `ask` never decides any of them.
@@ -662,8 +731,11 @@ HTML, CSS and ES modules.
 | `scripts/check-site.mjs` | static site checks: links, assets, CSP, page scripts parse, JSON and SVG valid |
 | `scripts/fetch-rate.mjs` | writes `site/rate.json` |
 | `scripts/serve.mjs` | local preview server (`node scripts/serve.mjs`, port 4173) |
-| `test/` | 131 unit and integration tests (`node --test`) |
+| `contracts/` | Solidity contracts (`LokalTags`, `LokalPots`, `LokalText`), Hardhat + TypeScript tests, the one-command demo, the deploy script and ABIs (see [The contract has the final say](#the-contract-has-the-final-say)) |
+| `docs/WHO-ENFORCES-WHAT.md` | every rule, and whether the contract, the agent or the site enforces it |
+| `test/` | 177 unit and integration tests (`node --test`) |
 | `.github/workflows/ci.yml` | tests, a syntax check of every script, and the site check on every push and pull request |
+| `.github/workflows/contracts.yml` | compiles and tests the contracts and runs the demo (every row asserted) whenever the contracts or the site's tag rules change |
 | `.github/workflows/pages.yml` | GitHub Pages mirror: deploys only after tests and the site check pass; refreshes the rate every 30 min (read-only, no secrets) |
 
 **Deploy gate.** Vercel builds with `node scripts/vercel-build.mjs` on every push to `main` (production) and every pull
@@ -810,6 +882,18 @@ node scripts/check-site.mjs       # static site check
 ## Progress log
 
 Newest first.
+
+### 2026-11-22: the contracts: LokalTags and LokalPots
+
+- **`contracts/`** (Solidity 0.8.30, OpenZeppelin 5.6.1, Hardhat + TypeScript): `LokalTags` (tag registry and payment
+  router with per-token limits) and `LokalPots` (one link, many payers). Neither holds money. See
+  [The contract has the final say](#the-contract-has-the-final-say).
+- An independent audit found one high, one medium and five low issues; all fixed: lokal/lokalpay and 14 lookalikes
+  reserved (63 names), per-payer daily caps, invisible and text-direction characters refused in names (site, agent and
+  contract alike), a 24-hour public wait before the payout wallet can change, two-step admin transfer, `rescue` for
+  tokens sent by mistake.
+- 127 contract tests plus a 28-step demo that CI asserts on every push (`.github/workflows/contracts.yml`), and
+  [docs/WHO-ENFORCES-WHAT.md](docs/WHO-ENFORCES-WHAT.md).
 
 ### 2026-11-22: Lokal tags, the `lokal` command and the repo move to deeeko/lokal
 

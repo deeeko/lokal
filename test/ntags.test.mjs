@@ -49,7 +49,7 @@ test("rules: valid, invalid, reserved, normalisation", () => {
   assert.match(site.ntagError("ada__ng"), /__/);
   assert.match(site.ntagError("ada_"), /end with _/);
   for (const t of ["agent", "admin", "celo", "naira", "ntags", "lokal", "lokalpay", "pay", "receive", "www", "undefined"]) assert.match(site.ntagError(t), /reserved/, t);
-  assert.equal(site.NTAG_RESERVED.size, 49); // the spec list, all lower-case
+  assert.equal(site.NTAG_RESERVED.size, 63); // the spec list, all lower-case
   assert.equal(site.normalizeNtag("  @Ada_NG "), "ada_ng");
   assert.equal(site.normalizeNtag("@@ada"), "@ada"); // only one @ is stripped
   assert.equal(site.normalizeNtag(null), "");

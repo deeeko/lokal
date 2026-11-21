@@ -1,0 +1,51 @@
+name: contracts
+
+# Builds and tests the LokalTags contract, then runs the canonical demo. The demo asserts every outcome in the
+# README's table, so the README and the contract can't drift apart without this going red. The parity tests also
+# read the site's nTag rules (site/assets/core.js, src/ntags.mjs), so a change there runs this too.
+# Nothing here deploys, holds a key or touches Celo mainnet.
+on:
+  push:
+    paths:
+      - "contracts/**"
+      - "site/assets/core.js"
+      - "src/ntags.mjs"
+      - ".github/workflows/contracts.yml"
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "site/assets/core.js"
+      - "src/ntags.mjs"
+      - ".github/workflows/contracts.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+      - run: npm ci
+      - name: Build (compile + typings)
+        run: npm run build
+      - name: Type check
+        run: npm run typecheck
+      - name: Contract tests (every rule, every revert, parity with the site's rules)
+        run: npm test
+      - name: Canonical demo (asserts every outcome in the README table)
+        run: npm run demo
