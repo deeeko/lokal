@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { assetVersions } from "./asset-version.mjs";
 
 const SITE = path.resolve("site");
 const errors = [];
@@ -159,6 +160,13 @@ for (const file of walk(SITE).filter((f) => f.endsWith(".json") && !f.endsWith("
   const rule = (JSON.parse(vercelRaw.toString("utf8")).headers || []).find((h) => h.source === "/install.ps1");
   const ct = rule && rule.headers.find((h) => h.key.toLowerCase() === "content-type");
   if (!ct || !/^text\/plain;\s*charset=utf-8$/i.test(ct.value)) fail("vercel.json: /install.ps1 must be served as text/plain; charset=utf-8");
+}
+
+// The brand images are cached, so every reference carries the same ?v= (scripts/asset-version.mjs bumps it).
+{
+  const { versions, bare } = assetVersions(SITE);
+  for (const b of bare) fail(`${b} has no ?v= version (run: node scripts/asset-version.mjs ${[...versions][0] ?? "<version>"})`);
+  if (versions.size > 1) fail(`brand images use more than one ?v= version: ${[...versions].join(", ")} (run: node scripts/asset-version.mjs <version>)`);
 }
 
 if (errors.length) {
