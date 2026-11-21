@@ -166,7 +166,7 @@ test("assessment: first-time payee and a new tag, with and without consent", () 
   const base = { tag: "bola", entry: contractEntry(NOW - 5 * H, "Bola"), history: { events, complete: true }, legacyClaims: [], nowSec: NOW };
   const withConsent = T.assessTag({ ...base, paid: { consent: true, tags: ["tunde"] } });
   assert.deepEqual(ids(withConsent), ["first", "new"]);
-  assert.match(withConsent.warnings.find((w) => w.id === "first").title, /^First time paying @bola\? Check with them directly that this is their tag\.$/);
+  assert.match(withConsent.warnings.find((w) => w.id === "first").title, /^First time paying @bola\? Check with them it's their tag\.$/);
   assert.match(withConsent.warnings.find((w) => w.id === "first").reason, /no record of paying @bola/);
   assert.match(withConsent.warnings.find((w) => w.id === "new").title, /claimed 5 hours ago/);
   assert.equal(withConsent.payments.count, 0);

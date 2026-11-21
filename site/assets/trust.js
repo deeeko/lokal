@@ -296,12 +296,19 @@ export function assessTag({ tag, entry, history = null, legacyClaims = null, pai
   const since = Number(entry?.since) || 0;
   const contract = entry?.source === "contract";
   const checks = [];
-  const add = (id, state, title, reason) => checks.push({ id, state, title, reason });
+  // a few words per check, for the one-line notes ("Before you pay: first-time payee, new tag"; "Couldn't check: name changes")
+  const SHORT = {
+    first: () => "first-time payee", new: (st) => (st === "warn" ? "new tag" : "tag age"),
+    owner: (st) => (st === "warn" ? "changed hands recently" : "owner changes"),
+    lookalike: (st) => (st === "warn" ? `looks like @${lookalikeOf(tag, paid.tags)?.of}` : "tags you've paid"),
+    name: (st) => (st === "warn" ? "name changed recently" : "name changes"),
+  };
+  const add = (id, state, title, reason) => checks.push({ id, state, title, reason, short: SHORT[id](state) });
 
   // first-time payee
   const first = firstTimeState(tag, paid);
   if (first === "known") add("first", "ok", `You've paid ${at} from this browser before.`, "");
-  else add("first", "warn", `First time paying ${at}? Check with them directly that this is their tag.`,
+  else add("first", "warn", `First time paying ${at}? Check with them it's their tag.`,
     first === "first" ? `This browser has no record of paying ${at}.`
       : "This browser doesn't keep a list of tags you've paid unless you allow it in Privacy choices, so it can't tell.");
 
