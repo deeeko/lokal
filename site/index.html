@@ -63,7 +63,8 @@
       <a href="#how">How it works</a>
       <a href="#countries">Countries</a>
       <a href="#safety">Safety</a>
-      <a href="docs.html">Docs</a>
+      <a href="#proof">Proof</a>
+      <a href="features.html">Features</a>
     </nav>
     <div class="lp-cta">
       <a class="lp-signin" id="lp-signin" href="start.html">Sign in</a>
@@ -73,13 +74,13 @@
 </header>
 
 <main id="main">
-  <!-- a) hero: the thesis, and the one orchestrated moment (a live converter) -->
+  <!-- 1. hero: the thesis, and the one orchestrated moment (a live converter) -->
   <section class="lp-hero" aria-labelledby="hero-h">
     <div class="wrap lp-split">
       <div>
         <span class="lp-eyebrow">Pay anyone in their local money</span>
         <h1 class="lp-display" id="hero-h">Send dollars. They receive their <em>lokal</em> money.</h1>
-        <p class="lp-lead">Pay anyone by their @tag or a link, from your own wallet. They get naira, rupiah or pesos in theirs, and you see exactly how much before you send.</p>
+        <p class="lp-lead">Pay a @tag or a link from your own wallet: they get naira, rupiah or pesos in theirs, and you see the exact amount before you send.</p>
         <div class="lp-actions">
           <a class="btn btn-primary btn-lg" href="start.html">Get started</a>
           <a class="text-link" href="quote.html">Pay someone <span class="arrow" aria-hidden="true">→</span></a>
@@ -103,237 +104,87 @@
     </div>
   </section>
 
-  <!-- b) the problem -->
-  <section class="lp-sec band lp-center" aria-labelledby="problem-h">
-    <div class="wrap">
-      <span class="lp-eyebrow">The problem</span>
-      <h2 class="lp-h2 reveal" id="problem-h">Sending money home costs too much and takes too long.</h2>
-      <ul class="lp-pains reveal-list">
-        <li style="--i:0"><b>Fees</b><p>A transfer fee up front, and often another one hidden in the exchange rate.</p></li>
-        <li style="--i:1"><b>Weak rates</b><p>The rate you are shown is rarely the rate they get.</p></li>
-        <li style="--i:2"><b>Delays</b><p>Days in transit, with no clear way to see where the money is.</p></li>
-        <li style="--i:3"><b>Declined cards</b><p>Local cards are often declined or capped for payments in dollars.</p></li>
-      </ul>
-    </div>
-  </section>
-
-  <!-- c) how it works -->
+  <!-- 2. how it works: three steps, one line each -->
   <section class="lp-sec" id="how" aria-labelledby="how-h">
     <div class="wrap lp-split">
       <div>
         <span class="lp-eyebrow">How it works</span>
         <h2 class="lp-h2 reveal" id="how-h">You pay.<br> A contract checks.<br> <em>They</em> get paid.</h2>
         <ol class="lp-steps reveal-list">
-          <li style="--i:0"><b class="lp-h3">Pay a @tag or a link from your own wallet.</b><p>Open someone's Lokal tag, like lokalpay.vercel.app/@ada, or a payment link they sent you. Choose what they receive and see the amount before you send.</p></li>
-          <li style="--i:1"><b class="lp-h3">The contract checks the limits, and the agent converts on Textile FX.</b><p>The LokalTags contract refuses a payment over a limit before any money moves. Lokal's agent then takes a firm Textile FX quote and converts your dollars.</p></li>
-          <li style="--i:2"><b class="lp-h3">They receive local money in their own wallet.</b><p>The agent pays exactly what the conversion delivered, never an assumed amount, with a receipt anyone can check.</p></li>
+          <li style="--i:0"><b class="lp-h3">Pay a @tag or a link from your own wallet.</b></li>
+          <li style="--i:1"><b class="lp-h3">A contract checks the limits; the agent converts on Textile FX.</b></li>
+          <li style="--i:2"><b class="lp-h3">They receive local money in their own wallet, with a receipt.</b></li>
         </ol>
-        <div class="lp-actions mt-24"><a class="text-link" href="quote.html">Pay someone now <span class="arrow" aria-hidden="true">→</span></a></div>
       </div>
       <figure class="reveal" style="margin:0">
         <div class="frame">
           <div class="frame-bar"><span class="url">lokalpay.vercel.app/@ada</span><span>Example</span></div>
           <div class="lp-card-plate" id="how-card"></div>
-          <div class="lp-pay-line"><b>What does @ada receive?</b><span>The payer picks: naira, rupiah, Argentine or Colombian pesos, or dollars.</span></div>
         </div>
         <figcaption class="frame-cap">A Lokal tag card, drawn by the same code as the real pay page. @ada is an example.</figcaption>
       </figure>
     </div>
   </section>
 
-  <!-- d) four countries -->
+  <!-- 3. four countries, live rates -->
   <section class="lp-sec band lp-center" id="countries" aria-labelledby="countries-h">
     <div class="wrap">
       <span class="lp-eyebrow">Four countries</span>
       <h2 class="lp-h2 reveal" id="countries-h">The payer chooses what they <em>receive</em>.</h2>
-      <p class="lp-lead">Every currency is a stablecoin on Celo, priced live by Textile FX against USD₮. Nobody has to pick a currency to sign up.</p>
       <ul class="lp-countries reveal-list" id="countries-list">
-        <li style="--i:0" data-code="cngn"><span class="cur-flag cur-flag-cngn" aria-hidden="true"></span><span class="c-name">Nigeria</span><span class="c-cur">Naira<small>cNGN</small></span><span class="c-rate" data-rate>…<small>per $1</small></span><span class="status-pill" data-status="built">Built, not yet used on mainnet</span></li>
-        <li style="--i:1" data-code="idrx"><span class="cur-flag cur-flag-idrx" aria-hidden="true"></span><span class="c-name">Indonesia</span><span class="c-cur">Rupiah<small>IDRX</small></span><span class="c-rate" data-rate>…<small>per $1</small></span><span class="status-pill" data-status="built">Built, not yet used on mainnet</span></li>
-        <li style="--i:2" data-code="wars"><span class="cur-flag cur-flag-wars" aria-hidden="true"></span><span class="c-name">Argentina</span><span class="c-cur">Argentine peso<small>wARS</small></span><span class="c-rate" data-rate>…<small>per $1</small></span><span class="status-pill" data-status="built">Built, not yet used on mainnet</span></li>
-        <li style="--i:3" data-code="wcop"><span class="cur-flag cur-flag-wcop" aria-hidden="true"></span><span class="c-name">Colombia</span><span class="c-cur">Colombian peso<small>wCOP</small></span><span class="c-rate" data-rate>…<small>per $1</small></span><span class="status-pill" data-status="built">Built, not yet used on mainnet</span></li>
+        <li style="--i:0" data-code="cngn"><span class="cur-flag cur-flag-cngn" aria-hidden="true"></span><span class="c-name">Nigeria</span><span class="c-cur">Naira · cNGN</span><span class="c-rate" data-rate>…<small>per $1</small></span></li>
+        <li style="--i:1" data-code="idrx"><span class="cur-flag cur-flag-idrx" aria-hidden="true"></span><span class="c-name">Indonesia</span><span class="c-cur">Rupiah · IDRX</span><span class="c-rate" data-rate>…<small>per $1</small></span></li>
+        <li style="--i:2" data-code="wars"><span class="cur-flag cur-flag-wars" aria-hidden="true"></span><span class="c-name">Argentina</span><span class="c-cur">Argentine peso · wARS</span><span class="c-rate" data-rate>…<small>per $1</small></span></li>
+        <li style="--i:3" data-code="wcop"><span class="cur-flag cur-flag-wcop" aria-hidden="true"></span><span class="c-name">Colombia</span><span class="c-cur">Colombian peso · wCOP</span><span class="c-rate" data-rate>…<small>per $1</small></span></li>
       </ul>
-      <p class="lp-also">Or dollars (USD₮) for anyone who would rather keep dollars. <a class="text-link" href="quote.html">See today's quote <span class="arrow" aria-hidden="true">→</span></a></p>
+      <p class="lp-also"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span> <span>Or dollars (USD₮). Live Textile FX rates, fee included.</span> <a class="text-link" href="quote.html">Get a quote <span class="arrow" aria-hidden="true">→</span></a></p>
     </div>
   </section>
 
-  <!-- e) everything Lokal does -->
-  <section class="lp-sec" id="everything" aria-labelledby="everything-h">
-    <div class="wrap">
-      <div class="lp-index-head">
-        <div>
-          <span class="lp-eyebrow">Everything Lokal does</span>
-          <h2 class="lp-h2 reveal" id="everything-h">All of it, labelled honestly.</h2>
-        </div>
-        <ul class="lp-legend">
-          <li><span class="status-pill" data-status="live">Live</span><span>Used with real money on Celo mainnet.</span></li>
-          <li><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><span>The code and tests exist. No real payout yet.</span></li>
-          <li><span class="status-pill" data-status="planned">Planned</span><span>Not built yet.</span></li>
-        </ul>
-      </div>
-      <div class="lp-index">
-        <div class="lp-group reveal">
-          <h3>Sending</h3>
-          <ul>
-            <li><b>Get a quote</b><p>A free, live Textile FX price for every currency.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="quote.html">Try it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Pay a Lokal tag</b><p>Open /@name, choose what they receive, pay from your wallet.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="quote.html">Try it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Pay a link</b><p>Pay the exact amount someone asked for, in one step.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="pay.html">Try it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>The <code>lokal</code> command line</b><p>Pay a tag from PowerShell, with an encrypted wallet of your own.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="docs.html#cli">Try it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Pay with CELO</b><p>Pay from the CELO in your wallet; it is converted to dollars first.</p><span class="meta"><span class="status-pill" data-status="planned">Planned</span><span class="not-yet">Not yet</span></span></li>
-          </ul>
-        </div>
-        <div class="lp-group reveal">
-          <h3>Receiving</h3>
-          <ul>
-            <li><b>Claim a Lokal tag</b><p>A short name like @ada that pays your own wallet.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="start.html">Try it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Get paid links</b><p>Ask for an exact amount in the currency you want, by link or QR code.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="get-paid.html">Try it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Pay for me</b><p>Send a link with a title and a note, so someone else can pay it for you.</p><span class="meta"><span class="status-pill" data-status="planned">Planned</span><span class="not-yet">Not yet</span></span></li>
-            <li><b>Any currency</b><p>Naira, rupiah, pesos or dollars: the payer picks on each payment.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="#countries">See them <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Add the token to your wallet</b><p>One button, so what you receive shows in your wallet.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="app.html">Try it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Cash-out guide</b><p>How to get each currency to a bank, checked route by route.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="cash-out.html">Read it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-          </ul>
-        </div>
-        <div class="lp-group reveal">
-          <h3>Safety &amp; proof</h3>
-          <ul>
-            <li><b>Contract limits</b><p>LokalTags and LokalPots refuse over-limit payments before money moves.</p><span class="meta"><span class="status-pill" data-status="live">Live</span><a class="text-link" href="#safety">See how <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Refunds</b><p>A payment the agent can't pay goes back to the wallet it came from.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="https://github.com/deeeko/lokal/blob/main/docs/REFUNDS.md">Read it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Receipts</b><p>Every payout gets a number anyone can rebuild from Celo.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="receipt.html">Try it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Verify a transaction</b><p>Paste any Celo transaction to check it and its tag.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="verify.html">Try it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>ERC-8004 identity and ratings</b><p>The agent's onchain identity, and ratings from people it paid.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="agent.html">See it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Attribution tag</b><p>Every transaction carries Lokal's ERC-8021 tag, so it can be counted.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="verify.html">Check one <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Autopilot status</b><p>Whether the agent is running, and when it last checked in.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="autopilot.html">See it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-          </ul>
-        </div>
-        <div class="lp-group reveal">
-          <h3>Developers</h3>
-          <ul>
-            <li><b>Open source</b><p>The site, the agent and the contracts, MIT licensed.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="https://github.com/deeeko/lokal">Read it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>The CLI</b><p>Install with one line in PowerShell; dry runs send nothing.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="docs.html#install">Try it <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Contracts on Celoscan</b><p>LokalTags and LokalPots, source verified.</p><span class="meta"><span class="status-pill" data-status="live">Live</span><a class="text-link" href="https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187">See them <span class="arrow" aria-hidden="true">→</span></a></span></li>
-            <li><b>Docs</b><p>How a payout runs, the limits, the addresses.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><a class="text-link" href="docs.html">Read them <span class="arrow" aria-hidden="true">→</span></a></span></li>
-          </ul>
-        </div>
-        <div class="lp-group next reveal">
-          <h3>Coming next</h3>
-          <ul>
-            <li><b>Pots</b><p>One link and QR code for many payers: weddings, birthdays, group gifts. The contract is live; the pages are next.</p><span class="meta"><span class="status-pill" data-status="planned">Planned</span><span class="not-yet">Not yet</span></span></li>
-            <li><b>“Who am I paying?”</b><p>The tag's age and history before you pay, with a warning for a first-time payee.</p><span class="meta"><span class="status-pill" data-status="built">Built, not yet used on mainnet</span></span></li>
-            <li><b>MiniPay mode</b><p>Claim a tag and get paid without leaving MiniPay.</p><span class="meta"><span class="status-pill" data-status="planned">Planned</span><span class="not-yet">Not yet</span></span></li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- f) why it's safe -->
-  <section class="lp-sec band lp-center" id="safety" aria-labelledby="safety-h">
+  <!-- 4. why it's safe -->
+  <section class="lp-sec lp-center" id="safety" aria-labelledby="safety-h">
     <div class="wrap">
       <span class="lp-eyebrow">Why it's safe</span>
       <h2 class="lp-h2 reveal" id="safety-h">The contract says no <em>before</em> money moves.</h2>
-      <p class="lp-lead">Limits are not a promise on a web page. They are written into two contracts on Celo, and anyone can read them.</p>
-      <div class="lp-safe reveal-list">
-        <div style="--i:0"><h3 class="lp-h3">Your keys stay yours</h3><p>Every payment is sent from your own wallet. Lokal never sees your keys, and the agent holds money only while it converts it.</p></div>
-        <div style="--i:1"><h3 class="lp-h3">Limits, enforced in code</h3><p>$25 per payment and $25 per person per day: the contract refuses a payment over these before any money moves. The agent adds its own cap of $100 a day overall.</p></div>
-        <div style="--i:2"><h3 class="lp-h3">Refunds</h3><p>If the agent can't pay a payment that arrived, it is recorded and can be sent back to the wallet it came from, in the same token.</p></div>
-        <div style="--i:3"><h3 class="lp-h3">Receipts you can check</h3><p>Every payout has a receipt number taken from its transaction, so anyone can rebuild it from the chain.</p></div>
-      </div>
+      <p class="lp-lead">$25 per payment and $25 per person a day are written into two contracts on Celo. You pay from your own wallet, and a payment the agent can't pay goes back to it.</p>
       <div class="lp-contracts">
         <a class="lp-contract" href="https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187"><b>LokalTags <span class="status-pill" data-status="live">Live</span></b><span class="mono">0xFF2f8ADC0c97B6E40b201848d378C11325bC7187</span><span class="micro muted">Tags and payments · source verified · Celoscan ↗</span></a>
         <a class="lp-contract" href="https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF"><b>LokalPots <span class="status-pill" data-status="live">Live</span></b><span class="mono">0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF</span><span class="micro muted">Pots · source verified · Celoscan ↗</span></a>
       </div>
+      <p class="lp-also"><a class="text-link" href="proof.html">Every payout, checked on the Proof page <span class="arrow" aria-hidden="true">→</span></a></p>
     </div>
   </section>
 
-  <!-- g) getting it to your bank -->
-  <section class="lp-sec" id="cash-out" aria-labelledby="cashout-h">
-    <div class="wrap lp-split flip">
-      <div>
-        <span class="lp-eyebrow">Getting it to your bank</span>
-        <h2 class="lp-h2 reveal" id="cashout-h">From wallet to bank, one currency at a time.</h2>
-        <p class="lp-body mt-24">The cash-out guide gives a checked route for each currency, as of 21 November 2026. Rupiah can be redeemed officially. For naira and Colombian pesos, no exchange takes them on Celo yet, so the guide shows how to swap to dollars first.</p>
-        <p class="lp-body mt-16">MiniPay shows only USDT, USDC and USDm. If you cash out through MiniPay, ask to be paid in dollars.</p>
-        <div class="lp-actions mt-24"><a class="text-link" href="cash-out.html">Read the cash-out guide <span class="arrow" aria-hidden="true">→</span></a></div>
-      </div>
-      <figure class="reveal" style="margin:0">
-        <div class="frame">
-          <div class="frame-bar"><span class="url">lokalpay.vercel.app/cash-out.html</span><span>Real screen</span></div>
-          <img src="assets/img/cash-out.jpg" alt="The cash-out guide: pick your currency, then follow its route to a bank." width="900" height="675" loading="lazy" decoding="async">
-        </div>
-      </figure>
-    </div>
-  </section>
-
-  <!-- h) proof -->
+  <!-- 5. proof: real payouts read from Celo -->
   <section class="lp-sec band lp-center" id="proof" aria-labelledby="proof-h">
     <div class="wrap">
       <span class="lp-eyebrow">Proof</span>
       <h2 class="lp-h2 reveal" id="proof-h">What's real today.</h2>
-      <p class="lp-lead">No made-up numbers. The payouts below are read from Celo when you open this page.</p>
-      <ul class="lp-status">
-        <li><span class="status-pill" data-status="live">Live</span><span>The LokalTags and LokalPots contracts, deployed and source-verified on Celo mainnet. No real user payout yet.</span></li>
-        <li><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><span>Payouts in naira, rupiah and pesos, Lokal tags, paying and claiming through the contracts, payment links, Get paid, autopilot, refunds, the <code>lokal</code> command, receipts and ratings, and the cash-out guide.</span></li>
-        <li><span class="status-pill" data-status="planned">Planned</span><span>Pots on the site, “Who am I paying?”, Pay with CELO, Pay for me, MiniPay mode.</span></li>
-      </ul>
+      <p class="lp-lead">No made-up numbers: the payouts below are read from Celo when you open this page.</p>
       <div class="lp-payouts" id="payouts" aria-live="polite">
         <h3 class="lp-h3">Real payouts</h3>
         <p class="small muted" id="payouts-msg">Reading the agent's payouts from Celo…</p>
       </div>
-      <p class="lp-also"><a class="text-link" href="proof.html">Every payout on the Proof page <span class="arrow" aria-hidden="true">→</span></a></p>
+      <p class="lp-status-line"><span><span class="status-pill" data-status="live">Live</span> both contracts</span><span><span class="status-pill" data-status="built">Built, not yet used on mainnet</span> payouts, tags, refunds, “Who am I paying?”</span></p>
+      <p class="lp-also"><a class="text-link" href="proof.html">Open the Proof page <span class="arrow" aria-hidden="true">→</span></a><a class="text-link" href="features.html">Everything, labelled <span class="arrow" aria-hidden="true">→</span></a></p>
     </div>
   </section>
 
-  <!-- i) for developers -->
-  <section class="lp-sec" id="developers" aria-labelledby="dev-h">
+  <!-- 6. the last word, and four questions -->
+  <section class="lp-sec lp-final" id="faq" aria-labelledby="final-h">
     <div class="wrap lp-split">
       <div>
-        <span class="lp-eyebrow">For developers</span>
-        <h2 class="lp-h2 reveal" id="dev-h">Read it, run it, pay from a terminal.</h2>
-        <p class="lp-body mt-24">The site, the agent and both contracts are open source. Hundreds of tests run on every push, and the site only deploys when they pass. The <code>lokal</code> command pays a tag from your own encrypted wallet and never touches the agent's key.</p>
-        <div class="lp-links-list">
-          <a class="text-link" href="https://github.com/deeeko/lokal">Source on GitHub <span class="arrow" aria-hidden="true">→</span></a>
-          <a class="text-link" href="docs.html">Docs <span class="arrow" aria-hidden="true">→</span></a>
-          <a class="text-link" href="https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187">LokalTags on Celoscan <span class="arrow" aria-hidden="true">→</span></a>
+        <h2 class="lp-h2 reveal" id="final-h">Get paid in your own <em>money</em>.</h2>
+        <div class="lp-actions">
+          <a class="btn btn-primary btn-lg" href="start.html">Get started</a>
+          <a class="text-link" href="quote.html">Pay someone <span class="arrow" aria-hidden="true">→</span></a>
         </div>
       </div>
-      <figure class="reveal" style="margin:0">
-        <div class="frame">
-          <div class="frame-bar"><span>PowerShell</span><span>Windows</span></div>
-<pre class="lp-code"><span class="c"># install the lokal command (Node.js 20+)</span>
-<span class="p">PS&gt; </span>irm https://lokalpay.vercel.app/install.ps1 | iex
-<span class="p">PS&gt; </span>lokal wallet new
-<span class="p">PS&gt; </span>lokal whois ada
-<span class="p">PS&gt; </span>lokal send ada 10 --to rupiah --dry-run</pre>
-        </div>
-        <figcaption class="frame-cap"><code>--dry-run</code> shows the exact transaction and sends nothing.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <!-- j) FAQ and the last word -->
-  <section class="lp-sec band lp-center" id="faq" aria-labelledby="faq-h">
-    <div class="wrap">
-      <span class="lp-eyebrow">Questions</span>
-      <h2 class="lp-h2 reveal" id="faq-h">Asked, and answered plainly.</h2>
       <div class="lp-faq">
-        <details><summary>What does it cost?</summary><p class="a">Lokal charges no fee today. You pay Celo's network fee for your own transaction, usually well under one US cent, and the rate you see already includes Textile FX's conversion fee. A small fee is planned; it will be shown on every quote before you pay.</p></details>
-        <details><summary>Which wallet do I need?</summary><p class="a">Any Celo wallet, such as MetaMask or MiniPay. To pay, you need USD₮ on Celo and a few cents of CELO for the network fee (some wallets, like MiniPay, take the fee in dollars instead). Your wallet is also your Lokal account: there is no email and no password.</p></details>
-        <details><summary>Can I receive in MiniPay?</summary><p class="a">MiniPay shows only USDT, USDC and USDm, so naira, rupiah and peso tokens won't appear there. If you use MiniPay, ask to be paid in dollars, or use a wallet such as MetaMask for local money.</p></details>
-        <details><summary>What if my payment is refused?</summary><p class="a">Most refusals happen before money moves: the page asks the contract first, explains the reason, and nothing is sent. If the agent refuses a payment after it arrives, it is recorded and can be sent back to the wallet you paid from; your payment then shows "Refunded" with its transaction.</p></details>
-        <details><summary>Does Lokal hold my money?</summary><p class="a">No. You pay from your own wallet and the recipient is paid into theirs. The contracts never hold money: each payment goes straight to the agent's payout wallet, which holds it only while it converts on Textile FX.</p></details>
-        <details><summary>Which countries can I send to?</summary><p class="a">Nigeria (naira), Indonesia (rupiah), Argentina and Colombia (pesos), or dollars to anyone. Textile FX also lists Brazil and Mexico, but they had no quote on 21 November 2026, so Lokal doesn't offer them yet.</p></details>
-        <details><summary>Do I need an account to pay someone?</summary><p class="a">No. Paying a tag or a link needs only your wallet. You sign in only to get paid, and signing in is a free signature that sends nothing.</p></details>
-        <details><summary>Is it live?</summary><p class="a">The contracts are live on Celo mainnet. Payouts are built and tested against live Textile FX quotes; the first real payout will be listed under <a href="#proof">Proof</a> with its transaction.</p></details>
-      </div>
-    </div>
-  </section>
-
-  <section class="lp-final lp-center" aria-labelledby="final-h">
-    <div class="wrap">
-      <h2 class="lp-h2 reveal" id="final-h">Get paid in your own <em>money</em>.</h2>
-      <div class="lp-actions">
-        <a class="btn btn-primary btn-lg" href="start.html">Get started</a>
-        <a class="text-link" href="quote.html">Pay someone <span class="arrow" aria-hidden="true">→</span></a>
+        <details><summary>Which wallet do I need? Does MiniPay work?</summary><p class="a">Any Celo wallet, such as MetaMask or MiniPay; your wallet is your account, with no email or password. MiniPay shows only USDT, USDC and USDm, so in MiniPay ask to be paid in dollars.</p></details>
+        <details><summary>Does Lokal hold my money?</summary><p class="a">No. You pay from your own wallet and they are paid into theirs. The contracts never hold money; the agent holds a payment only while it converts it on Textile FX.</p></details>
+        <details><summary>What if my payment is refused?</summary><p class="a">Most refusals happen before money moves: the page asks the contract first and nothing is sent. If the agent refuses a payment after it arrives, it can be sent back to the wallet you paid from, shown as "Refunded" with its transaction.</p></details>
+        <details><summary>What does it cost?</summary><p class="a">Lokal charges no fee today. You pay Celo's network fee, usually well under one US cent, and the rate already includes Textile FX's conversion fee. A planned fee will be shown on every quote before you pay.</p></details>
       </div>
     </div>
   </section>
@@ -347,7 +198,7 @@
         <p style="max-width:36ch">Pay anyone in their local money. Built for Agents Open for Business on Celo, Track 3: Stablecoin Corridors.</p>
       </div>
       <nav aria-label="Footer">
-        <a href="quote.html">Send</a><a href="get-paid.html">Get paid</a><a href="receipt.html">Receipts</a><a href="verify.html">Verify</a><a href="cash-out.html">Cash out</a><a href="agent.html">Agent</a><a href="docs.html">Docs</a><a href="https://github.com/deeeko/lokal">GitHub</a>
+        <a href="quote.html">Send</a><a href="get-paid.html">Get paid</a><a href="features.html">Features</a><a href="proof.html">Proof</a><a href="receipt.html">Receipts</a><a href="verify.html">Verify</a><a href="cash-out.html">Cash out</a><a href="agent.html">Agent</a><a href="docs.html">Docs</a><a href="docs.html#cli">CLI</a><a href="https://github.com/deeeko/lokal">GitHub</a>
       </nav>
     </div>
     <div class="lp-foot-base">

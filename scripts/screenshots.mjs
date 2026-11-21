@@ -1,7 +1,8 @@
-// Screenshots of the front door: every landing section at 390 px and 1440 px, each sign-up gateway step, the
-// dashboard, Activity for a visitor, and the Account claim step at the widths around the sidebar breakpoint.
+// Screenshots of the front door: the landing (whole page and its six sections) at 390 px and 1440 px, Features and
+// Proof, each sign-up gateway step, the dashboard, Activity for a visitor, and the Account claim step at the widths
+// around the sidebar breakpoint. Also refreshes docs/assets/landing.jpg (the README's hero image).
 //
-//   node scripts/screenshots.mjs [out-folder]          (default: ./screenshots)
+//   node scripts/screenshots.mjs [out-folder] [--front]   (default: ./screenshots; --front: landing, Features, Proof only)
 //
 // Needs Google Chrome and playwright-core, which is NOT a dependency of this repo; point at them with PLAYWRIGHT_CORE
 // and CHROME exactly as for scripts/brand.mjs. Serves site/ locally. The rate is the live one from
@@ -20,7 +21,8 @@ import { LOKAL_TAGS, FN, payTagData, currencyRef } from "../site/assets/lokal-co
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SITE = path.join(ROOT, "site");
-const OUT = path.resolve(process.argv[2] ?? "screenshots");
+const FRONT_ONLY = process.argv.includes("--front"); // only the landing, Features and Proof
+const OUT = path.resolve(process.argv.slice(2).find((a) => !a.startsWith("--")) ?? "screenshots");
 fs.mkdirSync(OUT, { recursive: true });
 const CHROME = process.env.CHROME ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const pw = createRequire(path.join(process.env.PLAYWRIGHT_CORE ?? ROOT, "x.js"))("playwright-core");
@@ -165,7 +167,6 @@ async function tall(page, name) {
   await page.setViewportSize(vp);
 }
 
-// first, the images the landing itself shows (so its section shots include them)
 // the README's hero image (compressed)
 {
   const ctx = await context({ width: 1440, height: 900 });
@@ -173,21 +174,14 @@ async function tall(page, name) {
   await page.goto(ORIGIN + "/index.html");
   await page.waitForFunction(() => !document.querySelector("#conv-rows .v")?.textContent.includes("…"));
   await settle(page, 1200);
-  await page.screenshot({ path: path.join(ROOT, "docs", "assets", "landing.jpg"), type: "jpeg", quality: 78 });
-  // the real cash-out page, for the landing's "Getting it to your bank" frame
-  await page.setViewportSize({ width: 1200, height: 900 });
-  await page.goto(ORIGIN + "/cash-out.html");
-  await settle(page, 1200);
-  fs.mkdirSync(path.join(SITE, "assets", "img"), { recursive: true });
-  await page.screenshot({ path: path.join(SITE, "assets", "img", "cash-out.jpg"), type: "jpeg", quality: 70, clip: { x: 284, y: 120, width: 900, height: 675 } });
+  await page.screenshot({ path: path.join(ROOT, "docs", "assets", "landing.jpg"), type: "jpeg", quality: 72 });
   await ctx.close();
 }
 
-// ---------- the landing, section by section ----------
+// ---------- the landing: the whole page, then its six sections ----------
 const SECTIONS = [
-  ["01-hero", ".lp-hero"], ["02-problem", "section[aria-labelledby=problem-h]"], ["03-how-it-works", "#how"], ["04-countries", "#countries"],
-  ["05-everything", "#everything"], ["06-safety", "#safety"], ["07-cash-out", "#cash-out"], ["08-proof", "#proof"],
-  ["09-developers", "#developers"], ["10-faq", "#faq"], ["11-final-and-footer", "section[aria-labelledby=final-h]"],
+  ["1-hero", ".lp-hero"], ["2-how-it-works", "#how"], ["3-countries", "#countries"], ["4-safety", "#safety"],
+  ["5-proof", "#proof"], ["6-final-faq-and-footer", "#faq"],
 ];
 for (const width of [390, 1440]) {
   const ctx = await context({ width, height: width < 500 ? 844 : 900 });
@@ -198,17 +192,18 @@ for (const width of [390, 1440]) {
   // the hero with its top bar, as it first appears
   const hero = await page.locator(".lp-hero").boundingBox();
   await save(page, `landing-${SECTIONS[0][0]}-${width}`, { clip: { x: 0, y: 0, width, height: Math.ceil(hero.y + hero.height) } });
-  // the rest: every reveal finished, the sticky bar out of the way, the first FAQ open
-  await page.evaluate(() => { for (const n of document.querySelectorAll(".reveal, .reveal-list")) n.classList.add("in"); document.querySelector(".lp-faq details")?.setAttribute("open", ""); });
-  await page.addStyleTag({ content: ".lp-bar { visibility: hidden; }" });
-  // lazy images load as they scroll in; load them all now so each section shot has its real screen
-  await page.evaluate(() => Promise.all([...document.images].map((i) => { i.loading = "eager"; return i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; }); })));
+  // the rest: every reveal finished, then the whole page, then each section with the sticky bar out of the way
+  await page.evaluate(() => { for (const n of document.querySelectorAll(".reveal, .reveal-list")) n.classList.add("in"); });
   await page.waitForFunction(() => !/Reading/.test(document.querySelector("#payouts-msg")?.textContent ?? ""), null, { timeout: 20000 }).catch(() => {});
   await settle(page);
+  console.log(`landing at ${width}px: ${await page.evaluate(() => document.documentElement.scrollHeight)}px tall`);
+  await tall(page, `landing-0-full-page-${width}`);
+  await page.evaluate(() => document.querySelector(".lp-faq details")?.setAttribute("open", ""));
+  await page.addStyleTag({ content: ".lp-bar { visibility: hidden; }" });
   for (const [name, sel] of SECTIONS.slice(1)) {
-    if (name.startsWith("11")) {
-      // the last word and the footer together, in page coordinates
-      const box = await page.evaluate(() => { const a = document.querySelector("section[aria-labelledby=final-h]").getBoundingClientRect(); const f = document.querySelector(".lp-foot").getBoundingClientRect(); return { y: a.top + scrollY, h: f.bottom - a.top }; });
+    if (sel === "#faq") {
+      // the last word, the questions and the footer together, in page coordinates
+      const box = await page.evaluate(() => { const a = document.querySelector("#faq").getBoundingClientRect(); const f = document.querySelector(".lp-foot").getBoundingClientRect(); return { y: a.top + scrollY, h: f.bottom - a.top }; });
       await save(page, `landing-${name}-${width}`, { clip: { x: 0, y: box.y, width, height: Math.ceil(box.h) }, fullPage: true });
     } else await save(page.locator(sel), `landing-${name}-${width}`);
   }
@@ -218,10 +213,25 @@ for (const width of [390, 1440]) {
     await page.evaluate(() => scrollTo(0, 0));
     await page.fill("#conv-amount", "30");
     await settle(page, 600);
-    await save(page.locator("#conv"), "landing-01b-hero-converter-over-limit-1440");
+    await save(page.locator("#conv"), "landing-1b-hero-converter-over-limit-1440");
   }
   await ctx.close();
 }
+
+// ---------- the public pages with the landing's chrome: Features and Proof ----------
+for (const file of ["features", "proof"]) {
+  for (const width of [390, 1440]) {
+    const ctx = await context({ width, height: width < 500 ? 844 : 900 });
+    const page = await ctx.newPage();
+    await page.goto(`${ORIGIN}/${file}.html`);
+    await settle(page, 1500);
+    await page.evaluate(() => { for (const n of document.querySelectorAll(".reveal, .reveal-list")) n.classList.add("in"); });
+    await settle(page, 600);
+    await tall(page, `${file}-full-page-${width}`);
+    await ctx.close();
+  }
+}
+if (FRONT_ONLY) { await browser.close(); server.close(); console.log(`${shots.length} screenshots in ${OUT}:\n` + shots.map((s) => "  " + s).join("\n")); process.exit(0); }
 
 // ---------- the sign-up gateway, step by step (mocked wallet and chain) ----------
 for (const width of [390, 1440]) {

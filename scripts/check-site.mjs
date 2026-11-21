@@ -14,9 +14,10 @@ const pages = fs.readdirSync(SITE).filter((f) => f.endsWith(".html"));
 if (!pages.includes("index.html")) fail("site/index.html is missing");
 // the dashboard, the gateway and the tag pages are linked from every page's sidebar and footer
 for (const p of ["app.html", "start.html", "account.html", "tag.html"]) if (!pages.includes(p)) fail(`site/${p} is missing`);
-/** Pages with their own chrome on purpose: the landing, the sign-up gateway and the public Proof page (see the CHROME comment below). */
-const OWN_CHROME = new Set(["index.html", "start.html", "proof.html"]);
+/** Pages with their own chrome on purpose: the landing, the sign-up gateway, and the public Proof and Features pages (see the CHROME comment below). */
+const OWN_CHROME = new Set(["index.html", "start.html", "proof.html", "features.html"]);
 if (!pages.includes("proof.html")) fail("site/proof.html is missing (the public Proof page)");
+if (!pages.includes("features.html")) fail("site/features.html is missing (everything Lokal does, each with its label)");
 /** The app sidebar, in order (the owner's brief, 21 Nov 2026). Account is an entry now; the user chip stays too. */
 const SIDEBAR = "Dashboard=app.html, Send=quote.html, Get paid=get-paid.html, Activity=transactions.html, Account=account.html, Docs=docs.html";
 
@@ -100,7 +101,8 @@ for (const page of pages) {
 // copies it to the others. Icon sprites may differ, since a page can add its own icons; the anchor check above makes
 // sure every icon used exists.
 //
-// Deliberate exception (OWN_CHROME): the landing (index.html, "/") and the sign-up gateway (start.html). The landing
+// Deliberate exception (OWN_CHROME): the landing (index.html, "/"), the sign-up gateway (start.html), and the public
+// Proof and Features pages, which share the landing's top bar and footer (checked below). The landing
 // tells a newcomer the story with a slim top bar (section anchors, Sign in, Get started) instead of dropping them into
 // an app sidebar, and the gateway is one calm, focused flow with only the logo and a way out. They have their own
 // rules above (no app sidebar, a slim bar, legal links, the way into the gateway, the gate script), and every other
@@ -121,6 +123,20 @@ for (const page of pages.filter((p) => !OWN_CHROME.has(p))) {
     if (!c[k]) fail(`${page}: missing the ${k}`);
     else if (c[k] !== refChrome[k]) fail(`${page}: the ${k} differs from app.html (run node scripts/sync-chrome.mjs to copy it)`);
   }
+}
+
+// The public pages with the landing's chrome (proof.html, features.html) carry the landing's footer links, and the
+// landing links Features from its top bar and both pages from its footer.
+{
+  const read = (p) => (pages.includes(p) ? fs.readFileSync(path.join(SITE, p), "utf8") : "");
+  const footNav = (p) => (read(p).match(/<footer class="lp-foot">[^]*?<nav aria-label="Footer">([^]*?)<\/nav>/) || [])[1];
+  const ref = footNav("index.html") ?? "";
+  for (const p of ["proof.html", "features.html"]) {
+    if (footNav(p) !== ref) fail(`${p}: footer links should be the landing's (copy them from index.html)`);
+    if (!ref.includes(`href="${p}"`)) fail(`index.html: footer should link ${p}`);
+    if (!/<nav class="lp-links"[^]*?href="features\.html"[^]*?<\/nav>/.test(read(p))) fail(`${p}: top bar should link Features (features.html)`);
+  }
+  if (!/<nav class="lp-links"[^]*?href="features\.html"[^]*?<\/nav>/.test(read("index.html"))) fail("index.html: top bar should link Features (features.html)");
 }
 
 // Activity is for the signed-in wallet only: without JavaScript (or before it runs) visitors see the sign-in prompt,

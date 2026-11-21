@@ -4,9 +4,12 @@
 import { $, el, icon, initChrome, celoscanTx, lagos, lagosClock, CURRENCIES, TAG } from "../assets/core.js";
 import { agentStatus } from "../assets/ntag-ui.js";
 import { loadProof, proofModel } from "../assets/proof.js";
+import { getSession } from "../assets/session.js";
 
 document.documentElement.classList.add("js");
 initChrome();
+// signed in: the top bar offers the way back to the dashboard (as on the landing and features.html)
+if (getSession()) { const a = $("#lp-signin"); a.textContent = "Dashboard"; a.href = "app.html"; }
 
 const body = $("#pf-body");
 const timeEl = $("#pf-time");

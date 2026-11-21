@@ -6,7 +6,7 @@
 //   - The dashboard: signed out -> a sign-in panel (it never redirects, so it can't bounce with the landing);
 //     signed in without a tag -> "claim your tag"; with a tag -> the full dashboard.
 //   - The sign-up gateway: starts at the first step that isn't done yet.
-// Public pages (a tag's pay page, payment links, quote, receipts, verify, cash-out, docs, privacy, terms, agent) are
+// Public pages (a tag's pay page, payment links, quote, receipts, verify, cash-out, docs, privacy, terms, agent, proof, features) are
 // never gated: payers must be able to pay in seconds, without an account.
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
@@ -14,7 +14,7 @@ const signedIn = (session) => Boolean(session && ADDR.test(String(session.addres
 
 /** Pages anyone can open without signing in. */
 export const PUBLIC_PAGES = Object.freeze(["index.html", "start.html", "tag.html", "pay.html", "quote.html", "receipt.html", "verify.html",
-  "cash-out.html", "docs.html", "privacy.html", "terms.html", "agent.html", "autopilot.html", "get-paid.html", "proof.html", "404.html"]);
+  "cash-out.html", "docs.html", "privacy.html", "terms.html", "agent.html", "autopilot.html", "get-paid.html", "proof.html", "features.html", "404.html"]);
 /** Pages whose content is only for the signed-in wallet (they show a sign-in prompt otherwise, never a redirect loop). */
 export const SIGNED_IN_PAGES = Object.freeze(["app.html", "transactions.html", "account.html"]);
 

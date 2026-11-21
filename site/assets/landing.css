@@ -1,5 +1,6 @@
 /* =====================================================================
-   The front door: the landing (index.html) and the sign-up gateway
+   The front door: the landing (index.html), the public pages with its
+   chrome (features.html, proof.html) and the sign-up gateway
    (start.html). Builds on the tokens in styles.css.
 
    Editorial and type-led: big confident display lines, generous section
@@ -10,7 +11,7 @@
    the live converter in the hero.
    ===================================================================== */
 
-.lp { --lp-pad: clamp(64px, 9vw, 104px); --lp-w: 1180px; scroll-padding-top: 76px; }
+.lp { --lp-pad: clamp(56px, 7.5vw, 96px); --lp-w: 1180px; scroll-padding-top: 76px; }
 /* the app pages reserve room for their fixed app bar below 1100px; the front door's bar is sticky, in the flow */
 html.lp body { padding-top: 0; }
 .lp main { padding-top: 0; margin-left: 0; }
@@ -104,40 +105,33 @@ html.lp body { padding-top: 0; }
 .conv-foot { padding: 12px 22px 16px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
 .conv-note { font-size: 12px; color: var(--warn); grid-column: 2 / -1; }
 
-/* ---------- the problem: four plain words ---------- */
-.lp-pains { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 56px 0 0; padding: 0; list-style: none; text-align: left; border-top: 1px solid var(--line); }
-.lp-pains li { padding: 26px 24px 0 0; }
-.lp-pains li + li { padding-left: 24px; border-left: 1px solid var(--line); }
-.lp-pains b { display: block; font-size: 21px; font-weight: 400; letter-spacing: -0.02em; margin-bottom: 8px; }
-.lp-pains p { font-size: 15px; color: var(--text-2); }
-
-/* ---------- how it works: three steps (a real sequence, so numbered) ---------- */
+/* ---------- how it works: three steps, one line each (a real sequence, so numbered) ---------- */
 .lp-steps { list-style: none; margin: 34px 0 0; padding: 0; counter-reset: s; display: grid; gap: 0; }
-.lp-steps li { counter-increment: s; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 4px 12px; padding: 22px 0; border-top: 1px solid var(--line); }
-.lp-steps li::before { content: counter(s); grid-row: span 2; font: 300 32px/1 var(--sans); color: var(--text-3); letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
-.lp-steps p { font-size: 15.5px; color: var(--text-2); }
+.lp-steps li { counter-increment: s; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 20px 0; border-top: 1px solid var(--line); }
+.lp-steps li::before { content: counter(s); font: 300 32px/1 var(--sans); color: var(--text-3); letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
 .lp-card-plate { display: grid; place-items: center; padding: clamp(28px, 5vw, 56px) clamp(18px, 4vw, 44px); }
 .lp-card-plate .ntag-stage { width: 100%; margin: 0; }
 .lp-card-plate .ntag-card { margin: 0 auto; }
-.lp-pay-line { display: grid; gap: 2px; padding: 14px 18px; border-top: 1px solid var(--line); font-size: 14px; color: var(--text-2); }
-.lp-pay-line b { color: var(--text); font-weight: 500; }
 
-/* ---------- countries ---------- */
-.lp-countries { list-style: none; margin: 56px 0 0; padding: 0; text-align: left; border-top: 1px solid var(--line-strong); }
-.lp-countries li { display: grid; grid-template-columns: 40px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) auto; align-items: center; gap: 8px 20px; padding: 22px 4px; border-bottom: 1px solid var(--line); }
-.lp-countries .cur-flag { width: 34px; height: 23px; border-radius: 5px; }
-.lp-countries .c-name { font-size: clamp(22px, 2.6vw, 34px); font-weight: 300; letter-spacing: -0.03em; line-height: 1.1; }
-.lp-countries .c-cur { color: var(--text-2); font-size: 15px; }
-.lp-countries .c-cur small { display: block; color: var(--text-3); font: 12.5px var(--mono); }
-.lp-countries .c-rate { font-size: clamp(17px, 1.8vw, 22px); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-.lp-countries .c-rate small { display: block; font-size: 12.5px; color: var(--text-3); letter-spacing: 0; }
-.lp-also { margin-top: 22px; font-size: 15px; color: var(--text-2); }
+/* ---------- countries: a compact rate board ---------- */
+.lp-countries { list-style: none; margin: 48px 0 0; padding: 0; text-align: left; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line-strong); }
+.lp-countries li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-content: start; gap: 4px 12px; padding: 22px 20px 20px; border-bottom: 1px solid var(--line); }
+.lp-countries li + li { border-left: 1px solid var(--line); }
+.lp-countries .cur-flag { width: 30px; height: 20px; border-radius: 4px; align-self: center; }
+.lp-countries .c-name { font-size: clamp(20px, 2vw, 26px); font-weight: 300; letter-spacing: -0.03em; line-height: 1.15; }
+.lp-countries .c-cur { grid-column: 1 / -1; color: var(--text-3); font-size: 13.5px; }
+.lp-countries .c-rate { grid-column: 1 / -1; margin-top: 14px; font-size: clamp(22px, 2.2vw, 28px); font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.lp-countries .c-rate small { display: block; font-size: 12.5px; color: var(--text-3); letter-spacing: 0; font-weight: 400; }
+.lp-also { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 14px; margin-top: 24px; font-size: 15px; color: var(--text-2); }
 
-/* ---------- everything Lokal does: the index ---------- */
+/* ---------- everything Lokal does: the index (features.html) ---------- */
+.lp-page { border-top: 0; padding-top: clamp(40px, 6vw, 72px); }
 .lp-index-head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 24px 64px; align-items: end; }
 .lp-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 14px; color: var(--text-2); }
 .lp-legend li { display: grid; grid-template-columns: 12.5rem minmax(0, 1fr); gap: 12px; align-items: baseline; }
 .lp-legend .status-pill { justify-self: start; }
+.lp-subhead { margin-top: 56px; font-size: 12.5px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+.lp-subhead + .lp-status { margin-top: 14px; }
 .lp-index { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 32px; margin-top: 56px; }
 .lp-group h3 { font-size: 12.5px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); padding-bottom: 14px; border-bottom: 1px solid var(--line-strong); }
 .lp-group ul { list-style: none; margin: 0; padding: 0; }
@@ -155,11 +149,7 @@ html.lp body { padding-top: 0; }
 .status-pill[data-status="planned"] { border-style: dashed; }
 
 /* ---------- why it's safe ---------- */
-.lp-safe { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 48px; margin-top: 56px; text-align: left; }
-.lp-safe > div { padding: 24px 0; border-top: 1px solid var(--line); }
-.lp-safe h3 { margin-bottom: 8px; }
-.lp-safe p { color: var(--text-2); font-size: 15.5px; }
-.lp-contracts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 32px; text-align: left; }
+.lp-contracts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; max-width: 920px; margin: 36px auto 0; text-align: left; }
 .lp-contract { display: grid; gap: 6px; padding: 18px 20px; border-radius: 16px; background: var(--frame); border: 1px solid var(--line); }
 .lp-contract b { font-weight: 500; }
 .lp-contract .mono { font-size: 12.5px; color: var(--text-2); overflow-wrap: anywhere; }
@@ -169,29 +159,30 @@ html.lp body { padding-top: 0; }
 .lp-status { list-style: none; margin: 40px 0 0; padding: 0; text-align: left; border-top: 1px solid var(--line-strong); }
 .lp-status li { display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); gap: 10px 24px; align-items: baseline; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 15.5px; color: var(--text-2); }
 .lp-status .status-pill { justify-self: start; }
-.lp-payouts { margin-top: 32px; padding: 26px; border-radius: 20px; border: 1px dashed var(--line-strong); text-align: left; }
+.lp-payouts { max-width: 920px; margin: 36px auto 0; padding: 26px; border-radius: 20px; border: 1px dashed var(--line-strong); text-align: left; }
 .lp-payouts.has-rows { border-style: solid; }
 .lp-payouts h3 { margin-bottom: 6px; }
 .lp-payouts ul { list-style: none; margin: 12px 0 0; padding: 0; }
 .lp-payouts li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 15px; }
+/* the status today, in one line */
+.lp-status-line { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px 22px; margin-top: 20px; font-size: 14px; color: var(--text-2); }
+.lp-status-line > span { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 8px; }
+.lp-also .text-link + .text-link { margin-left: 12px; }
+.lp-status-line .text-link { font-size: 14px; }
 
-/* ---------- developers ---------- */
-.lp-code { margin: 0; padding: 20px 22px; font: 14px/1.9 var(--mono); color: var(--mint-ink); white-space: pre; overflow-x: auto; }
-.lp-code .p { color: var(--text-3); user-select: none; }
-.lp-code .c { color: var(--text-3); }
-.lp-links-list { display: flex; flex-wrap: wrap; gap: 12px 26px; margin-top: 26px; }
-
-/* ---------- FAQ ---------- */
-.lp-faq { max-width: 820px; margin: 48px auto 0; text-align: left; border-top: 1px solid var(--line-strong); }
+/* ---------- the last word and four questions ---------- */
+.lp-final { padding: calc(var(--lp-pad) * 1.1) 0; }
+.lp-final .lp-split { align-items: start; }
+.lp-final .lp-actions { margin-top: 30px; }
+.lp-final.lp-center .lp-actions { justify-content: center; }
+.lp-faq { text-align: left; border-top: 1px solid var(--line-strong); }
 .lp-faq details { border-bottom: 1px solid var(--line); }
-.lp-faq summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 22px 2px; font-size: 18px; font-weight: 400; letter-spacing: -0.01em; }
+.lp-faq summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 20px 2px; font-size: 18px; font-weight: 400; letter-spacing: -0.01em; }
 .lp-faq summary::-webkit-details-marker { display: none; }
 .lp-faq summary::after { content: "+"; flex: none; font-size: 24px; font-weight: 300; color: var(--text-3); transition: transform .3s var(--calm); }
 .lp-faq details[open] summary::after { transform: rotate(45deg); }
-.lp-faq .a { padding: 0 2px 24px; color: var(--text-2); font-size: 16px; line-height: 1.65; max-width: 68ch; }
+.lp-faq .a { padding: 0 2px 22px; color: var(--text-2); font-size: 16px; line-height: 1.65; max-width: 62ch; }
 .lp-faq .a a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
-.lp-final { padding: calc(var(--lp-pad) * 1.15) 0; }
-.lp-final .lp-actions { justify-content: center; margin-top: 34px; }
 
 /* ---------- landing footer ---------- */
 .lp-foot { border-top: 1px solid var(--line); padding: 44px 0 36px; color: var(--text-3); font-size: 14px; }
@@ -213,31 +204,27 @@ html.lp body { padding-top: 0; }
   .lp-index { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; }
   .lp-group { margin-bottom: 36px; }
   .lp-group.next { margin-top: 0; }
+  .lp-countries { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-countries li:nth-child(3) { border-left: 0; }
 }
 @media (max-width: 900px) {
   .lp-split, .lp-hero .lp-split, .lp-index-head { grid-template-columns: minmax(0, 1fr); }
   .lp-split.flip > :first-child { order: 0; }
-  .lp-pains { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .lp-pains li:nth-child(3) { padding-left: 0; border-left: 0; }
-  .lp-countries li { grid-template-columns: 40px minmax(0, 1fr) auto; }
-  .lp-countries .c-cur { grid-column: 2; }
-  .lp-countries .c-rate { grid-column: 2 / -1; }
-  .lp-countries li > .status-pill { grid-column: 3; grid-row: 1; }
 }
 @media (max-width: 640px) {
   .lp { --lp-pad: 64px; }
   .lp-hero { padding-top: 36px; }
   .lp-hero .lp-lead { margin-top: 18px; }
   .lp-hero .lp-actions { margin-top: 26px; }
-  .lp-pains, .lp-safe, .lp-contracts, .lp-index, .lp-group.next ul { grid-template-columns: minmax(0, 1fr); }
-  .lp-pains li, .lp-pains li + li { padding: 20px 0 0; border-left: 0; }
+  .lp-contracts, .lp-index, .lp-group.next ul { grid-template-columns: minmax(0, 1fr); }
   .lp-status li, .lp-legend li { grid-template-columns: minmax(0, 1fr); gap: 6px; }
-  .lp-countries li { padding: 18px 0; gap: 6px 14px; }
-  .lp-countries .c-rate { grid-column: 2 / -1; }
+  .lp-countries li { padding: 18px 14px 16px; gap: 4px 10px; }
+  .lp-countries li:nth-child(odd) { padding-left: 0; }
+  .lp-countries .c-name { font-size: 20px; }
+  .lp-countries .c-rate { font-size: 21px; margin-top: 10px; }
   .conv-body { padding: 18px 16px 14px; }
   .conv-foot { padding: 12px 16px 14px; }
   .lp-payouts { padding: 20px 18px; }
-  .lp-code { font-size: 12.5px; padding: 16px; }
   .lp-faq summary { font-size: 17px; }
 }
 

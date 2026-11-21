@@ -73,7 +73,7 @@ test("Activity and the dashboard: only a signed-in wallet sees its rows; signed 
   assert.equal(dashboardView({ address: ADDR }, null), "no-tag");
   assert.equal(dashboardView({ address: ADDR }, "ada"), "tag");
   // payer pages are never gated; the signed-in pages are disjoint from them
-  for (const p of ["tag.html", "pay.html", "quote.html", "receipt.html", "verify.html", "cash-out.html", "docs.html", "privacy.html", "terms.html", "agent.html"]) assert.ok(PUBLIC_PAGES.includes(p), p);
+  for (const p of ["tag.html", "pay.html", "quote.html", "receipt.html", "verify.html", "cash-out.html", "docs.html", "privacy.html", "terms.html", "agent.html", "proof.html", "features.html"]) assert.ok(PUBLIC_PAGES.includes(p), p);
   for (const p of SIGNED_IN_PAGES) assert.ok(!PUBLIC_PAGES.includes(p), p);
 });
 

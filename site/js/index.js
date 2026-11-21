@@ -1,4 +1,5 @@
-// The landing (index.html). It tells the story; only three things on it are live:
+// The landing (index.html): six sections (hero, how it works, four countries, why it's safe, proof, the last word and
+// four questions). Every feature with its label lives on features.html. Only three things on the landing are live:
 //   1. the hero converter: type dollars, see naira / rupiah / pesos from the live Textile FX rate (/api/rate, or
 //      rate.json where there is no API), each amount ticking in when it changes;
 //   2. the four countries' rates;
