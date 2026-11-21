@@ -12,10 +12,10 @@ rules both share), `src/guards.mjs`, `src/pay.mjs`, `src/watch.mjs` and `src/nta
 the independent audit's attack scenarios in `tests/Attack.spec.ts`) and by `npm run demo`, which walks the whole story
 and asserts every outcome.
 
-> **Status.** `LokalTags` and `LokalPots` are built, audited, fixed and tested, but not deployed yet. Until the site and
-> the agent switch to them (see the README), tags are still claimed with `NT1:` transactions and paid with `NTP:`
-> transfer memos, and every rule below marked "contract" is enforced by the agent and the site instead, after the
-> money has arrived.
+> **Status.** `LokalTags` ([`0xFF2f8ADC0c97B6E40b201848d378C11325bC7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187)) and `LokalPots` ([`0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF`](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF)) are live on Celo
+> mainnet and source-verified. Until the site and the agent switch to them (see the README), tags are still claimed with
+> `NT1:` transactions and paid with `NTP:` transfer memos, and every rule below marked "contract" is enforced by the
+> agent and the site instead, after the money has arrived.
 
 ## Enforced by LokalTags (onchain, before any money moves)
 

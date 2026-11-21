@@ -23,6 +23,8 @@ Built for the **Agents Open for Business** hackathon on Celo, **Track 3: Stablec
 | Agent wallet | [`0x8a695cf54CB44753c8b784EB36d266f748617a1e`](https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e) |
 | ERC-8004 identity | agentId **10079** in the Identity Registry [`0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`](https://celoscan.io/address/0x8004A169FB4a3325136EB29fA0ceB6D2e539a432) |
 | ERC-8004 reputation | Reputation Registry [`0x8004BAa17C55a88189AE136b182e5fdA19dE9b63`](https://celoscan.io/address/0x8004BAa17C55a88189AE136b182e5fdA19dE9b63) |
+| LokalTags (tags + payments) | [`0xFF2f8ADC0c97B6E40b201848d378C11325bC7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) · source verified on [Sourcify](https://repo.sourcify.dev/42220/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) (exact match) |
+| LokalPots (pots) | [`0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF`](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) · source verified on [Sourcify](https://repo.sourcify.dev/42220/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) (exact match) |
 | Attribution tag (ERC-8021) | `celo_7360953d1b53`, on every transaction the agent sends **and** on every transaction the site asks a user's wallet to send (tag claims, payments, registrations, ratings) |
 | USD₮ | [`0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e`](https://celoscan.io/address/0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e) (6 decimals) |
 | cNGN (naira) | [`0xF6829D7393dAe24509eb1E52eE8e572e2E271a4f`](https://celoscan.io/address/0xF6829D7393dAe24509eb1E52eE8e572e2E271a4f) (6 decimals) |
@@ -627,8 +629,11 @@ the site enforces it.
 
 | | |
 |---|---|
-| Status | Built, audited, fixed and tested. **Mainnet deployment in progress**; addresses will appear here. Until the site and the agent switch over, tags still work through `NT1:` / `NTP:` transactions and the agent enforces these limits. |
-| Admin | [`0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070`](https://celoscan.io/address/0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070) (two-step ownership transfer; not the agent's key) |
+| Status | **Live on Celo mainnet since 21 Nov 2026.** Deployed by the agent with the ERC-8021 tag ([LokalTags tx](https://celoscan.io/tx/0x4d4aa9adba3417e9a7017a4c2e45b4cafe2380702e75f6f9350af7ac58af858e), [LokalPots tx](https://celoscan.io/tx/0x8e56d2a9e391a54589ab9e72d683d8307355c5f8b8fb2dd697bab62b65c3ebd9)). The site and the agent switch to the contracts next; until then tags still work through `NT1:` / `NTP:` transactions and the agent enforces these limits. |
+| LokalTags | [`0xFF2f8ADC0c97B6E40b201848d378C11325bC7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) · [Blockscout](https://celo.blockscout.com/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187?tab=contract) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) |
+| LokalPots | [`0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF`](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) · [Blockscout](https://celo.blockscout.com/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF?tab=contract) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) |
+| ABIs and addresses | [`contracts/deployments/`](contracts/deployments/) (`LokalTags.json`, `LokalPots.json`, constructor arguments, deploy record) |
+| Admin | [`0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070`](https://celoscan.io/address/0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070) (two-step ownership transfer, [sent](https://celoscan.io/tx/0xd22cf761f5c768dad0b432fa27d0bea927db04ce344de10f3ce26af8dde66bda); the admin accepts it from their own wallet. Never the agent's key) |
 | Payout wallet | the agent, [`0x8a695cf54CB44753c8b784EB36d266f748617a1e`](https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e) |
 
 ---
@@ -883,8 +888,10 @@ node scripts/check-site.mjs       # static site check
 
 Newest first.
 
-### 2026-11-22: the contracts: LokalTags and LokalPots
+### 2026-11-22: the contracts: LokalTags and LokalPots, live on Celo mainnet
 
+- **Deployed** on Celo mainnet: LokalTags [`0xFF2f8ADC0c97B6E40b201848d378C11325bC7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187), LokalPots [`0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF`](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF), both source-verified
+  (Sourcify exact match), every transaction attribution-tagged. Admin handed to a separate wallet (two-step).
 - **`contracts/`** (Solidity 0.8.30, OpenZeppelin 5.6.1, Hardhat + TypeScript): `LokalTags` (tag registry and payment
   router with per-token limits) and `LokalPots` (one link, many payers). Neither holds money. See
   [The contract has the final say](#the-contract-has-the-final-say).

@@ -1,8 +1,13 @@
 {
   "contractName": "LokalTags",
   "chainId": 42220,
-  "address": null,
-  "deployment": null,
+  "address": "0xFF2f8ADC0c97B6E40b201848d378C11325bC7187",
+  "deployment": {
+    "txHash": "0x4d4aa9adba3417e9a7017a4c2e45b4cafe2380702e75f6f9350af7ac58af858e",
+    "blockNumber": 83385019,
+    "deployer": "0x8a695cf54CB44753c8b784EB36d266f748617a1e",
+    "payoutWallet": "0x8a695cf54CB44753c8b784EB36d266f748617a1e"
+  },
   "tokens": [
     {
       "symbol": "USDT",

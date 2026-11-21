@@ -1,8 +1,13 @@
 {
   "contractName": "LokalPots",
   "chainId": 42220,
-  "address": null,
-  "deployment": null,
+  "address": "0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF",
+  "deployment": {
+    "txHash": "0x8e56d2a9e391a54589ab9e72d683d8307355c5f8b8fb2dd697bab62b65c3ebd9",
+    "blockNumber": 83385026,
+    "deployer": "0x8a695cf54CB44753c8b784EB36d266f748617a1e",
+    "payoutWallet": "0x8a695cf54CB44753c8b784EB36d266f748617a1e"
+  },
   "pots": {
     "maxPotCapUsd6": "100000000",
     "maxPerPayerCapUsd6": "5000000",

@@ -1,0 +1,164 @@
+{
+  "chainId": 42220,
+  "network": "celo",
+  "rehearsal": false,
+  "deployer": "0x8a695cf54CB44753c8b784EB36d266f748617a1e",
+  "payoutWallet": "0x8a695cf54CB44753c8b784EB36d266f748617a1e",
+  "newOwner": "0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070",
+  "attribution": "celo_7360953d1b53",
+  "reservedTags": [
+    "agent",
+    "admin",
+    "administrator",
+    "root",
+    "system",
+    "support",
+    "help",
+    "official",
+    "team",
+    "staff",
+    "mod",
+    "moderator",
+    "security",
+    "celo",
+    "minipay",
+    "valora",
+    "opera",
+    "textile",
+    "naira",
+    "nairapayout",
+    "payout",
+    "payouts",
+    "ntag",
+    "ntags",
+    "lokal",
+    "lokalpay",
+    "cngn",
+    "usdt",
+    "usdc",
+    "tether",
+    "cusd",
+    "ceur",
+    "wallet",
+    "bank",
+    "cbn",
+    "null",
+    "undefined",
+    "anonymous",
+    "everyone",
+    "me",
+    "you",
+    "test",
+    "demo",
+    "api",
+    "www",
+    "app",
+    "pay",
+    "send",
+    "receive",
+    "lokal_support",
+    "lokalsupport",
+    "lokal_help",
+    "lokal_team",
+    "lokal_official",
+    "lokalofficial",
+    "support_team",
+    "help_desk",
+    "helpdesk",
+    "admin1",
+    "celo_team",
+    "celoteam",
+    "minipay_support",
+    "textile_fx"
+  ],
+  "lastStep": "done",
+  "updatedAt": "2026-11-21T18:29:51.261Z",
+  "LokalTags": {
+    "address": "0xFF2f8ADC0c97B6E40b201848d378C11325bC7187",
+    "txHash": "0x4d4aa9adba3417e9a7017a4c2e45b4cafe2380702e75f6f9350af7ac58af858e",
+    "blockNumber": 83385019
+  },
+  "tokens": [
+    {
+      "symbol": "USDT",
+      "address": "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e",
+      "decimals": 6,
+      "limits": {
+        "minPerPayment": "1000000",
+        "maxPerPayment": "25000000",
+        "maxPerRecipientPerDay": "25000000",
+        "maxPerPayerPerDay": "25000000",
+        "maxPerDay": "250000000"
+      },
+      "unitsPerUsd": "1000000"
+    },
+    {
+      "symbol": "cNGN",
+      "address": "0xF6829D7393dAe24509eb1E52eE8e572e2E271a4f",
+      "decimals": 6,
+      "limits": {
+        "minPerPayment": "1441000000",
+        "maxPerPayment": "34944000000",
+        "maxPerRecipientPerDay": "34944000000",
+        "maxPerPayerPerDay": "34944000000",
+        "maxPerDay": "349440000000"
+      },
+      "unitsPerUsd": "1441000000"
+    },
+    {
+      "symbol": "IDRX",
+      "address": "0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22",
+      "decimals": 2,
+      "limits": {
+        "minPerPayment": "1840700",
+        "maxPerPayment": "44636900",
+        "maxPerRecipientPerDay": "44636900",
+        "maxPerPayerPerDay": "44636900",
+        "maxPerDay": "446369000"
+      },
+      "unitsPerUsd": "1840700"
+    },
+    {
+      "symbol": "wARS",
+      "address": "0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D",
+      "decimals": 18,
+      "limits": {
+        "minPerPayment": "1766000000000000000000",
+        "maxPerPayment": "42806000000000000000000",
+        "maxPerRecipientPerDay": "42806000000000000000000",
+        "maxPerPayerPerDay": "42806000000000000000000",
+        "maxPerDay": "428060000000000000000000"
+      },
+      "unitsPerUsd": "1765200000000000000000"
+    },
+    {
+      "symbol": "wCOP",
+      "address": "0x8a1D45e102e886510e891d2Ec656a708991e2D76",
+      "decimals": 18,
+      "limits": {
+        "minPerPayment": "3456000000000000000000",
+        "maxPerPayment": "83798000000000000000000",
+        "maxPerRecipientPerDay": "83798000000000000000000",
+        "maxPerPayerPerDay": "83798000000000000000000",
+        "maxPerDay": "837980000000000000000000"
+      },
+      "unitsPerUsd": "3455600000000000000000"
+    }
+  ],
+  "LokalPots": {
+    "address": "0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF",
+    "txHash": "0x8e56d2a9e391a54589ab9e72d683d8307355c5f8b8fb2dd697bab62b65c3ebd9",
+    "blockNumber": 83385026
+  },
+  "pots": {
+    "maxPotCapUsd6": "100000000",
+    "maxPerPayerCapUsd6": "5000000",
+    "maxPerHostDailyUsd6": "100000000",
+    "maxDailyUsd6": "250000000"
+  },
+  "ownerTransfer": {
+    "to": "0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070",
+    "txHash": "0xd22cf761f5c768dad0b432fa27d0bea927db04ce344de10f3ce26af8dde66bda",
+    "accepted": false
+  }
+}
