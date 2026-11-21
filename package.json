@@ -2,6 +2,9 @@
   "name": "lokal",
   "version": "0.1.0",
   "description": "Lokal: pay anyone in their local money. An agent that pays out in local stablecoins (cNGN today) on Celo via Textile FX",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node --test",
     "start": "node src/agent.mjs",

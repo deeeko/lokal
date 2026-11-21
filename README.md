@@ -5,9 +5,21 @@ Formerly Naira Payout.
 Send dollars, they receive their local money: an agent on Celo that converts USD₮ to a local stablecoin on Textile FX
 and pays the recipient's own wallet, by Lokal tag, payment link or command line, with every limit enforced in code.
 
-Multi-currency by design: **naira** (cNGN, Nigeria) is ready to pay out today; **rupiah** (IDRX, Indonesia) and **pesos**
-(wARS, Argentina; wCOP, Colombia) already quote live on Textile FX and are rolling out next. See
-[Currencies](#currencies) for the exact status of each.
+Multi-currency by design: **naira** (cNGN, Nigeria) payouts are built and tested; **rupiah** (IDRX, Indonesia) and
+**pesos** (wARS, Argentina; wCOP, Colombia) are planned: Textile FX priced them on 21 Nov and their payout code is being
+built. See [Currencies](#currencies) for the exact status of each.
+
+> **Status today.** Every feature carries one of three labels, used the same way on the site:
+> **Live** (used with real money on Celo mainnet, with a transaction link) ·
+> **Built, not yet used on mainnet** (code and tests exist; no real payout yet) ·
+> **Planned** (not built yet).
+>
+> - **Live:** the LokalTags and LokalPots contracts are deployed and verified on mainnet (see
+>   [The contract has the final say](#the-contract-has-the-final-say)). No real user payout yet.
+> - **Built, not yet used on mainnet:** naira payouts (USD₮ → cNGN and back), Lokal tags, payment links, Get paid,
+>   autopilot, the `lokal` command, receipts and reviews.
+> - **Planned:** rupiah and peso payouts, paying through the contracts from the site, Pots on the site, the
+>   "Who am I paying?" card, Pay with CELO for payers, the cash-out guide, MiniPay mode.
 
 **[Live app](https://lokalpay.vercel.app)** ·
 **[Agent on Celoscan](https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e)** ·
@@ -48,8 +60,9 @@ Built for the **Agents Open for Business** hackathon on Celo, **Track 3: Stablec
 8. [Architecture](#architecture)
 9. [Run it yourself](#run-it-yourself)
 10. [Progress log](#progress-log)
-11. [Status and roadmap](#status-and-roadmap)
-12. [License](#license)
+11. [Business model](#business-model)
+12. [Status and roadmap](#status-and-roadmap)
+13. [License](#license)
 
 ---
 
@@ -58,7 +71,7 @@ Built for the **Agents Open for Business** hackathon on Celo, **Track 3: Stablec
 Someone abroad wants to send money home. They hold dollars (USD₮) on Celo; the recipient wants their local money.
 Lokal's agent sits in the middle: it takes the dollars, converts them to a local stablecoin on **Textile FX**, and pays
 the recipient's own Celo wallet. It is built for families and freelancers across **Nigeria, Indonesia, Argentina and
-Colombia**: @ada receives naira today; @budi will receive rupiah once the rupiah payouts ship (see
+Colombia**: @ada can receive naira; @budi will receive rupiah once the rupiah payouts ship (see
 [Currencies](#currencies)).
 
 Today the agent pays out end to end in **cNGN** (the naira stablecoin). The naira corridor also runs the other way
@@ -86,25 +99,25 @@ wallet. The agent holds only what it is converting at that moment.
 ## Currencies
 
 Lokal is multi-currency by design. Every local stablecoin below is on Celo mainnet and is priced by Textile FX against
-USD₮. Naira is ready today; rupiah and pesos are rolling out.
+USD₮. Naira payouts are built, not yet used on mainnet; rupiah and pesos are planned.
 
 | Country | Token | Issuer | Decimals | Today's rate (5 USD₮) | Status |
 |---|---|---|---|---|---|
-| 🇳🇬 Nigeria | [cNGN](https://celoscan.io/address/0xF6829D7393dAe24509eb1E52eE8e572e2E271a4f) (naira) | — | 6 | ₦7,205.67 | **Payout flow built** (USD₮ → cNGN, cNGN → USD₮, and CELO → cNGN for the operator); first real mainnet payout pending |
-| 🇮🇩 Indonesia | [IDRX](https://celoscan.io/address/0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22) (rupiah) | — | 2 | Rp 92,035.51 | Quoting live, payouts next |
-| 🇦🇷 Argentina | [wARS](https://celoscan.io/address/0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D) (peso) | Ripio | 18 | ARS 8,826.31 | Quoting live, payouts next |
-| 🇨🇴 Colombia | [wCOP](https://celoscan.io/address/0x8a1D45e102e886510e891d2Ec656a708991e2D76) (peso) | Ripio | 18 | COP 17,277.91 | Quoting live, payouts next |
+| 🇳🇬 Nigeria | [cNGN](https://celoscan.io/address/0xF6829D7393dAe24509eb1E52eE8e572e2E271a4f) (naira) | — | 6 | ₦7,205.67 | **Built, not yet used on mainnet** (USD₮ → cNGN, cNGN → USD₮, and CELO → cNGN for the operator) |
+| 🇮🇩 Indonesia | [IDRX](https://celoscan.io/address/0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22) (rupiah) | — | 2 | Rp 92,035.51 | **Planned** (Textile gave a price on 21 Nov; payout code in progress) |
+| 🇦🇷 Argentina | [wARS](https://celoscan.io/address/0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D) (peso) | Ripio | 18 | ARS 8,826.31 | **Planned** (Textile gave a price on 21 Nov; payout code in progress) |
+| 🇨🇴 Colombia | [wCOP](https://celoscan.io/address/0x8a1D45e102e886510e891d2Ec656a708991e2D76) (peso) | Ripio | 18 | COP 17,277.91 | **Planned** (Textile gave a price on 21 Nov; payout code in progress) |
 
 - **Rates** are live Textile FX previews for 5 USD₮ taken on 21 Nov 2026. They are free previews, not firm quotes, and
   they move; every payment gets its own firm quote at the time it is paid.
-- **What "Payout flow built" means.** Payments by Lokal tag, payment link, Get paid or the `lokal` CLI are paid out by the
+- **What "Built, not yet used on mainnet" means.** Payments by Lokal tag, payment link, Get paid or the `lokal` CLI are paid out by the
   agent (by hand or on autopilot) in cNGN, plus the reverse corridor that pays USD₮. The flow is built and tested against
   live Textile quotes; the first real mainnet payout to a user is still pending and will be linked here with its
   transactions. No payout in IDRX, wARS or wCOP has been made yet.
-- **What "Quoting live, payouts next" means.** Textile FX returns live prices for these tokens, and the new LokalTags and
-  LokalPots contracts (in `contracts/`, not yet deployed) are configured to accept them, with per-token limits worked
-  out from the same dollar caps. The agent's payouts in these tokens and the site's currency picker ("Choose what they receive") are the
-  next build step.
+- **What "Planned" means here.** Textile FX returned a price for these tokens when checked on 21 Nov, and the LokalTags
+  and LokalPots contracts (live on mainnet) already accept them, with per-token limits worked out from the same dollar
+  caps. The agent's payouts in these tokens and the site's currency picker ("Choose what they receive") are not
+  released yet.
 - **Not yet supported.** Textile also lists wBRL (Brazil) and wMXN (Mexico), but neither returned a quote on 21 Nov, so
   Lokal does not offer them.
 
@@ -363,15 +376,15 @@ flowchart TB
     direction TB
     P1["Pay a Lokal tag<br/>/@ada · picks the currency<br/>they receive"]
     P2["Pay a link<br/>exact amount, made by<br/>the recipient"]
-    P3["Pot / Spray Wall<br/>one QR, many guests<br/>(rolling out)"]
+    P3["Pot / Spray Wall<br/>one QR, many guests<br/>(planned)"]
   end
 
   %% ---------- checks before money moves ----------
   subgraph CHECKS["Checked before anything is sent"]
     direction TB
-    C1["Who am I paying?<br/>tag owner, age, first-time warning"]
+    C1["Who am I paying?<br/>tag owner, age, first-time warning<br/>(planned)"]
     C2["Limits shown and enforced<br/>$25 per payment · $25 per person/day<br/>$100 per day overall"]
-    C3["LokalTags + LokalPots contracts<br/>refuse over-limit payments<br/>before money moves (deploying)"]
+    C3["LokalTags + LokalPots contracts<br/>refuse over-limit payments<br/>before money moves<br/>(live on mainnet; site switch planned)"]
   end
 
   %% ---------- the agent ----------
@@ -396,8 +409,8 @@ flowchart TB
   subgraph RECIPIENT["Recipient's OWN wallet"]
     direction TB
     R1["🇳🇬 cNGN (naira) · ready today"]
-    R2["🇮🇩 IDRX (rupiah) · rolling out"]
-    R3["🇦🇷 wARS · 🇨🇴 wCOP (pesos) · rolling out"]
+    R2["🇮🇩 IDRX (rupiah) · planned"]
+    R3["🇦🇷 wARS · 🇨🇴 wCOP (pesos) · planned"]
   end
 
   %% ---------- after ----------
@@ -405,7 +418,7 @@ flowchart TB
     direction TB
     X1["Keep it: savings in<br/>their own currency"]
     X2["Send it on Celo<br/>instantly, fraction of a cent"]
-    X3["Cash out to a bank<br/>via a supported exchange<br/>(see Cash out guide)"]
+    X3["Cash out to a bank<br/>via a supported exchange<br/>(cash-out guide: planned)"]
   end
 
   %% ---------- proof ----------
@@ -418,12 +431,12 @@ flowchart TB
 
   T1 --> P1 & P2
   T1 -.-> P3
-  T2 -.->|"Pay with CELO: converted<br/>CELO → USD₮ first (rolling out)"| A1
+  T2 -.->|"Pay with CELO: converted<br/>CELO → USD₮ first (planned)"| A1
   P1 --> C1 --> C2
   P2 --> C2
   P3 -.-> C3
   C2 --> A1
-  C2 -.->|"contract path (deploying)"| C3
+  C2 -.->|"contract path (site switch planned)"| C3
   C3 -.-> A1
   A1 --> A2
   A2 -->|"no match / breaks a rule"| A3
@@ -452,9 +465,9 @@ sequenceDiagram
   actor Ada as Ada (recipient)
 
   Tom->>Site: Open /@ada, choose "she receives naira", enter $10
-  Site->>Chain: Look up @ada (owner wallet, preferred currency, tag age)
+  Site->>Chain: Look up @ada (owner wallet)
   Site->>Textile: Free preview: $10 USD₮ → ≈ ₦14,4xx cNGN
-  Site-->>Tom: "Who am I paying?" card · rate · limits · ₦ estimate
+  Site-->>Tom: tag owner · rate · limits · ₦ estimate
   Note over Site,Tom: Limits checked against today's payments<br/>(stricter of agent records and the chain)
   Tom->>Chain: Send 10 USD₮ to the agent with memo "for @ada" (+ attribution tag)
   Chain-->>Site: Confirmed (tx hash) → tracker shows "Waiting for the agent"
@@ -473,7 +486,7 @@ sequenceDiagram
     Status-->>Site: Tracker shows "Paid · NP-XXXX-XXXX"
     Chain-->>Ada: ₦ arrives in her own wallet
   end
-  Ada->>Ada: Keep it, send it on, or cash out to her bank (Cash out guide)
+  Ada->>Ada: Keep it, send it on, or cash out to her bank (cash-out guide planned)
 ```
 
 ---
@@ -753,7 +766,7 @@ security headers and cache rules.
 
 ## Run it yourself
 
-Needs Node.js (CI and the deploy use Node 22).
+Needs Node.js 20 or newer (CI and the deploy use Node 22).
 
 ```powershell
 git clone https://github.com/deeeko/lokal.git
@@ -888,7 +901,16 @@ node scripts/check-site.mjs       # static site check
 
 Newest first.
 
-### 2026-11-22: the contracts: LokalTags and LokalPots, live on Celo mainnet
+### 2026-11-21: honesty pass, business model and SECURITY.md
+
+- **Three labels, used everywhere:** Live (used with real money on mainnet), Built, not yet used on mainnet, and
+  Planned. A "Status today" box near the top says which is which. Rupiah and pesos, Pots on the site, "Who am I
+  paying?", Pay with CELO and the cash-out guide are now labelled Planned in the text and in both diagrams.
+- **Business model** section: no fee today; a visible fee and paid business features are Planned.
+- **SECURITY.md** with private reporting through GitHub (turned on for the repo); `engines` set to Node 20+;
+  progress-log dates corrected to the real commit dates.
+
+### 2026-11-21: the contracts: LokalTags and LokalPots, live on Celo mainnet
 
 - **Deployed** on Celo mainnet: LokalTags [`0xFF2f8ADC0c97B6E40b201848d378C11325bC7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187), LokalPots [`0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF`](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF), both source-verified
   (Sourcify exact match), every transaction attribution-tagged. Admin handed to a separate wallet (two-step, accepted the same evening).
@@ -902,7 +924,7 @@ Newest first.
 - 127 contract tests plus a 28-step demo that CI asserts on every push (`.github/workflows/contracts.yml`), and
   [docs/WHO-ENFORCES-WHAT.md](docs/WHO-ENFORCES-WHAT.md).
 
-### 2026-11-22: Lokal tags, the `lokal` command and the repo move to deeeko/lokal
+### 2026-11-21: Lokal tags, the `lokal` command and the repo move to deeeko/lokal
 
 - **nTags are now Lokal tags.** Every page, receipt, message, the docs, privacy and terms say "Lokal tag" ("Claim your
   Lokal tag", "Pay a Lokal tag"). Only the words changed: the onchain formats (`NT1:` claims, `NTP:` memos), the
@@ -914,7 +936,7 @@ Newest first.
   the old repo URL. Autopilot's status codes still read refusal reasons written before the rename.
 - README now covers every supported currency.
 
-### 2026-11-22: nTags, wallet sign-in, the `ntag` CLI and a safety pass
+### 2026-11-21: nTags, wallet sign-in, the `ntag` CLI and a safety pass
 
 - **Status server.** Autopilot now reports every deposit it handles (paid with receipt, refused with reason,
   received) to a signed `/api/status` on Vercel, backed by a private Blob. The tag page, account page and payment
@@ -1001,6 +1023,24 @@ Newest first.
 
 ---
 
+## Business model
+
+Lokal is for "Agents Open for Business", so here is how it pays for itself, labelled like everything else.
+
+- **Today: no fee.** The payer gets Textile FX's rate exactly as quoted, and the operator pays the gas. Each payout is
+  a handful of Celo transactions (reset, approve, swap, transfer), which costs a fraction of a US cent each.
+- **Planned: a small, visible fee.** A fee in basis points with a small minimum (`FEE_BPS`, `FEE_MIN_USD`), taken
+  from the bought amount and shown on every quote, payment screen, CLI summary and receipt *before* the payer signs.
+  Limits apply to the gross amount. Not built yet.
+- **Planned: paid features for businesses.** Payment links and Pots for freelancers, shops and events (one QR code,
+  many payers), and later the dollar-subscription corridor in [Status and roadmap](#status-and-roadmap).
+
+Why people would pay: sending dollars home or to a freelancer usually means a bank or money-transfer fee *and* a
+weak exchange rate. Lokal shows the exact rate and the exact amount the recipient gets before anyone signs, and pays
+their own wallet in seconds.
+
+---
+
 ## Status and roadmap
 
 **Done**
@@ -1015,6 +1055,7 @@ Newest first.
 - [x] One-line Windows installer for the `lokal` command (`ntag` kept as an alias)
 - [x] Renamed to Lokal, at lokalpay.vercel.app (naira-payout.vercel.app keeps working)
 - [x] Live Textile FX quotes checked for rupiah (IDRX) and pesos (wARS, wCOP), see [Currencies](#currencies)
+- [x] LokalTags and LokalPots contracts deployed on Celo mainnet and source-verified; admin held by a separate wallet
 
 **Still to do** (added here only once they have happened)
 
@@ -1025,7 +1066,9 @@ Newest first.
 
 - **Currency picker and per-currency payouts.** "Choose what they receive" on every payment screen (naira, rupiah or
   pesos), and the agent and autopilot paying out in IDRX, wARS and wCOP as they pay in cNGN today, each with its own
-  decimals and the same dollar limits. Deploy the LokalTags and LokalPots contracts, which are already configured for all four local stablecoins.
+  decimals and the same dollar limits.
+- **Pay through the contracts.** Switch the site and the `lokal` command to the live LokalTags and LokalPots contracts,
+  so limits are checked before money moves and wallets see a normal contract call.
 - **All rates in the sidebar.** The live Textile rate for every supported currency, not only naira.
 - **Dollar subscriptions paid in local money.** Local cards are often declined or capped for dollar subscriptions (X
   Premium, ChatGPT, Canva, app stores). The naira → dollar corridor already converts cNGN to USD₮ on Textile FX; pairing
