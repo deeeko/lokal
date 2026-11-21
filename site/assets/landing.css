@@ -126,27 +126,23 @@ html.lp body { padding-top: 0; }
 
 /* ---------- everything Lokal does: the index (features.html) ---------- */
 .lp-page { border-top: 0; padding-top: clamp(40px, 6vw, 72px); }
-.lp-index-head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 24px 64px; align-items: end; }
-.lp-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 14px; color: var(--text-2); }
-.lp-legend li { display: grid; grid-template-columns: 12.5rem minmax(0, 1fr); gap: 12px; align-items: baseline; }
-.lp-legend .status-pill { justify-self: start; }
+.lp-index-head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 18px 64px; align-items: end; }
+.lp-index-head .lp-lead { font-size: 17px; }
 .lp-subhead { margin-top: 56px; font-size: 12.5px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
-.lp-subhead + .lp-status { margin-top: 14px; }
 .lp-index { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 32px; margin-top: 56px; }
+/* not built yet: one small list at the bottom, no labels */
+.lp-soon { margin-top: 48px; }
+.lp-soon .lp-subhead { margin-top: 0; }
+.lp-soon ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; border-top: 1px solid var(--line); }
+.lp-soon li { padding: 14px 0; font-size: 14px; color: var(--text-3); line-height: 1.5; }
+.lp-soon li b { display: block; color: var(--text-2); font-weight: 500; font-size: 15px; }
 .lp-group h3 { font-size: 12.5px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); padding-bottom: 14px; border-bottom: 1px solid var(--line-strong); }
 .lp-group ul { list-style: none; margin: 0; padding: 0; }
 .lp-group li { display: grid; gap: 6px; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .lp-group li b { font-weight: 500; font-size: 15.5px; letter-spacing: -0.005em; }
 .lp-group li p { font-size: 14px; color: var(--text-2); line-height: 1.5; }
-.lp-group .meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px; margin-top: 4px; }
+.lp-group .meta { display: flex; margin-top: 2px; }
 .lp-group .meta .text-link { font-size: 13.5px; }
-.lp-group .meta .not-yet { font-size: 13px; color: var(--text-3); }
-.lp-group.next { grid-column: 1 / -1; margin-top: 40px; }
-.lp-group.next ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; }
-
-/* honest status labels, a touch larger here */
-.lp .status-pill { font-size: 12px; }
-.status-pill[data-status="planned"] { border-style: dashed; }
 
 /* ---------- why it's safe ---------- */
 .lp-contracts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; max-width: 920px; margin: 36px auto 0; text-align: left; }
@@ -156,19 +152,12 @@ html.lp body { padding-top: 0; }
 .lp-contract:hover { border-color: var(--line-strong); }
 
 /* ---------- proof ---------- */
-.lp-status { list-style: none; margin: 40px 0 0; padding: 0; text-align: left; border-top: 1px solid var(--line-strong); }
-.lp-status li { display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); gap: 10px 24px; align-items: baseline; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 15.5px; color: var(--text-2); }
-.lp-status .status-pill { justify-self: start; }
 .lp-payouts { max-width: 920px; margin: 36px auto 0; padding: 26px; border-radius: 20px; border: 1px dashed var(--line-strong); text-align: left; }
 .lp-payouts.has-rows { border-style: solid; }
 .lp-payouts h3 { margin-bottom: 6px; }
 .lp-payouts ul { list-style: none; margin: 12px 0 0; padding: 0; }
 .lp-payouts li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 15px; }
-/* the status today, in one line */
-.lp-status-line { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px 22px; margin-top: 20px; font-size: 14px; color: var(--text-2); }
-.lp-status-line > span { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 8px; }
 .lp-also .text-link + .text-link { margin-left: 12px; }
-.lp-status-line .text-link { font-size: 14px; }
 
 /* ---------- the last word and four questions ---------- */
 .lp-final { padding: calc(var(--lp-pad) * 1.1) 0; }
@@ -203,7 +192,6 @@ html.lp body { padding-top: 0; }
 @media (max-width: 1024px) {
   .lp-index { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; }
   .lp-group { margin-bottom: 36px; }
-  .lp-group.next { margin-top: 0; }
   .lp-countries { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lp-countries li:nth-child(3) { border-left: 0; }
 }
@@ -216,8 +204,7 @@ html.lp body { padding-top: 0; }
   .lp-hero { padding-top: 36px; }
   .lp-hero .lp-lead { margin-top: 18px; }
   .lp-hero .lp-actions { margin-top: 26px; }
-  .lp-contracts, .lp-index, .lp-group.next ul { grid-template-columns: minmax(0, 1fr); }
-  .lp-status li, .lp-legend li { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .lp-contracts, .lp-index, .lp-soon ul { grid-template-columns: minmax(0, 1fr); }
   .lp-countries li { padding: 18px 14px 16px; gap: 4px 10px; }
   .lp-countries li:nth-child(odd) { padding-left: 0; }
   .lp-countries .c-name { font-size: 20px; }

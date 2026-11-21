@@ -6,10 +6,11 @@ Newest first. This was the README's progress log; it moved here when the README 
 
 - **Landing** ([the website](ARCHITECTURE.md#the-website-landing-sign-up-dashboard)): six sections with one job each:
   the hero and its live converter, how it works in three lines, the four countries as a live rate board, why it's
-  safe, Proof (real payouts and a one-line status) and the last word with four questions. 4,474 px tall at 1440 px,
+  safe, Proof (one honest line above the real payouts) and the last word with four questions. 4,474 px tall at 1440 px,
   down from 10,395.
-- **Features** (`features.html`): everything Lokal does with its Live / Built / Planned label and a try-it link, the
-  Status today box and what's next. Proof and Features now share the landing's top bar and footer, and
+- **Features** (`features.html`): everything Lokal does, listed plainly with a try-it link, and one small "Coming
+  soon" list (MiniPay mode, Pay with CELO, Pay for me). The per-item status pills and the Status today box are gone
+  from the site; the README keeps one status table. Proof and Features now share the landing's top bar and footer, and
   `scripts/check-site.mjs` holds them to it.
 - **README** cut to one page: what's real with receipts, how a payout works, currencies, safety, Track 3 and how to run
   it. Its detail moved, nearly verbatim, into [ARCHITECTURE.md](ARCHITECTURE.md), [CLI.md](CLI.md),

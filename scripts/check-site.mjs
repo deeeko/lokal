@@ -138,6 +138,12 @@ for (const page of pages.filter((p) => !OWN_CHROME.has(p))) {
     if (!/<nav class="lp-links"[^]*?href="features\.html"[^]*?<\/nav>/.test(read(p))) fail(`${p}: top bar should link Features (features.html)`);
   }
   if (!/<nav class="lp-links"[^]*?href="features\.html"[^]*?<\/nav>/.test(read("index.html"))) fail("index.html: top bar should link Features (features.html)");
+  // honest without labels: what isn't built yet sits only in Features' "Coming soon" list (with no "Try it" link), and
+  // the landing's Proof shows only payouts read from Celo, under one plain line
+  const soon = (read("features.html").match(/<div class="lp-soon">[^]*?<\/div>/) || [""])[0];
+  if (!/>Coming soon</.test(soon)) fail('features.html: what isn\'t built yet belongs in one "Coming soon" list (<div class="lp-soon">)');
+  if (/href=/.test(soon)) fail('features.html: "Coming soon" items must not link anywhere (they are not built yet)');
+  if (!read("index.html").includes("Every real payout appears below with its transaction.")) fail("index.html: Proof should say every real payout appears below with its transaction");
 }
 
 // Activity is for the signed-in wallet only: without JavaScript (or before it runs) visitors see the sign-in prompt,

@@ -3,6 +3,10 @@
 The formats Lokal puts on Celo and reads back: which currency a payment asks for, the Lokal tag rules and the
 cutover from the memo protocol, "Get paid" links, and how a payment through the contracts reaches the agent.
 
+The full wire formats are kept as specs: [spec/NTAGS.md](spec/NTAGS.md) (the legacy `NT1:` claim and `NTP:` memo
+formats, still paid for tags claimed before the cutover) and [spec/REGISTRATIONS.md](spec/REGISTRATIONS.md) (the
+`NP1:` "Get paid" registrations and receipts).
+
 ## Currencies
 
 Lokal is multi-currency by design. Every local stablecoin below is on Celo mainnet and is priced by Textile FX against

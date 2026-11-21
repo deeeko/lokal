@@ -2,7 +2,8 @@
 
 ## Status today
 
-Every feature carries one of three labels, used the same way on the site ([features page](https://lokalpay.vercel.app/features.html)):
+Three labels, used here and in the README's "What's real" table. The site lists what works on the
+[Features page](https://lokalpay.vercel.app/features.html), with what isn't built yet under "Coming soon".
 **Live** (used with real money on Celo mainnet, with a transaction link) ·
 **Built, not yet used on mainnet** (code and tests exist; no real payout yet) ·
 **Planned** (not built yet).

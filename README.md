@@ -22,9 +22,8 @@ Built for **Agents Open for Business** on Celo, **Track 3: Stablecoin Corridors 
 
 ## What's real, with receipts
 
-Every feature carries one label: **Live** (used on Celo mainnet, with a transaction), **Built, not yet used on
-mainnet** (code and tests, no real payout yet) or **Planned**. The full list is on the
-[Features page](https://lokalpay.vercel.app/features.html) and in [docs/ROADMAP.md](docs/ROADMAP.md).
+Each row links to its proof on Celo. Everything Lokal does is on the
+[Features page](https://lokalpay.vercel.app/features.html); what's next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 | What | Status | Receipt |
 |---|---|---|
@@ -79,8 +78,8 @@ Pots work the same way for many payers: one link and QR code for a wedding or a 
 | 🇳🇬 Naira · cNGN | 🇮🇩 Rupiah · IDRX | 🇦🇷 Argentine peso · wARS | 🇨🇴 Colombian peso · wCOP | 💵 Dollars · USD₮ |
 |---|---|---|---|---|
 
-The payer picks on every payment; Textile FX prices each one live. All are built, not yet used on mainnet. Rates,
-decimals and how the choice travels on chain: [docs/PROTOCOL.md](docs/PROTOCOL.md#currencies).
+The payer picks on every payment; Textile FX prices each one live. Rates, decimals and how the choice travels on
+chain: [docs/PROTOCOL.md](docs/PROTOCOL.md#currencies).
 
 ## Safety
 
@@ -124,7 +123,7 @@ The demo deploys both contracts on a local chain and plays out 28 payments, ever
 
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): the site, tags, pots, a payout end to end, limits, the code map, the deploy gate, tests
 - [CONTRACTS.md](docs/CONTRACTS.md): LokalTags and LokalPots, the 28-step demo, addresses and admin
-- [PROTOCOL.md](docs/PROTOCOL.md): currencies, Lokal tag rules and the cutover, payment links, contract payments
+- [PROTOCOL.md](docs/PROTOCOL.md): currencies, Lokal tag rules and the cutover, payment links, contract payments; the wire specs [NTAGS.md](docs/spec/NTAGS.md) and [REGISTRATIONS.md](docs/spec/REGISTRATIONS.md)
 - [CLI.md](docs/CLI.md): the `lokal` command, the agent CLI, every flag and environment variable
 - [OPERATOR.md](docs/OPERATOR.md): running the agent: status server, refunds, the lock, alerts, `doctor`
 - [RUNBOOK.md](docs/RUNBOOK.md): the first real payout, step by step
