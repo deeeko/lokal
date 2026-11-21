@@ -59,7 +59,8 @@ for (const page of pages) {
       }
     }
     if (covered.has("tag.html") && covered.get("tag.html") !== "quote.html") fail(`${page}: tag.html may only be grouped under Send (quote.html)`);
-    for (const p of pages) if (p !== "404.html" && p !== "tag.html" && !OWN_CHROME.has(p) && !covered.has(p)) fail(`${page}: sidebar does not reach ${p} (add it to an entry's data-also)`);
+    // pot.html, like tag.html, is the public page for one pot, opened from the link or QR code its host shares
+    for (const p of pages) if (p !== "404.html" && p !== "tag.html" && p !== "pot.html" && !OWN_CHROME.has(p) && !covered.has(p)) fail(`${page}: sidebar does not reach ${p} (add it to an entry's data-also)`);
     // a tab strip only links pages of this page's own group, and marks this page as current
     const strip = (html.match(/<nav class="subnav"[^]*?<\/nav>/) || [""])[0];
     if (strip) {

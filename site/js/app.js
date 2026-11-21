@@ -10,12 +10,20 @@ import {
   receiptNo, loadRegistrations, registrationStatuses, CORRIDORS, ntagNameError, RELEASE_LOCK_DAYS, num2,
 } from "../assets/core.js";
 import { getSession, onSessionChange, watchSession, injectedWallet, ensureCelo, rememberNtag, lookupNtag, explainWalletError } from "../assets/session.js";
-import { LOKAL_TAGS, readTagOf, readTagInfo, setNameData, setReceiveTokenData, releaseData, simulate, tokenOfCode } from "../assets/lokal-contracts.js";
+import {
+  LOKAL_TAGS, LOKAL_POTS, readTagOf, readTagInfo, setNameData, setReceiveTokenData, releaseData, simulate, tokenOfCode,
+  createPotData, closePotData, decodePotCreated, readPotInfo, readPotLimits,
+} from "../assets/lokal-contracts.js";
+import {
+  potTitleError, cleanTitle, titleRoom, parseUsd6, usd6Text, capsError, CLOSE_PRESETS, closesAtFor, closeTimeError, closeText,
+  potState, potUrl, loadHostPots, latestBlock,
+} from "../assets/pots.js";
+import { potMeter, potBadge, potShare } from "../assets/pot-ui.js";
 import { ntagCard, stage, shareBlock, contractEntry, greeting, alertBox, plainError, waitForReceipt, sameAddr } from "../assets/ntag-ui.js";
 import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 import { loadMyActivity, receivedTotals } from "../assets/my-activity.js";
 import { addToWalletRow } from "../assets/wallet-assets.js";
-import { dashboardView } from "../assets/front-door.js";
+import { dashboardView, potsView, canClosePot } from "../assets/front-door.js";
 
 initChrome();
 
@@ -80,6 +88,7 @@ function heroSection(s) {
       el("div", { class: "dash-actions" },
         el("a", { class: "btn btn-secondary btn-sm", href: "get-paid.html" }, icon("link"), "Create a payment link"),
         el("a", { class: "btn btn-secondary btn-sm", href: "quote.html" }, icon("quote"), "Send money"),
+        el("button", { class: "btn btn-secondary btn-sm", type: "button", dataset: { openPot: "" } }, icon("bolt"), "Open a pot"),
         linkRow("account.html", "Payments to your tag, with statuses"))));
 }
 
@@ -179,21 +188,24 @@ function walletSection() {
 }
 
 // ---------- settings: display name, default currency, release (LokalTags calls from your own wallet) ----------
-async function sendTagCall(addr, data, ctx, onSent, failMessage) {
+/** One contract call from the signed-in wallet: same account, on Celo, simulated first, then sent and confirmed. */
+async function sendCall(to, addr, data, ctx, onSent, failMessage, { prepare } = {}) {
   const eth = injectedWallet();
-  if (!eth) throw plainError("No wallet found in this browser. Open this page in your wallet's browser to change your tag.");
+  if (!eth) throw plainError("No wallet found in this browser. Open this page in your wallet's browser to continue.");
   const accs = await eth.request({ method: "eth_requestAccounts" });
   if (!sameAddr(accs?.[0], addr)) throw plainError(`Your wallet is on ${accs?.[0] ? short(accs[0]) : "no account"}, but you're signed in as ${short(addr)}. Switch back to that account. Nothing was sent.`);
   await ensureCelo(eth);
-  const sim = await simulate({ from: addr, to: LOKAL_TAGS, data }, ctx);
-  if (!sim.ok) throw plainError(`${sim.message} Nothing was sent.`);
-  const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from: addr, to: LOKAL_TAGS, value: "0x0", data }] });
+  if (prepare) data = await prepare();
+  const sim = await simulate({ from: addr, to, data }, ctx);
+  if (!sim.ok) throw plainError(/Nothing was sent\.$/.test(sim.message) ? sim.message : `${sim.message} Nothing was sent.`);
+  const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from: addr, to, value: "0x0", data }] });
   if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
   onSent?.(hash);
   const rc = await waitForReceipt(hash, { failMessage });
   if (!rc) throw plainError("Celo hasn't confirmed it after a few minutes. It may still go through; reload in a moment.");
-  return hash;
+  return { hash, receipt: rc };
 }
+const sendTagCall = (addr, data, ctx, onSent, failMessage) => sendCall(LOKAL_TAGS, addr, data, ctx, onSent, failMessage).then((r) => r.hash);
 const sentLine = (hash) => el("p", { class: "small soft" }, "Sent. Waiting for Celo… ", el("a", { class: "link", href: celoscanTx(hash) }, "View on Celoscan ", icon("ext")));
 
 function settingsSection(s) {
@@ -293,6 +305,250 @@ function settingsSection(s) {
     el("div", { class: "card-f" }, el("span", { class: "micro muted" }, "Your tag, name and default currency are public on the LokalTags contract."), linkRow("account.html", "Switch to another tag")));
 }
 
+// ---------- pots: open one, share it, watch it fill, close it (LokalPots calls from your own wallet) ----------
+function potsSection(s) {
+  const view = potsView(s, D.tag);
+  const newBtn = el("button", { class: "btn btn-secondary btn-sm", type: "button", "aria-expanded": "false", "aria-controls": "pot-new" }, icon("bolt"), "New pot");
+  const panel = el("div", { class: "pot-new", id: "pot-new", hidden: true });
+  const list = el("div", { "aria-live": "polite" });
+  const sec = el("section", { class: "card dash-card dash-pots", id: "pots", "aria-labelledby": "pots-h" },
+    el("div", { class: "card-h" }, el("div", {}, el("h2", { id: "pots-h" }, "Your pots"),
+      el("p", { class: "micro muted pot-sub" }, "One link and QR code for many guests.")),
+      view === "host" ? newBtn : null),
+    el("div", { class: "card-b stack" }, panel, list),
+    el("div", { class: "card-f" }, el("span", { class: "micro muted" }, "Guests need no account."),
+      el("a", { class: "text-link small", href: "https://celoscan.io/address/" + LOKAL_POTS }, "LokalPots on Celoscan ", el("span", { class: "arrow", "aria-hidden": "true" }, "→"))));
+  if (view !== "host") {
+    list.replaceChildren(el("div", { class: "dash-empty" }, el("p", { class: "dash-empty-title" }, "Claim your tag to host a pot"),
+      el("p", { class: "small soft" }, "Pots are hosted from a Lokal tag, so the agent knows who to pay."),
+      el("div", { class: "row mt-8" }, linkRow("start.html", "Claim your tag"))));
+    return sec;
+  }
+  const toggle = (open) => {
+    if (open && panel.hidden) { panel.replaceChildren(createPotForm(s, { onDone: (id) => { loadList(id); }, onCancel: () => toggle(false) })); }
+    panel.hidden = !open;
+    newBtn.setAttribute("aria-expanded", String(open));
+    newBtn.hidden = open;
+    if (open) panel.querySelector("input")?.focus();
+  };
+  newBtn.addEventListener("click", () => toggle(true));
+  sec.openNew = () => { toggle(true); sec.scrollIntoView({ behavior: "smooth", block: "start" }); };
+
+  const loadList = async (justOpened = null) => {
+    list.setAttribute("aria-busy", "true");
+    if (!list.firstChild) list.replaceChildren(el("p", { class: "small muted" }, el("span", { class: "skel" }), " Looking for your pots…"));
+    try {
+      const found = (await loadHostPots(s.address)).slice(0, 12);
+      const pots = (await Promise.all(found.map((p) => readPotInfo(p.potId).then((i) => ({ potId: BigInt(p.potId), ...i })).catch(() => null)))).filter(Boolean);
+      if (justOpened != null && !pots.some((p) => p.potId === BigInt(justOpened))) {
+        const i = await readPotInfo(justOpened).catch(() => null);
+        if (i) pots.unshift({ potId: BigInt(justOpened), ...i });
+      }
+      list.removeAttribute("aria-busy");
+      if (!pots.length) {
+        list.replaceChildren(el("div", { class: "dash-empty" }, el("p", { class: "dash-empty-title" }, "No pots yet"),
+          el("p", { class: "small soft" }, "Open one for a wedding, a birthday or a group gift.")));
+        return;
+      }
+      list.replaceChildren(el("ul", { class: "pot-rows" }, pots.map((p) => potRow(s, p, () => loadList()))));
+    } catch {
+      list.removeAttribute("aria-busy");
+      const b = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, icon("refresh"), "Try again");
+      b.addEventListener("click", () => loadList());
+      list.replaceChildren(alertBox("err", "alert", el("p", {}, "Couldn't read your pots from Celo right now."), el("div", { class: "row mt-8" }, b)));
+    }
+  };
+  loadList();
+  if (location.hash === "#pots-new") setTimeout(() => sec.openNew(), 300);
+  return sec;
+}
+
+/** One of the host's pots: progress, state, link and QR, and Close (two steps, simulated first). */
+function potRow(s, p, reload) {
+  const now = Math.floor(Date.now() / 1000);
+  const st = potState(p, now);
+  const meter = potMeter(p, { size: "sm" });
+  const url = potUrl(p.potId);
+  const qrBox = el("div", {});
+  const share = el("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-expanded": "false" }, icon("link"), "Share");
+  share.addEventListener("click", () => {
+    const open = !qrBox.firstChild;
+    qrBox.replaceChildren(...(open ? [potShare(p.potId, p.title, { qr: "open", open: false })] : []));
+    share.setAttribute("aria-expanded", String(open));
+  });
+  const msg = el("div", { "aria-live": "polite" });
+  const end = el("div", { class: "dash-list-end" },
+    el("button", { class: "icon-btn sm", type: "button", "aria-label": `Copy the link to ${p.title}`, dataset: { copy: url, copyLabel: "Pot link copied" } }, icon("copy")),
+    share,
+    el("a", { class: "btn btn-secondary btn-sm", href: url }, "Open"));
+  if ((st === "open" || st === "full") && canClosePot(s, p)) {
+    const close = el("button", { class: "btn btn-ghost btn-sm pot-close", type: "button" }, "Close pot");
+    let armed = false;
+    close.addEventListener("click", async () => {
+      if (D.busy) return;
+      if (!armed) {
+        armed = true;
+        close.textContent = "Close it now?";
+        close.classList.add("is-armed");
+        msg.replaceChildren(el("p", { class: "micro muted" }, "Guests can't spray after this, and it can't be reopened. Press again to close it."));
+        setTimeout(() => { if (armed && !D.busy) { armed = false; close.textContent = "Close pot"; close.classList.remove("is-armed"); msg.replaceChildren(); } }, 6000);
+        return;
+      }
+      D.busy = true; close.disabled = true; close.textContent = "Check your wallet…";
+      try {
+        await sendCall(LOKAL_POTS, s.address, closePotData(p.potId), { potId: p.potId }, (h) => msg.replaceChildren(sentLine(h)),
+          "The contract refused to close the pot on Celo, so it is still open. Only the network fee was spent.");
+        D.busy = false;
+        toast("Pot closed");
+        reload();
+      } catch (e) {
+        D.busy = false; armed = false; close.disabled = false; close.textContent = "Close pot"; close.classList.remove("is-armed");
+        msg.replaceChildren(alertBox("err", "alert", el("p", {}, errText(e))));
+      }
+    });
+    end.append(close);
+  }
+  return el("li", { class: "pot-row" },
+    el("div", { class: "pot-row-main" },
+      el("div", { class: "pot-row-title" }, el("a", { class: "dash-list-label", href: url }, el("bdi", {}, p.title)), potBadge(st)),
+      meter.el,
+      el("span", { class: "micro muted" }, [`Pot #${p.potId}`, `${p.payerCount} guest${p.payerCount === 1 ? "" : "s"}`, `up to ${usd6Text(p.perPayerCapUsd6)} each`,
+        st === "open" || st === "full" ? `closes ${closeText(p.closesAt)}` : st === "closed" ? "closed by you" : `ended ${closeText(p.closesAt)}`].join(" · "))),
+    end, qrBox, msg);
+}
+
+/** The "New pot" form: title, closing time, the pot's cap and the per-guest cap, within the contract's maxima. */
+function createPotForm(s, { onDone, onCancel }) {
+  const F = { limits: null, preset: "14d", custom: null, busy: false };
+  const titleIn = el("input", { class: "input", id: "pot-title-in", type: "text", maxlength: "60", autocomplete: "off", placeholder: "Ada & Tunde's wedding", "aria-describedby": "pot-title-hint" });
+  const titleHint = el("p", { class: "hint", id: "pot-title-hint" });
+  const presetBtns = [...CLOSE_PRESETS.map((p) => ({ id: p.id, label: p.label })), { id: "custom", label: "Pick a time" }].map((p) => {
+    const b = el("button", { type: "button", "aria-pressed": String(p.id === F.preset), dataset: { id: p.id } }, p.label);
+    b.addEventListener("click", () => { F.preset = p.id; for (const x of presetBtns) x.setAttribute("aria-pressed", String(x.dataset.id === p.id)); customWrap.hidden = p.id !== "custom"; if (p.id === "custom") customIn.focus(); paint(); });
+    return b;
+  });
+  const pad = (n) => String(n).padStart(2, "0");
+  const localValue = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const customIn = el("input", { class: "input", id: "pot-close-in", type: "datetime-local", "aria-describedby": "pot-close-hint" });
+  const customWrap = el("div", { class: "field", hidden: true }, el("label", { class: "label", for: "pot-close-in" }, "Closes at (your time)"), customIn);
+  const closeHint = el("p", { class: "hint", id: "pot-close-hint" });
+  const capIn = el("input", { id: "pot-cap-in", type: "text", inputmode: "decimal", autocomplete: "off", size: "6", "aria-describedby": "pot-cap-hint" });
+  const eachIn = el("input", { id: "pot-each-in", type: "text", inputmode: "decimal", autocomplete: "off", size: "6", "aria-describedby": "pot-each-hint" });
+  const capHint = el("p", { class: "hint", id: "pot-cap-hint" }), eachHint = el("p", { class: "hint", id: "pot-each-hint" });
+  const summary = el("p", { class: "small soft pot-new-sum" });
+  const openBtn = el("button", { class: "btn btn-primary", type: "button", disabled: true }, "Open the pot");
+  const cancelBtn = el("button", { class: "btn btn-ghost", type: "button" }, "Cancel");
+  const msg = el("div", { "aria-live": "polite" });
+  cancelBtn.addEventListener("click", () => { if (!F.busy) onCancel(); });
+  let touched = {};
+  for (const [k, n] of [["title", titleIn], ["cap", capIn], ["each", eachIn], ["close", customIn]]) {
+    n.addEventListener("input", () => { touched[k] = true; paint(); });
+    n.addEventListener("blur", () => { touched[k] = true; paint(); });
+  }
+
+  /** { title, closeChoice, potCapUsd6, perPayerCapUsd6 } or { errors } (by field). */
+  function read() {
+    const errors = {};
+    const tErr = potTitleError(titleIn.value);
+    if (tErr) errors.title = tErr;
+    let closeChoice = { preset: F.preset };
+    const now = Math.floor(Date.now() / 1000);
+    if (F.preset === "custom") {
+      const at = customIn.value ? Math.floor(new Date(customIn.value).getTime() / 1000) : NaN;
+      const cErr = closeTimeError(at, now);
+      if (cErr) errors.close = cErr; else closeChoice = { at };
+    }
+    const cap = parseUsd6(capIn.value), each = parseUsd6(eachIn.value);
+    if (cap.error) errors.cap = cap.error;
+    if (each.error) errors.each = each.error;
+    if (!cap.error && !each.error && F.limits) {
+      const c = capsError({ potCapUsd6: cap.usd6, perPayerCapUsd6: each.usd6 }, F.limits);
+      if (c) errors[c.field] = c.message;
+    }
+    return { errors, title: cleanTitle(titleIn.value), closeChoice, potCapUsd6: cap.usd6, perPayerCapUsd6: each.usd6 };
+  }
+  function paint() {
+    const r = read();
+    const set = (hint, key, input, fallback) => {
+      const show = r.errors[key] && touched[key];
+      hint.classList.toggle("err", Boolean(show));
+      hint.textContent = show ? r.errors[key] : fallback;
+      input?.setAttribute("aria-invalid", String(Boolean(show)));
+    };
+    const room = titleRoom(titleIn.value);
+    set(titleHint, "title", titleIn, room >= 0 ? `${room} characters left.` : " ");
+    set(closeHint, "close", customIn, F.preset === "custom" ? "Between 10 minutes and 14 days from now." : "You can close it sooner.");
+    const max = F.limits;
+    set(capHint, "cap", capIn, max ? `Up to ${usd6Text(max.maxPotCapUsd6)}, the contract's maximum.` : "Reading the contract's maximum…");
+    set(eachHint, "each", eachIn, max ? `$1 to ${usd6Text(max.maxPerPayerCapUsd6)} per guest, the contract's range.` : " ");
+    const ok = !Object.keys(r.errors).length && F.limits;
+    if (ok) {
+      const at = r.closeChoice.at ?? Math.floor(Date.now() / 1000) + CLOSE_PRESETS.find((p) => p.id === F.preset).seconds;
+      summary.replaceChildren("Guests spray ", el("b", {}, `$1 to ${usd6Text(r.perPayerCapUsd6)} each`), " until it holds ", el("b", {}, usd6Text(r.potCapUsd6)),
+        " or ", el("b", {}, closeText(at)), ".");
+    } else summary.textContent = " ";
+    openBtn.disabled = F.busy || !ok;
+  }
+  readPotLimits().then((l) => {
+    F.limits = l;
+    if (!capIn.value) capIn.value = usd6Text(l.maxPotCapUsd6).slice(1).replace(/,/g, "");
+    if (!eachIn.value) eachIn.value = usd6Text(l.maxPerPayerCapUsd6).slice(1).replace(/,/g, "");
+    paint();
+  }).catch(() => { msg.replaceChildren(alertBox("err", "alert", el("p", {}, "Couldn't read the contract's maximums from Celo. Reload the page in a moment."))); });
+  customIn.min = localValue(new Date(Date.now() + 15 * 60_000));
+  customIn.max = localValue(new Date(Date.now() + 14 * 86_400_000 - 5 * 60_000));
+
+  openBtn.addEventListener("click", async () => {
+    touched = { title: true, cap: true, each: true, close: true };
+    const r = read();
+    paint();
+    if (Object.keys(r.errors).length || F.busy || D.busy) return;
+    F.busy = true; D.busy = true; openBtn.disabled = true; cancelBtn.disabled = true; openBtn.textContent = "Check your wallet…"; msg.replaceChildren();
+    let closesAt = null;
+    try {
+      const { receipt } = await sendCall(LOKAL_POTS, s.address, null, { creating: true }, (h) => { openBtn.textContent = "Waiting for Celo…"; msg.replaceChildren(sentLine(h)); },
+        "The contract refused the pot on Celo, so nothing was opened. Only the network fee was spent.",
+        { prepare: async () => {
+          // the closing time is set by the chain's clock, never later than the contract's 14 days
+          closesAt = closesAtFor(r.closeChoice, (await latestBlock()).timestamp);
+          return createPotData({ title: r.title, closesAt, potCapUsd6: r.potCapUsd6, perPayerCapUsd6: r.perPayerCapUsd6 });
+        } });
+      const created = (receipt.logs ?? []).map((l) => decodePotCreated(l)).find(Boolean);
+      F.busy = false; D.busy = false;
+      toast("Pot opened");
+      const panel = openBtn.closest(".pot-new");
+      if (created) {
+        panel.replaceChildren(el("div", { class: "pot-made" },
+          el("div", { class: "pot-made-copy" },
+            el("span", { class: "eyebrow" }, `Pot #${created.potId} is open`),
+            el("h3", { class: "dash-h2" }, el("bdi", {}, created.title)),
+            el("p", { class: "soft" }, "Share the link or the QR code.")),
+          potShare(created.potId, created.title, { qr: "open" })));
+        onDone(created.potId);
+      } else {
+        panel.replaceChildren(alertBox("", "check", el("p", {}, "Your pot is open. It shows in the list below in a moment.")));
+        onDone(null);
+      }
+    } catch (e) {
+      F.busy = false; D.busy = false; cancelBtn.disabled = false; openBtn.textContent = "Open the pot";
+      msg.replaceChildren(alertBox("err", "alert", el("p", {}, errText(e))));
+      paint();
+    }
+  });
+  paint();
+  return el("div", { class: "pot-form-new stack" },
+    el("div", { class: "field" }, el("label", { class: "label", for: "pot-title-in" }, "What's it for?"), titleIn, titleHint),
+    el("div", { class: "field" }, el("span", { class: "label", id: "pot-close-l" }, "Closes in"),
+      el("div", { class: "segmented pot-closes", role: "group", "aria-labelledby": "pot-close-l" }, presetBtns), customWrap, closeHint),
+    el("div", { class: "pot-caps" },
+      el("div", { class: "field" }, el("label", { class: "label", for: "pot-cap-in" }, "The pot can hold"), el("div", { class: "money sm" }, el("span", { class: "pot-cur", "aria-hidden": "true" }, "$"), capIn), capHint),
+      el("div", { class: "field" }, el("label", { class: "label", for: "pot-each-in" }, "Each guest can spray up to"), el("div", { class: "money sm" }, el("span", { class: "pot-cur", "aria-hidden": "true" }, "$"), eachIn), eachHint)),
+    summary,
+    el("div", { class: "row" }, openBtn, cancelBtn),
+    el("p", { class: "micro muted" }, "One transaction, checked before your wallet opens."),
+    msg);
+}
+
 // ---------- page ----------
 let seq = 0;
 async function render() {
@@ -328,7 +584,10 @@ async function render() {
   const recent = recentSection();
   const note = D.note ? alertBox("", "info", el("p", {}, D.note)) : null;
   D.note = null;
-  root.replaceChildren(...[note, heroSection(s),
+  const pots = potsSection(s);
+  const hero = heroSection(s);
+  hero.querySelector("[data-open-pot]")?.addEventListener("click", () => pots.openNew?.());
+  root.replaceChildren(...[note, hero, pots,
     el("div", { class: "dash-grid" }, received, recent, linksSection(s), walletSection()),
     view === "tag" ? settingsSection(s) : null].filter(Boolean));
   const loadActivity = () => loadMyActivity(s.address).then(({ rows }) => {
