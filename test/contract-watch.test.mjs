@@ -9,8 +9,9 @@ import { AGENT_ADDRESS, LEGACY_CUTOVER_BLOCK, LOKAL_POTS, LOKAL_TAGS, LOKAL_TAGS
 import { refusal } from "../src/guards.mjs";
 import { encodeNtagTransfer, legacyNtagOps } from "../src/ntags.mjs";
 import { classifyNtagDeposit, watch } from "../src/watch.mjs";
+import { findDepositRecord, planRefund } from "../src/refund.mjs";
 import {
-  CONTRACT_MIN, POTS_ABI, TAGS_ABI, currencyOfRef, decodeContractLog, innerTransfer, mergeLogs, routeFor, tokenCode,
+  CONTRACT_MIN, POTS_ABI, TAGS_ABI, contractDepositRecords, currencyOfRef, decodeContractLog, innerTransfer, mergeLogs, routeFor, tokenCode,
 } from "../src/contract-watch.mjs";
 import { currencyOfRef as siteCurrencyOfRef, currencyRef, decodePotPaid, decodeTagPaid, payoutRoute } from "../site/assets/lokal-contracts.js";
 
@@ -204,7 +205,7 @@ test("cutover: legacy ops from the cutover block on are ignored; a memo to a tag
  * transfers [{ n, block, units, input }].
  */
 function world({ payments = [], deposits = [], regs = [], receive = {}, cursor = String(B0 - 1), over = {} } = {}) {
-  const mem = { requests: [], reg: {}, ntag: {}, contract: {}, state: { cursor }, log: [], saved: [] };
+  const mem = { requests: [], reg: {}, ntag: {}, contract: {}, refunds: {}, state: { cursor }, log: [], saved: [], alerts: [] };
   const calls = [];
   const forwards = [];
   const out = [];
@@ -222,7 +223,7 @@ function world({ payments = [], deposits = [], regs = [], receive = {}, cursor =
     contractLogs.push(decoded(raw));
     const to = p.inner === false ? EVE : AGENT_ADDRESS;
     const inner = transferRaw({ token, from: PAYER, to, value: amount, logIndex: 3 });
-    receipts.set(tx, { status: "success", logs: [inner, raw] });
+    receipts.set(tx, { status: "success", from: PAYER, blockNumber: BigInt(p.block), logs: [inner, raw] });
     txs.set(tx, { from: PAYER, to: p.kind === "pot" ? LOKAL_POTS : LOKAL_TAGS, input: "0x9d5ef760", transactionIndex: 1 });
     if (to === AGENT_ADDRESS && (token === USDT || token === CNGN)) {
       transferLogs.push({ address: token, transactionHash: tx, logIndex: 3, blockNumber: BigInt(p.block), transactionIndex: 1, args: { from: PAYER, to: AGENT_ADDRESS, value: amount } });
@@ -242,7 +243,9 @@ function world({ payments = [], deposits = [], regs = [], receive = {}, cursor =
       getLogs: async ({ fromBlock, toBlock }) => transferLogs.filter((l) => inRange(l, fromBlock, toBlock)),
       getTransaction: async ({ hash }) => txs.get(hash),
       getTransactionReceipt: async ({ hash }) => receipts.get(hash),
-      getBlock: async ({ blockNumber }) => ({ timestamp: BigInt(T0) + BigInt(blockNumber) - BigInt(B0) }),
+      getBlock: async ({ blockNumber }) => ({ timestamp: BigInt(T0) + BigInt(blockNumber ?? latest) - BigInt(B0) }),
+      getBalance: async () => 10n ** 19n,
+      readContract: async ({ functionName }) => { if (functionName === "balanceOf") return 10n ** 24n; throw new Error(`fake chain: no ${functionName}`); },
     }),
     getContractLogs: async (_pub, { fromBlock, toBlock }) => contractLogs.filter((l) => inRange(l, fromBlock, toBlock)),
     readReceiveToken: async (_pub, holder) => ({ value: receive[holder] ?? ZERO, latest: false }),
@@ -260,7 +263,13 @@ function world({ payments = [], deposits = [], regs = [], receive = {}, cursor =
     saveNtagPayments: (s) => { mem.ntag = clone(s); },
     loadContractPayments: () => clone(mem.contract),
     saveContractPayments: (s) => { mem.contract = clone(s); },
-    log: (e) => mem.log.push(e),
+    log: (e) => mem.log.push({ at: new Date().toISOString(), ...e }),
+    readReceipts: () => clone(mem.log),
+    loadRefunds: () => clone(mem.refunds),
+    saveRefunds: (s) => { mem.refunds = clone(s); },
+    makeStatus: () => null,
+    makeAlerter: () => ({ enabled: true, channels: ["fake"], alert: (kind, text) => { mem.alerts.push({ kind, text }); return true; }, close: async () => {} }),
+    version: () => "0.1.0+test",
     pay: async (args) => {
       calls.push(args);
       return { hashes: { swap: h(7000 + calls.length), payout: h(8000 + calls.length) }, receiptNo: `NP-${calls.length}`, receiptUrl: "u", paid: "1", untagged: [] };
@@ -446,4 +455,45 @@ test("contract payments and plain deposits are handled in chain order in one pas
   w.mem.requests = [reqA];
   await run(w);
   assert.deepEqual(w.calls.map((c) => c.requestId ?? c.ntag), ["r_aaaaaaaa", "ada"], "request, then the tag payment; the second deposit finds the request used");
+});
+
+test("a refused contract payment is refundable to the PAYER from its inner transfer; a paid one never is; a refund record stops the payout", async () => {
+  const w = world({
+    payments: [{ n: 1, block: B0 + 10, kind: "tag", amount: 20_000_000n }, { n: 2, block: B0 + 11, kind: "tag", amount: 5_000_000n }],
+    over: { preflight: async (a) => { if (a.amount === "20") throw refusal("Amount 20 exceeds the per-payout cap of 10 USD (MAX_USD). Not paid automatically; review it manually."); return {}; } },
+  });
+  await run(w);
+  const refused = w.mem.contract[evKey(1)];
+  const paid = w.mem.contract[evKey(2)];
+  assert.equal(refused.status, "refused");
+  assert.equal(refused.depositKey, `${h(5001)}:3`, "the inner Transfer's tx:logIndex");
+  assert.equal(refused.deposit.logIndex, 3);
+  assert.equal(refused.deposit.eventLogIndex, 4);
+  assert.ok(w.mem.alerts.some((a) => a.kind === "deposit_refused" && a.text.includes(`refund --deposit ${h(5001)}:3`)));
+  const deposits = contractDepositRecords(w.mem.contract);
+  const one = findDepositRecord({ key: `${h(5001)}:3`, tx: h(5001), logIndex: 3 }, { ntagPayments: deposits });
+  assert.equal(one.payout, null);
+  assert.equal(one.refundable.category, "refused");
+  assert.equal(one.refundable.payer, PAYER);
+  const two = findDepositRecord({ key: `${h(5002)}:3`, tx: h(5002), logIndex: 3 }, { ntagPayments: deposits });
+  assert.ok(two.payout?.paid, "a paid contract payment is never refunded");
+  // the plan reads the deposit back from the chain: back to the payer, never to the contract
+  const plan = await planRefund(`${h(5001)}:3`, {
+    pub: w.io.makePub(), agent: AGENT_ADDRESS, own: [], contracts: [LOKAL_TAGS, LOKAL_POTS], preview: async () => null, now: () => Date.now(),
+    loadRecords: () => ({ requests: [], registrations: {}, ntagPayments: deposits, receipts: [], refunds: {} }),
+  });
+  assert.equal(plan.payer, PAYER);
+  assert.equal(plan.value, 20_000_000n);
+  assert.equal(plan.token.symbol, "USDT");
+  await assert.rejects(planRefund(`${h(5001)}:4`, {
+    pub: w.io.makePub(), agent: AGENT_ADDRESS, own: [], contracts: [], preview: async () => null,
+    loadRecords: () => ({ requests: [], registrations: {}, ntagPayments: deposits, receipts: [], refunds: {} }),
+  }), /no refusal/, "the event's own key is not a deposit");
+
+  // a payment whose deposit already has a refund record is never paid
+  const w2 = world({ payments: [{ n: 3, block: B0 + 12, kind: "tag" }] });
+  w2.mem.refunds = { [`${h(5003)}:3`]: { id: `${h(5003)}:3`, status: "refunded" } };
+  await run(w2);
+  assert.equal(w2.calls.length, 0);
+  assert.deepEqual(w2.mem.contract, {});
 });
