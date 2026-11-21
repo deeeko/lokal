@@ -8,7 +8,7 @@ import {
 import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 import { ensureCelo, explainWalletError } from "../assets/session.js";
 import {
-  agentStatus, depositStatus, allowanceFromStatus, globalFromStatus, receivedStale, statusFinal, reasonText, sourceNote, REFUND_NOTE,
+  agentStatus, depositStatus, allowanceFromStatus, globalFromStatus, receivedStale, statusFinal, reasonText, sourceNote, refusedNote, refundedLine, refundedText,
   DELAYED_NOTE, SLOW_NOTE,
 } from "../assets/ntag-ui.js";
 
@@ -283,7 +283,8 @@ function initLink(req) {
   // regs: every registration sent to the agent (#tx= links only), to apply the same-amount rule
   // agent: the agent's own record of the deposit from the status server (exact), or null (then the chain is read)
   const state = { deposit: null, payout: null, error: false, checkedAt: null, regs: null, agent: null };
-  const refused = () => state.agent?.status === "refused";
+  const refused = () => state.agent?.status === "refused" || state.agent?.status === "refunded";
+  const refunded = () => state.agent?.status === "refunded";
   // what the agent says while no payout is known: "failed" (delayed), "received" (paying now, or slow when old)
   const agentWaiting = () => (state.payout ? null : state.agent?.status === "failed" ? "failed"
     : state.agent?.status === "received" ? (receivedStale(state.agent) ? "slow" : "paying") : null);
@@ -328,6 +329,7 @@ function initLink(req) {
     // header badge
     let b;
     if (state.payout) b = badge("", "ok"), b.append(el("span", { class: "dot" }), "Paid out");
+    else if (refunded()) b = badge(refundedText(state.agent), "neutral");
     else if (refused()) b = badge("Not paid", "err");
     else if (selfPaid()) b = badge("Won't be paid out", "err");
     else if (state.deposit) b = badge("", "ok"), b.append(el("span", { class: "dot" }), "Payment received");
@@ -356,6 +358,8 @@ function initLink(req) {
     if (state.payout) {
       const href = isReg ? `receipt.html#p=${state.payout.hash}` : `receipt.html#p=${state.payout.hash}&r=${req.id}`;
       pay.replaceChildren(el("a", { class: "link", href, title: receiptNo(state.payout.hash) }, "View receipt ", icon("right")));
+    } else if (refunded()) {
+      setText(pay, "Not paid: refunded");
     } else if (refused() || selfPaid()) {
       setText(pay, "Not paid");
     } else if (state.deposit) {
@@ -378,9 +382,10 @@ function initLink(req) {
       msg.replaceChildren(el("p", { class: "small muted mt-16" }, isReg
         ? `${req.name} has been paid to ${short(req.recipient)}, the wallet that registered this link. The receipt rebuilds the payout from the chain.`
         : `${req.name} has been paid. The receipt rebuilds the payout from the chain.`));
+    } else if (refunded()) {
+      msg.replaceChildren(el("div", { class: "alert mt-16" }, icon("check"), refundedLine(state.agent)));
     } else if (refused()) {
-      msg.replaceChildren(el("div", { class: "alert err mt-16" }, icon("alert"),
-        el("span", {}, el("b", {}, `${reasonText(state.agent.reason)}, so the agent didn't pay it. `), REFUND_NOTE)));
+      msg.replaceChildren(el("div", { class: "alert err mt-16" }, icon("alert"), el("span", {}, refusedNote(state.agent.reason))));
     } else if (selfPaid()) {
       msg.replaceChildren(el("div", { class: "alert err mt-16" }, icon("alert"),
         el("span", {}, `This payment came from ${short(req.recipient)}, the same wallet the link pays. The agent doesn't pay a link from its own recipient, so it won't be paid out. `,
@@ -436,6 +441,7 @@ function initLink(req) {
           { logIndex: state.deposit.logIndex, kind: isReg ? "registration" : "request", amount: req.amount });
         state.agent = ev;
         if (ev?.status === "paid") state.payout = { hash: ev.payoutTx, exact: true };
+        else if (ev?.status === "refused") { /* final for the payout; keep asking: it may be refunded */ }
         else if (!statusFinal(ev)) {
           state.payout = await findPayout(buy.address, state.deposit, isReg ? req.recipient : null);
           state.payoutFromChain = Boolean(state.payout);
@@ -453,7 +459,7 @@ function initLink(req) {
   }
   function schedule() {
     clearTimeout(timer);
-    if (state.payout || selfPaid() || refused()) return; // done
+    if (state.payout || selfPaid() || refunded()) return; // done (a refused payment is still watched for its refund)
     if (expired() && !state.deposit && state.checkedAt) return; // nothing more can happen
     timer = setTimeout(check, POLL_MS);
   }

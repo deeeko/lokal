@@ -14,7 +14,7 @@ import {
   ntagCard, stage, revealCard, shareBlock, alertBox, availabilityMessage, ntagRules, cleanTagInput, suggestNtags, waitForReceipt,
   plainError, sameAddr, sleep, nameText, LIMITS, LIMITS_TEXT, REFUSED_NOTE, receivableToday, loadNtagStateFresh, loadTagLedger,
   slowNotice, scrollToNode, focusHeading, noWalletHelp, noCeloAlert, celoBalance,
-  agentStatus, allowanceFromStatus, combineAllowance, statusFinal, receivedStale, reasonText, paidText, sourceNote, units6Of,
+  agentStatus, allowanceFromStatus, combineAllowance, statusFinal, receivedStale, reasonText, paidText, sourceNote, units6Of, refundedText,
   STATUS_SOURCE, DELAYED_NOTE, SLOW_NOTE, payoutText, contractEntry,
 } from "../assets/ntag-ui.js";
 import { currencyOf, formatCurrency } from "../assets/core.js";
@@ -850,8 +850,11 @@ function payRow(d, tag) {
     end = [el("span", { class: "badge ok" }, el("span", { class: "dot" }), got ? `Paid ${got}` : "Paid"),
       el("a", { class: "link small", href: `receipt.html#${ev.receiptNo}` }, ev.receiptNo, " ", icon("right")),
       el("a", { class: "link small", href: "cash-out.html" }, "Cash out")];
+  } else if (ev?.status === "refunded") {
+    end = [badge(refundedText(ev), "neutral"), ev.refundTx ? el("a", { class: "link small", href: celoscanTx(ev.refundTx) }, "Refund ", icon("ext")) : null,
+      el("span", { class: "micro muted" }, "Not paid; sent back to the payer.")];
   } else if (ev?.status === "refused") {
-    end = [badge("Not paid", "err"), el("span", { class: "micro muted" }, `${reasonText(ev.reason)}. The payer can ask the agent's owner for a refund.`)];
+    end = [badge("Not paid", "err"), el("span", { class: "micro muted" }, `${reasonText(ev.reason)}. The agent can send it back to the payer.`)];
   } else if (ev?.status === "failed") {
     end = [badge("Payout delayed", "warn"), el("span", { class: "micro muted" }, DELAYED_NOTE)];
   } else if (ev?.status === "received" && receivedStale(ev)) {

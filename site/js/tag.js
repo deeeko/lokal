@@ -14,7 +14,7 @@ import {
   ntagCard, stage, alertBox, availabilityMessage, ntagFinder, waitForReceipt, plainError, sameAddr, sleep, dayMonthYear,
   nameText, LIMITS, LIMITS_TEXT, CNGN_CAP_USD, REFUSED_NOTE, receivableToday, allowanceResetAt, loadNtagStateFresh,
   loadTagLedger, slowNotice, scrollToNode, focusHeading, noWalletHelp, noCeloAlert, celoBalance,
-  agentStatus, depositStatus, allowanceFromStatus, combineAllowance, receivedStale, reasonText, paidText, sourceNote, REFUND_NOTE,
+  agentStatus, depositStatus, allowanceFromStatus, combineAllowance, receivedStale, reasonText, paidText, sourceNote, refusedNote, refundedLine,
   DELAYED_NOTE, SLOW_NOTE, payoutText, lookupTag,
 } from "../assets/ntag-ui.js";
 
@@ -707,12 +707,18 @@ function payCard(tag, entry) {
               showPaid(ev.receiptNo, paidText(ev));
               return;
             }
+            if (ev?.status === "refunded") {
+              setSource(true);
+              set("agent", "err", "Not paid: sent back to you.");
+              status.replaceChildren(alertBox("", "info", el("p", {}, refundedLine(ev))));
+              clear();
+              return;
+            }
             if (ev?.status === "refused") {
               setSource(true);
               set("agent", "err", "Not paid.");
-              status.replaceChildren(alertBox("warn", "alert", el("p", {}, el("b", {}, `${reasonText(ev.reason)}, so the agent didn't pay it. `), REFUND_NOTE)));
-              clear();
-              return;
+              status.replaceChildren(alertBox("warn", "alert", el("p", {}, refusedNote(ev.reason))));
+              // keep watching: a refund shows here as "Refunded"
             }
             // 2. "received", "failed" or no record: read the chain as before; a payout found there wins
             try {

@@ -256,12 +256,25 @@ export function allowanceResetAt(alw, needUsd) {
 //     server's numbers count only when they are fresh (updated in the last 5 minutes);
 //   - anything odd (not on Vercel, 503, a network error, a malformed answer) means null: the page reads the chain as before.
 export const STATUS_SOURCE = { agent: "Live status from the agent", chain: "Estimated from Celo" };
-export const REFUND_NOTE = "Your payment stays with the agent. Contact the agent's owner for a refund.";
+export const REFUND_NOTE = "Your money is safe with the agent and can be sent back to the wallet you paid from. You'll see 'Refunded' here.";
+/** The sentence for a refused deposit: "Not paid: <reason>. Your money is safe with the agent ..." */
+export const refusedNote = (reason) => `Not paid: ${reasonText(reason).replace(/^./, (c) => c.toLowerCase())}. ${REFUND_NOTE}`;
+/** "Refunded · RF-XXXX-XXXX" for a refunded event (the number from the refund transaction when the event has none). */
+export function refundedText(ev) {
+  const no = ev?.refundNo || (/^0x[0-9a-fA-F]{64}$/.test(String(ev?.refundTx ?? "")) ? "RF-" + ev.refundTx.slice(2, 6).toUpperCase() + "-" + ev.refundTx.slice(6, 10).toUpperCase() : null);
+  return no ? `Refunded · ${no}` : "Refunded";
+}
+/** A refunded event as a line: "Refunded · RF-XXXX-XXXX" with a link to the refund transaction on Celoscan. */
+export function refundedLine(ev, cls = "") {
+  const tx = /^0x[0-9a-fA-F]{64}$/.test(String(ev?.refundTx ?? "")) ? ev.refundTx : null;
+  return el("span", { class: cls }, el("b", {}, refundedText(ev)), tx ? [" · ", el("a", { class: "link", href: celoscanTx(tx) }, "Refund on Celoscan ", icon("ext"))] : null,
+    ". The payment went back to the wallet it came from.");
+}
 export const DELAYED_NOTE = "Payout delayed — the agent's owner has been alerted.";
 export const SLOW_NOTE = "Taking longer than usual.";
 export const STATUS_FRESH_MS = 5 * 60_000; // server totals older than this are ignored
 export const RECEIVED_STALE_MS = 15 * 60_000; // a "received" older than this is treated as unknown
-const STATUS_RANK = { received: 0, failed: 1, refused: 2, paid: 3 };
+const STATUS_RANK = { received: 0, failed: 1, refused: 2, refunded: 3, paid: 4 }; // same order as lib/status.mjs RANK
 const has = (o, k) => o != null && Object.prototype.hasOwnProperty.call(o, k); // not Object.hasOwn: older phones
 const finite = (v) => typeof v === "number" && Number.isFinite(v);
 const REASON_TEXT = {
@@ -343,8 +356,8 @@ export function depositStatus(answer, hash, match = {}) {
 }
 /** A "received" so old that the payout should have happened: show it as unknown ("taking longer than usual"). */
 export const receivedStale = (ev, nowMs = Date.now()) => ev?.status === "received" && !(nowMs - Date.parse(ev.at) < RECEIVED_STALE_MS);
-/** A status that is final: no chain check can change it ("paid" with a receipt, or "refused"). */
-export const statusFinal = (ev) => ev?.status === "paid" || ev?.status === "refused";
+/** A status that is final: no chain check can change it ("paid" with a receipt, "refused", or "refunded"). */
+export const statusFinal = (ev) => ev?.status === "paid" || ev?.status === "refused" || ev?.status === "refunded";
 
 const clampRoom = (v, cap) => Math.min(cap, Math.max(0, v));
 /**
