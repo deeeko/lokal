@@ -333,6 +333,148 @@ Settings: `NTAG_WALLET_FILE`, `CELO_RPC_URL` (default Forno), `NTAG_PASSWORD`, `
 
 ---
 
+## The whole journey, end to end
+
+### 1. Every path money can take
+
+How dollars (or CELO) sent from anywhere become naira, rupiah or pesos in someone's own wallet, what is checked on the
+way, and what the recipient can do next. Solid arrows are live today; dashed arrows are being rolled out (marked in
+the labels).
+
+```mermaid
+flowchart TB
+  %% ---------- who pays and with what ----------
+  subgraph PAYER["Payer (anywhere in the world)"]
+    direction TB
+    W1["Own wallet<br/>MiniPay or MetaMask"]
+    W2["lokal command<br/>(PowerShell, encrypted key)"]
+    T1["USD₮ on Celo"]
+    T2["CELO"]
+    W1 --- T1
+    W1 --- T2
+    W2 --- T1
+  end
+
+  %% ---------- how they pay ----------
+  subgraph WAYS["Ways to pay (lokalpay.vercel.app)"]
+    direction TB
+    P1["Pay a Lokal tag<br/>/@ada · picks the currency<br/>they receive"]
+    P2["Pay a link<br/>exact amount, made by<br/>the recipient"]
+    P3["Pot / Spray Wall<br/>one QR, many guests<br/>(rolling out)"]
+  end
+
+  %% ---------- checks before money moves ----------
+  subgraph CHECKS["Checked before anything is sent"]
+    direction TB
+    C1["Who am I paying?<br/>tag owner, age, first-time warning"]
+    C2["Limits shown and enforced<br/>$25 per payment · $25 per person/day<br/>$100 per day overall"]
+    C3["LokalTags + LokalPots contracts<br/>refuse over-limit payments<br/>before money moves (deploying)"]
+  end
+
+  %% ---------- the agent ----------
+  subgraph AGENT["Lokal agent (Celo mainnet · ERC-8004 #10079)"]
+    direction TB
+    A1["Agent wallet receives<br/>the payment"]
+    A2{"Autopilot matches it<br/>tag memo · link amount<br/>· owner request"}
+    A3["Refused and recorded<br/>(unknown tag, over a limit,<br/>currency not quoting)"]
+    A4["Recorded BEFORE paying<br/>so nothing is ever paid twice"]
+  end
+
+  %% ---------- conversion ----------
+  subgraph FX["Textile FX (RFQ) on Celo"]
+    direction TB
+    F1["Free preview"]
+    F2["Firm quote<br/>max 3% worse than preview"]
+    F3["Approve exact amount<br/>→ swap"]
+    F1 --> F2 --> F3
+  end
+
+  %% ---------- recipient ----------
+  subgraph RECIPIENT["Recipient's OWN wallet"]
+    direction TB
+    R1["🇳🇬 cNGN (naira) · ready today"]
+    R2["🇮🇩 IDRX (rupiah) · rolling out"]
+    R3["🇦🇷 wARS · 🇨🇴 wCOP (pesos) · rolling out"]
+  end
+
+  %% ---------- after ----------
+  subgraph AFTER["What the recipient does next"]
+    direction TB
+    X1["Keep it: savings in<br/>their own currency"]
+    X2["Send it on Celo<br/>instantly, fraction of a cent"]
+    X3["Cash out to a bank<br/>via a supported exchange<br/>(see Cash out guide)"]
+  end
+
+  %% ---------- proof ----------
+  subgraph PROOF["Proof, for everyone"]
+    direction TB
+    Q1["Receipt NP-XXXX-XXXX<br/>rebuilt from chain data"]
+    Q2["Status server<br/>Paid · Refused · Delayed"]
+    Q3["Attribution tag<br/>celo_7360953d1b53<br/>on every transaction"]
+  end
+
+  T1 --> P1 & P2
+  T1 -.-> P3
+  T2 -.->|"Pay with CELO: converted<br/>CELO → USD₮ first (rolling out)"| A1
+  P1 --> C1 --> C2
+  P2 --> C2
+  P3 -.-> C3
+  C2 --> A1
+  C2 -.->|"contract path (deploying)"| C3
+  C3 -.-> A1
+  A1 --> A2
+  A2 -->|"no match / breaks a rule"| A3
+  A2 -->|"match"| A4 --> F1
+  F3 -->|"exact delivered amount"| R1
+  F3 -.-> R2 & R3
+  R1 & R2 & R3 --> X1 & X2 & X3
+  R1 --> Q1
+  A4 --> Q2
+  F3 --> Q3
+```
+
+### 2. One payment, step by step
+
+Ada (in Lagos) has claimed `@ada` and prefers naira. Tom (in London) pays her $10 from his own wallet.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Tom as Tom (payer)
+  participant Site as lokalpay.vercel.app
+  participant Chain as Celo mainnet
+  participant Agent as Lokal agent (autopilot)
+  participant Textile as Textile FX
+  participant Status as Status server
+  actor Ada as Ada (recipient)
+
+  Tom->>Site: Open /@ada, choose "she receives naira", enter $10
+  Site->>Chain: Look up @ada (owner wallet, preferred currency, tag age)
+  Site->>Textile: Free preview: $10 USD₮ → ≈ ₦14,4xx cNGN
+  Site-->>Tom: "Who am I paying?" card · rate · limits · ₦ estimate
+  Note over Site,Tom: Limits checked against today's payments<br/>(stricter of agent records and the chain)
+  Tom->>Chain: Send 10 USD₮ to the agent with memo "for @ada" (+ attribution tag)
+  Chain-->>Site: Confirmed (tx hash) → tracker shows "Waiting for the agent"
+  Agent->>Chain: Sees the deposit, decodes the memo, resolves @ada as of that block
+  Agent->>Agent: Re-checks the claim onchain, caps, payer ≠ recipient
+  alt breaks a rule
+    Agent->>Status: Refused (reason code), recorded so it is never paid by accident
+    Status-->>Site: Tracker shows "Refused: …"
+  else all good
+    Agent->>Status: Received (being paid)
+    Agent->>Textile: Firm quote (must be ≤ 3% worse than preview)
+    Agent->>Chain: Approve exact USD₮ → swap to cNGN (tagged)
+    Agent->>Chain: Pay Ada exactly the cNGN the swap delivered (tagged)
+    Agent->>Chain: Read every tx back, confirm the attribution tag
+    Agent->>Status: Paid · receipt NP-XXXX-XXXX
+    Status-->>Site: Tracker shows "Paid · NP-XXXX-XXXX"
+    Chain-->>Ada: ₦ arrives in her own wallet
+  end
+  Ada->>Ada: Keep it, send it on, or cash out to her bank (Cash out guide)
+```
+
+---
+
 ## How a payout works
 
 **One payout** (`pay` in `src/pay.mjs`), the same for both stablecoin corridors and for every way of paying:
@@ -466,8 +608,8 @@ Autopilot never uses it.
 | Rule | Detail |
 |---|---|
 | Format | 3–20 characters: lowercase letters, numbers and `_`, starting with a letter (`^[a-z][a-z0-9_]{2,19}$`), no `__`, not ending in `_`. The onchain JSON must already be lowercase; the site and CLI normalise input (trim, strip one `@`, lowercase). |
-| Display name | optional, 1–40 characters, no control characters |
-| Reserved | agent, admin, administrator, root, system, support, help, official, team, staff, mod, moderator, security, celo, minipay, valora, opera, textile, naira, nairapayout, payout, payouts, ntag, ntags, lokal, lokalpay, cngn, usdt, usdc, tether, cusd, ceur, wallet, bank, cbn, null, undefined, anonymous, everyone, me, you, test, demo, api, www, app, pay, send, receive |
+| Display name | optional, 1–40 characters, no control characters, no invisible or text-direction characters (zero-width spaces and joiners, bidi marks, overrides and isolates) |
+| Reserved (63) | agent, admin, administrator, root, system, support, help, official, team, staff, mod, moderator, security, celo, minipay, valora, opera, textile, naira, nairapayout, payout, payouts, ntag, ntags, lokal, lokalpay, cngn, usdt, usdc, tether, cusd, ceur, wallet, bank, cbn, null, undefined, anonymous, everyone, me, you, test, demo, api, www, app, pay, send, receive, and the lookalikes lokal_support, lokalsupport, lokal_help, lokal_team, lokal_official, lokalofficial, support_team, help_desk, helpdesk, admin1, celo_team, celoteam, minipay_support, textile_fx |
 | One tag per wallet | claiming another tag releases the old one |
 | Release lock | a released tag stays locked for its previous owner's reclaim only, for **30 days** |
 | Ordering | claims are applied in (block, position) order; the first valid claim wins; later claims for a held tag are "taken" |
