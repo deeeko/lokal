@@ -7,8 +7,7 @@
 // The activity feed and everyone's addresses are not on this page: they live behind sign-in (Activity, Dashboard).
 // Signed-in visitors never get here by accident: assets/gate.js sends them to the dashboard unless they asked for
 // "About Lokal" (index.html?about); then the top bar's "Sign in" becomes "Dashboard".
-import { $, $$, el, initChrome, loadRate, loadTxPage, receiptNo, celoscanTx, lagosTime, lagosClock, parseMoneyInput, CAP, CURRENCIES, formatCurrency, tokenOf } from "../assets/core.js";
-import { payoutFromTx, unitsText } from "../assets/proof.js";
+import { $, $$, el, initChrome, loadRate, loadTxPage, txKind, receiptNo, celoscanTx, lagosTime, lagosClock, parseMoneyInput, CAP, CURRENCIES, formatCurrency, tokenOf } from "../assets/core.js";
 import { getSession } from "../assets/session.js";
 import { flagIcon } from "../assets/currency-ui.js";
 import { ntagCard, stage, reducedMotion } from "../assets/ntag-ui.js";
@@ -126,9 +125,17 @@ $("#how-card").append(stage(card));
 // ---------- proof: real payouts, read from Celo (no addresses shown) ----------
 const payouts = $("#payouts");
 const msg = $("#payouts-msg");
-// the same reading as the Proof page (assets/proof.js), newest five
+/** A payout's amount from its transfer(to, amount) calldata, in the token's own decimals. */
+function payoutAmount(tx) {
+  const t = tokenOf(tx.to?.hash);
+  const hex = String(tx.raw_input ?? "").slice(74, 138);
+  if (!t || !/^[0-9a-f]{64}$/i.test(hex)) return null;
+  const v = Number(BigInt("0x" + hex)) / 10 ** t.decimals;
+  const c = CURRENCIES.find((x) => x.token === t.symbol);
+  return c ? formatCurrency(v, c.code) + " " + t.symbol : `$${v.toFixed(2)} ${t.symbol}`;
+}
 loadTxPage().then(({ items }) => {
-  const rows = items.map(payoutFromTx).filter(Boolean);
+  const rows = items.filter((t) => txKind(t) === "payout" && t.status === "ok" && /^0x[0-9a-f]{64}$/i.test(String(t.hash)));
   if (!rows.length) {
     msg.textContent = "The first real payout will appear here with its transaction.";
     return;
@@ -138,7 +145,7 @@ loadTxPage().then(({ items }) => {
   payouts.append(el("ul", {}, rows.slice(0, 5).map((t) => {
     const no = receiptNo(t.hash);
     return el("li", {},
-      el("span", {}, el("b", {}, unitsText(t.units, tokenOf(t.token))), el("span", { class: "muted" }, t.time ? ` · ${lagosTime(t.time)} WAT` : "")),
+      el("span", {}, el("b", {}, payoutAmount(t) ?? "A payout"), el("span", { class: "muted" }, t.timestamp ? ` · ${lagosTime(t.timestamp)} WAT` : "")),
       el("span", { class: "row" }, el("a", { class: "link mono", href: `receipt.html#${no}` }, no), el("a", { class: "link small", href: celoscanTx(t.hash) }, "Transaction ↗")));
   })));
 }).catch(() => {
