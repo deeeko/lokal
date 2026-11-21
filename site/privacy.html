@@ -94,7 +94,7 @@
     <span class="eyebrow">Privacy</span>
     <h1 class="page-title">We don't <em>track</em> you</h1>
     <p class="lead">No cookies. No analytics. No ads. Here's everything this site and the agent touch, in plain words.</p>
-    <p class="small muted mt-16">Updated 21 November 2026: the new landing, sign-up and dashboard</p>
+    <p class="small muted mt-16">Updated 21 November 2026: payments through the contracts, refunds and the agent's alerts</p>
     <nav class="subnav" aria-label="Docs pages"><a href="docs.html">Docs</a><a href="cash-out.html">Cash out</a><a href="privacy.html" aria-current="page">Privacy</a><a href="terms.html">Terms</a></nav>
   </header>
 
@@ -112,6 +112,7 @@
         <li><strong>Signing out</strong> deletes the saved sign-in and disconnects your wallet from the site. To remove the site's access completely, also disconnect it in your wallet's "Connected sites" settings.</li>
       </ul>
       <p>A sign-in only tells this site which wallet you are. It can't move your money: this site never holds money or keys, and every payment is sent from your own wallet, only after you approve it there.</p>
+      <p><strong>Paying through the contracts.</strong> When you pay a Lokal tag or a pot, your wallet sends the payment to the LokalTags or LokalPots contract on Celo, which checks the limits and passes it straight to the agent. For USD₮ your wallet asks you to sign a permit for exactly that amount, usable once and only by that contract; for other tokens it asks you to approve exactly that amount. The currency you chose for the recipient travels with the payment, on the blockchain.</p>
 
       <h2 id="dashboard">Your dashboard and activity</h2>
       <p>Your dashboard (your tag, money received, your payments and payment links) and your Activity page are built <strong>in your browser</strong> each time you open them, by reading public data from Celo: Forno and the Blockscout explorer. Nothing new is stored on a server for them, and they add nothing to your device beyond what is listed below.</p>
@@ -138,8 +139,9 @@
       <p>If you <strong>claim a Lokal tag</strong> (like @ada), your own wallet writes the tag, any display name and preferred currency you add, and your wallet address to the Celo blockchain. Anyone can look up which wallet holds a tag. Payments to your tag are public too. Releasing a tag stops it pointing to you, but the history stays onchain forever. Use a name you're happy to be public.</p>
 
       <h2 id="agent">What the agent keeps</h2>
-      <p>To actually send money, the agent keeps a few records on its owner's computer (never on this site or in the code): saved recipients (name and wallet), payment requests (including who paid), and a log of payouts for the daily safety limit. They're used only to make the payments people asked for, never sold or shared, and deleted within two years after the project ends.</p>
-      <p>So the site can show exact payment status, the agent also sends a short status note for each payment it handles to this site's <code>/api/status</code>: the transaction ids, wallet addresses, amounts and tag (all already public on Celo), whether it was paid, refused (with a reason code) or is being paid, and the receipt number. Notes are kept for 30 days. When you look up a payment, the page asks <code>/api/status</code> by transaction, wallet or tag; nothing about you as a visitor is stored.</p>
+      <p>To actually send money, the agent keeps a few records on its owner's computer (never on this site or in the code): saved recipients (name and wallet), payment requests (including who paid), records of payments made through the contracts and of refunds (the paying wallet, amount and transactions), and a log of payouts for the daily safety limit. They're used only to make the payments people asked for, never sold or shared, and deleted within two years after the project ends.</p>
+      <p>So the site can show exact payment status, the agent also sends a short status note for each payment it handles to this site's <code>/api/status</code>: the transaction ids, wallet addresses, amounts and tag (all already public on Celo), whether it was paid, refused (with a reason code), refunded (with the refund transaction) or is being paid, and the receipt number. Notes are kept for 30 days. The agent also sends a short "I'm running" note about itself (its gas balance and the block it has reached) so the site can say whether it is online; it contains nothing about you. When you look up a payment, the page asks <code>/api/status</code> by transaction, wallet or tag; nothing about you as a visitor is stored.</p>
+      <p><strong>The owner's alerts.</strong> If the agent's owner turns on phone alerts, the agent sends them short notes through Telegram or a webhook the owner chooses: for example that a payment was refused (amount, token, reason, shortened wallet address like 0x7a3f…42fc, transaction link), that a payout went through (receipt number), or that the agent stopped. That service handles the notes under its own policy. No keys, passwords or full wallet addresses are included.</p>
 
       <h2 id="you">Your say</h2>
       <p>Want to see, fix or delete what the agent's owner holds about you? Ask via <a href="https://github.com/deeeko/lokal/issues">GitHub issues</a> and we'll sort out a private way to talk. You can also reach Nigeria's data regulator at <a href="https://ndpc.gov.ng">ndpc.gov.ng</a>, or your local one.</p>
