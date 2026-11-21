@@ -143,7 +143,16 @@ test("currency_unavailable: a local currency that isn't quoting is a permanent r
 
 test("pre-flight per currency: amounts in USD₮ base units, a no-quote refused as currency_unavailable", async (t) => {
   const real = globalThis.fetch;
-  t.after(() => { globalThis.fetch = real; });
+  // CI has no contacts.json: use an empty temporary one (never the operator's real file).
+  const prevContacts = process.env.CONTACTS_FILE;
+  const tmpContacts = `${(await import("node:os")).tmpdir()}/lokal-contacts-${process.pid}.json`;
+  fs.writeFileSync(tmpContacts, JSON.stringify({ contacts: {}, own_wallets: [] }));
+  process.env.CONTACTS_FILE = tmpContacts;
+  t.after(() => {
+    globalThis.fetch = real;
+    if (prevContacts === undefined) delete process.env.CONTACTS_FILE; else process.env.CONTACTS_FILE = prevContacts;
+    fs.rmSync(tmpContacts, { force: true });
+  });
   const { preflight } = await import("../src/pay.mjs");
   const seen = [];
   let answer = null;

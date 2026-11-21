@@ -25,10 +25,12 @@ import { firmQuote, preview, submit } from "./textile.mjs";
 import { currencyOf, formatCurrencyUnits } from "./currencies.mjs";
 
 export function loadContacts() {
-  if (!fs.existsSync(CONTACTS_FILE)) {
+  // Read the env at call time too, so tests can point at a temporary file without touching the real one.
+  const file = process.env.CONTACTS_FILE ?? CONTACTS_FILE;
+  if (!fs.existsSync(file)) {
     throw new Error(`No contacts file. Copy contacts.example.json to contacts.json and add your recipient.`);
   }
-  return parseContacts(JSON.parse(fs.readFileSync(CONTACTS_FILE, "utf8")));
+  return parseContacts(JSON.parse(fs.readFileSync(file, "utf8")));
 }
 
 /** All entries in receipts.jsonl (bad lines are skipped). */
