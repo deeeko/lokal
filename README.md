@@ -1059,6 +1059,8 @@ their own wallet in seconds.
 
 **Still to do** (added here only once they have happened)
 
+The operator steps for these are in [docs/RUNBOOK.md](docs/RUNBOOK.md).
+
 - [ ] Tagged mainnet run: USD₮ to cNGN to a named recipient, with transaction links
 - [ ] Named user and what they used it for
 
