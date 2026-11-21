@@ -6,14 +6,14 @@
 //   - The dashboard: signed out -> a sign-in panel (it never redirects, so it can't bounce with the landing);
 //     signed in without a tag -> "claim your tag"; with a tag -> the full dashboard.
 //   - The sign-up gateway: starts at the first step that isn't done yet.
-// Public pages (a tag's pay page, payment links, quote, receipts, verify, cash-out, docs, privacy, terms, agent) are
+// Public pages (a tag's pay page, a pot's page, payment links, quote, receipts, verify, cash-out, docs, privacy, terms, agent) are
 // never gated: payers must be able to pay in seconds, without an account.
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 const signedIn = (session) => Boolean(session && ADDR.test(String(session.address)));
 
 /** Pages anyone can open without signing in. */
-export const PUBLIC_PAGES = Object.freeze(["index.html", "start.html", "tag.html", "pay.html", "quote.html", "receipt.html", "verify.html",
+export const PUBLIC_PAGES = Object.freeze(["index.html", "start.html", "tag.html", "pot.html", "pay.html", "quote.html", "receipt.html", "verify.html",
   "cash-out.html", "docs.html", "privacy.html", "terms.html", "agent.html", "autopilot.html", "get-paid.html", "404.html"]);
 /** Pages whose content is only for the signed-in wallet (they show a sign-in prompt otherwise, never a redirect loop). */
 export const SIGNED_IN_PAGES = Object.freeze(["app.html", "transactions.html", "account.html"]);
@@ -27,6 +27,18 @@ export function dashboardView(session, tag) {
   if (tag === undefined) return "loading";
   return tag ? "tag" : "no-tag";
 }
+
+/**
+ * Pots: a pot's page (pot.html?id=N) is public, so a guest sprays without an account. Opening and closing a pot happen
+ * on the dashboard, from the signed-in wallet, and the contract only lets a tag holder host one.
+ * "signed-out" (sign in first) | "loading" | "no-tag" (claim a tag first) | "host" (can open pots).
+ */
+export function potsView(session, tag) {
+  const v = dashboardView(session, tag);
+  return v === "tag" ? "host" : v;
+}
+/** Only the pot's host may close it (the contract says the same: NotHost). */
+export const canClosePot = (session, pot) => signedIn(session) && Boolean(pot?.host) && session.address.toLowerCase() === String(pot.host).toLowerCase();
 
 /**
  * The gateway's first open step: "connect" (no wallet account yet) | "sign" (connected, not signed in as it) |
