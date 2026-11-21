@@ -163,7 +163,7 @@ wallet's existing balance. It can't change the payout wallet, limits, rates or t
 
 **The website is compromised.** It could show a wrong contract address or ask for a bad transaction. The wallet shows
 the contract call being signed, and the contracts still apply every rule above. Check the contract addresses against
-the ones in the README.
+the ones in the README and [CONTRACTS.md](CONTRACTS.md).
 
 ## Known, accepted behaviour
 
@@ -198,4 +198,4 @@ These are by design or low impact. Each has a test that pins today's behaviour.
 - Whether the agent actually paid out. That is in the agent's receipts and the payout transactions from its wallet.
 - Anything about the old `NT1:` / `NTP:` history. Tags claimed under the old protocol need to be claimed again on the
   contract; there is no admin import, on purpose. Until then the agent keeps paying `NTP:` memo payments to them, and
-  when a name is held in both places the contract's holder wins (see "Lokal tag rules" in the README).
+  when a name is held in both places the contract's holder wins (see [Lokal tag rules](PROTOCOL.md#lokal-tag-rules)).

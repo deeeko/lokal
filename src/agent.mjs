@@ -658,7 +658,7 @@ async function main() {
       break;
     }
     default:
-      console.log("Lokal agent. Commands: keygen | status | quote | pay | ask | request | requests | registrations | ntag | ntags | ntag-data | watch | retry | refunds | refund | status-sync | alert-test | doctor | register | verify  (see README)");
+      console.log("Lokal agent. Commands: keygen | status | quote | pay | ask | request | requests | registrations | ntag | ntags | ntag-data | watch | retry | refunds | refund | status-sync | alert-test | doctor | register | verify  (see docs/CLI.md)");
       console.log("  Refunds: refunds (what can be refunded) · refund --deposit TX:LOGINDEX [--execute] [--yes] [--retry] · watch --execute --auto-refund");
       console.log("    A refund sends a refused, unmatched or ambiguous deposit back to its sender, same token and amount (docs/REFUNDS.md).");
       console.log("  One agent at a time: watch --execute and pay/ask/retry/register/refund --execute take agent.lock; after a crash add --clear-stale-lock.");

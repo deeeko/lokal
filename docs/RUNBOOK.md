@@ -70,7 +70,7 @@ If the quote fails, stop: Textile has no price right now. Try again later.
 - Open the receipt and the **Verify** page. Every agent transaction must show the attribution tag
   `celo_7360953d1b53`.
 - Ask the payer to leave a rating on the receipt page (ERC-8004 reputation).
-- Send the receipt link to the developer. It goes into the README "Still to do" list and the proof section with its
+- Send the receipt link to the developer. It goes into the README's "What's real" table and the "Still to do" list in [ROADMAP.md](ROADMAP.md), with its
   transaction links, and naira moves from **Built, not yet used on mainnet** to **Live**.
 
 ## If something goes wrong

@@ -9,7 +9,7 @@
  *   cd contracts && npm ci && npm run demo
  *
  * Every step asserts its outcome and that neither contract holds anything. If the contracts ever behave differently
- * from the table, this script exits non-zero (CI runs it), so the README's table can't drift from the code.
+ * from the table, this script exits non-zero (CI runs it), so the table in docs/CONTRACTS.md can't drift from the code.
  * Only mock tokens on a local chain move. Nothing here touches Celo.
  */
 import assert from "node:assert/strict";
@@ -238,7 +238,7 @@ async function main() {
 
   await holdsNothing();
 
-  // The table, exactly as the README shows it.
+  // The table, exactly as docs/CONTRACTS.md shows it.
   const out = ["| # | Who | Action | Result | Why |", "| --- | --- | --- | --- | --- |"];
   rows.forEach((r, i) => out.push(`| ${i + 1} | ${r.who} | ${r.action} | **${r.result}** | ${r.why} |`));
   console.log(out.join("\n"));

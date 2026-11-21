@@ -1,7 +1,7 @@
 name: contracts
 
 # Builds and tests the LokalTags contract, then runs the canonical demo. The demo asserts every outcome in the
-# README's table, so the README and the contract can't drift apart without this going red. The parity tests also
+# table in docs/CONTRACTS.md, so the docs and the contract can't drift apart without this going red. The parity tests also
 # read the site's nTag rules (site/assets/core.js, src/ntags.mjs), so a change there runs this too.
 # Nothing here deploys, holds a key or touches Celo mainnet.
 on:
@@ -47,5 +47,5 @@ jobs:
         run: npm run typecheck
       - name: Contract tests (every rule, every revert, parity with the site's rules)
         run: npm test
-      - name: Canonical demo (asserts every outcome in the README table)
+      - name: Canonical demo (asserts every outcome in the docs/CONTRACTS.md table)
         run: npm run demo
