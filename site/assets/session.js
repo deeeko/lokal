@@ -268,25 +268,7 @@ export function avatar(address, cls = "") {
   return n;
 }
 
-let chipBusy = false;
-let lookupNow = null; // set by initUserChip: looks up the signed-in wallet's Lokal tag right away
-async function chipSignIn(btn) {
-  const eth = injectedWallet();
-  if (!eth) { location.href = "account.html"; return; } // the account page explains how to open it in a wallet
-  if (chipBusy) return;
-  chipBusy = true;
-  btn?.setAttribute("aria-busy", "true");
-  try {
-    await signIn(eth);
-    toast("Signed in"); // stay on this page; the chip menu offers the account (or "Claim your Lokal tag")
-    lookupNow?.();
-  } catch (e) {
-    toast(e?.code === "NO_WALLET" || e?.plain ? e.message : explainWalletError(e));
-  } finally {
-    chipBusy = false;
-    btn?.removeAttribute("aria-busy");
-  }
-}
+// Signed out, the chip is a link to the sign-up gateway (start.html): signing up and signing in are the same flow.
 async function chipSignOut() {
   const revoked = await signOut();
   toast(revoked ? "Signed out" : "Signed out on this site");
@@ -309,8 +291,12 @@ function userMenu(id, s, info) {
   const items = [
     el("div", { class: "np-menu-head" }, avatar(s.address, "lg"),
       el("div", { class: "np-menu-who" }, who, el("span", { class: "mono", title: s.address }, short(s.address)))),
-    el("a", { class: "np-menu-item", href: "account.html" }, icon("user"), tag || info === undefined ? "Your account" : "Claim your Lokal tag"),
+    el("a", { class: "np-menu-item", href: "app.html" }, icon("home"), "Dashboard"),
+    tag || info === undefined
+      ? el("a", { class: "np-menu-item", href: "account.html" }, icon("user"), "Account")
+      : el("a", { class: "np-menu-item", href: "start.html" }, icon("user"), "Claim your Lokal tag"),
     el("button", { class: "np-menu-item", type: "button", dataset: { copy: s.address, copyLabel: "Address copied" } }, icon("copy"), "Copy wallet address"),
+    el("a", { class: "np-menu-item", href: "index.html?about" }, icon("info"), "About Lokal"),
   ];
   const out = el("button", { class: "np-menu-item", type: "button" }, icon("logout"), "Sign out");
   out.addEventListener("click", () => { closeMenu(); chipSignOut(); });
@@ -333,11 +319,9 @@ function renderSidebarChip(slot, s, info) {
   if (!slot) return;
   if (!s) {
     // aria-label: in the icon rail the text is display:none, which would leave the button unnamed
-    const b = el("button", { class: "sb-user-chip signed-out", type: "button", "data-label": "Sign in", "aria-label": "Sign in with your wallet" },
+    slot.replaceChildren(el("a", { class: "sb-user-chip signed-out", href: "start.html", "data-label": "Sign in", "aria-label": "Sign in with your wallet" },
       el("span", { class: "np-avatar is-anon", "aria-hidden": "true" }, icon("user")),
-      el("span", { class: "sb-user-text sb-label" }, el("b", {}, "Sign in"), el("span", {}, "With your wallet, free")));
-    b.addEventListener("click", () => chipSignIn(b));
-    slot.replaceChildren(b);
+      el("span", { class: "sb-user-text sb-label" }, el("b", {}, "Sign in"), el("span", {}, "With your wallet, free"))));
     return;
   }
   const tag = info?.tag ?? null;
@@ -355,9 +339,7 @@ function renderSidebarChip(slot, s, info) {
 function renderNavChip(slot, s, info) {
   if (!slot) return;
   if (!s) {
-    const b = el("button", { class: "nav-user-btn signed-out", type: "button", "aria-label": "Sign in with your wallet" }, icon("user"), el("span", {}, "Sign in"));
-    b.addEventListener("click", () => chipSignIn(b));
-    slot.replaceChildren(b);
+    slot.replaceChildren(el("a", { class: "nav-user-btn signed-out", href: "start.html", "aria-label": "Sign in with your wallet" }, icon("user"), el("span", {}, "Sign in")));
     return;
   }
   const tag = info?.tag ?? null;
@@ -392,11 +374,6 @@ export function initUserChip() {
     renderNavChip(nav, s, info);
     document.documentElement.dataset.signedIn = s ? "true" : "false";
     if (s && info === undefined) lookup(s.address, 1200);
-  };
-  lookupNow = () => {
-    const s = getSession();
-    if (!s || cachedNtag(s.address) !== undefined) return;
-    lookupNtag(s.address).then(() => { if (sameAddr(getSession()?.address, s.address)) render(); }).catch(() => { /* keep the short address */ });
   };
   document.addEventListener("click", (e) => { if (openMenu && !e.target.closest(".np-menu")) closeMenu(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openMenu) closeMenu(true); });

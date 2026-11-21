@@ -1,6 +1,12 @@
 import { AGENT, EXPLORER_API, TOKENS, CURRENCIES, formatCurrency, getJson, celoscanTx, celoscanAddr, lagosTime, lagosClock, short, num2, el, badge, icon, $, initChrome } from "../assets/core.js";
+import { getSession } from "../assets/session.js";
 
 initChrome();
+
+// No one's wallet address is printed on this public page: a deposit shows "A payer" (or "You" for the signed-in
+// wallet) and a payout shows only its amount. Each row still links its own transaction, and the timings stay, so
+// anyone can see autopilot working without the page listing other people's wallets.
+const isMe = (a) => { const s = getSession(); return Boolean(s && a && s.address.toLowerCase() === String(a).toLowerCase()); };
 
 // The board is rebuilt from public ERC-20 transfers only. Payment requests live in the owner's
 // requests.json, which this page never sees, so a deposit is paired with the agent's next
@@ -124,13 +130,11 @@ function row({ d, p, status }) {
     cell("Deposit", "lead-cell", el("span", { class: "board-pay" },
       el("span", { class: "strong num" }, amountText(d)),
       txLink(d.hash, short(d.hash)))),
-    cell("From", null, d.from
-      ? el("a", { class: "mono", href: celoscanAddr(d.from), target: "_blank", rel: "noopener", title: d.from, "aria-label": `Payer ${short(d.from)} on Celoscan` }, short(d.from))
-      : dash()),
+    cell("From", null, d.from ? el("span", { class: isMe(d.from) ? "strong" : "soft" }, isMe(d.from) ? "You" : "A payer") : dash()),
     cell("Received (WAT)", "num", lagosTime(d.time)),
     cell("Status", null, badge(text, kind)),
     cell("Payout", null, p
-      ? el("span", { class: "board-pay" }, el("span", { class: "strong num" }, amountText(p)), el("span", { class: "small muted" }, `to ${short(p.to)}`))
+      ? el("span", { class: "board-pay" }, el("span", { class: "strong num" }, amountText(p)), el("span", { class: "small muted" }, isMe(p.to) ? "to you" : "to the recipient"))
       : dash()),
     cell("Time to payout", "num", p ? duration(p.time - d.time) : dash()),
     cell("Receipt", null, p

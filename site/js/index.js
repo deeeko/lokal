@@ -1,177 +1,159 @@
-import { AGENT, AGENT_ID, CAP, $, el, badge, icon, short, lagosTime, lagosClock, celoscanTx, celoscanAddr, loadRate, loadIdentity, loadTxPage, receiptNo, isTagged, txKind, txLabel, initChrome, parseMoneyInput, ageText, $$, currencyOf, formatCurrency } from "../assets/core.js";
-import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
+// The landing (index.html). It tells the story; only three things on it are live:
+//   1. the hero converter: type dollars, see naira / rupiah / pesos from the live Textile FX rate (/api/rate, or
+//      rate.json where there is no API), each amount ticking in when it changes;
+//   2. the four countries' rates;
+//   3. Proof: real payouts read from the agent's transactions on Celo (amount, currency, receipt, transaction; never an
+//      address), with an honest empty state until the first one.
+// The activity feed and everyone's addresses are not on this page: they live behind sign-in (Activity, Dashboard).
+// Signed-in visitors never get here by accident: assets/gate.js sends them to the dashboard unless they asked for
+// "About Lokal" (index.html?about); then the top bar's "Sign in" becomes "Dashboard".
+import { $, $$, el, initChrome, loadRate, loadTxPage, txKind, receiptNo, celoscanTx, lagosTime, lagosClock, parseMoneyInput, CAP, CURRENCIES, formatCurrency, tokenOf } from "../assets/core.js";
+import { getSession } from "../assets/session.js";
+import { flagIcon } from "../assets/currency-ui.js";
+import { ntagCard, stage, reducedMotion } from "../assets/ntag-ui.js";
 
+document.documentElement.classList.add("js");
 initChrome();
 
-const fill = (node, ...children) => node.replaceChildren(...children.flat().filter((c) => c != null));
-const fail = (valueId, subId, reason) => {
-  fill($(valueId), "—");
-  fill($(subId), reason);
-};
+// signed in, here on purpose ("About Lokal"): the top bar offers the way back
+if (getSession()) {
+  const a = $("#lp-signin");
+  a.textContent = "Dashboard";
+  a.href = "app.html";
+}
 
-// ---------- exchange rate + quick quote (in the currency they receive) ----------
-let rate = null; // loadRate(): every currency's rate
-const input = $("#qq-amount");
-const out = $("#qq-out");
-const hint = $("#qq-hint");
-const picker = currencyPicker({
-  label: "What they receive", describedBy: "qq-cur-label",
-  onChange: () => { renderRate(); renderQuote(); },
-});
-$("#qq-currency").replaceChildren(picker.el);
-const cur = () => currencyOf(picker.value);
-const perUsd = () => (rate && rate.available[picker.value] ? rate.rates[picker.value] : null);
+// ---------- the converter ----------
+const input = $("#conv-amount");
+const hint = $("#conv-hint");
+const list = $("#conv-rows");
+let rate = null;
+const cells = new Map();
+for (const [i, c] of CURRENCIES.entries()) {
+  const v = el("span", { class: "v" }, "…");
+  const amt = el("span", { class: "conv-amt", title: `${c.name}, rounded down` }, v);
+  const note = el("span", { class: "conv-note", hidden: true });
+  const li = el("li", { class: "enter", style: `animation-delay:${i * 70}ms`, dataset: { code: c.code } },
+    flagIcon(c.code), el("span", { class: "conv-where" }, el("b", {}, c.city), el("span", {}, `${c.label} · ${c.token}`)), amt, note);
+  cells.set(c.code, { v, amt, note, last: null });
+  list.append(li);
+}
 
-/** core.js parseMoneyInput reads "1,5" as 1.50 and "1,250" as 1250 (never 15 from "1,5"). */
-function parseAmount(raw) {
+/** Puts `text` in a cell; when it changed, the new value ticks up into place (a cross-fade with reduced motion). */
+function show(code, text, state = "") {
+  const c = cells.get(code);
+  c.amt.classList.toggle("is-off", state === "off");
+  c.amt.classList.toggle("is-over", state === "over");
+  if (c.last === text) return;
+  c.last = text;
+  c.v.textContent = text;
+  c.v.classList.remove("tick");
+  void c.v.offsetWidth;
+  c.v.classList.add("tick");
+}
+
+function amount() {
+  const raw = input.value;
   if (!String(raw).trim()) return { empty: true };
   const p = parseMoneyInput(raw);
-  return p.error ? { invalid: true, error: p.error } : { value: p.cents / 100 };
+  return p.error ? { invalid: true } : { value: p.cents / 100 };
 }
 
-/** "Up to $25 per payment ≈ Rp 459,847." (or Textile's own limit for a thin market, when it is lower) */
-function limitText() {
-  const r = perUsd();
-  if (!r) return `Up to $${CAP} per payment.`;
-  const max = rate.maxUsd[picker.value];
-  if (max && max < CAP) return `Right now up to about $${max.toFixed(2)} ≈ ${formatCurrency(max * r, picker.value)} (Textile's limit for ${cur().plural}).`;
-  return `Up to $${CAP} per payment ≈ ${formatCurrency(CAP * r, picker.value)}.`;
-}
-
-function renderQuote() {
-  out.classList.remove("over");
+function renderConverter() {
+  const a = amount();
   hint.classList.remove("err");
   input.removeAttribute("aria-invalid");
-  const a = parseAmount(input.value);
   if (a.invalid) {
     hint.classList.add("err");
     input.setAttribute("aria-invalid", "true");
-    hint.textContent = a.error && !a.error.startsWith("Enter a number") ? a.error : "Enter an amount in dollars, for example 10.";
-    fill(out, "—");
+    hint.textContent = "Type an amount in dollars, for example 10.";
+    for (const c of CURRENCIES) show(c.code, "—", "off");
     return;
   }
-  hint.textContent = limitText();
-  if (rate == null) return; // still loading or failed: leave the output as set by the loader
-  const r = perUsd();
-  if (!r) {
-    fill(out, "—");
-    hint.classList.add("err");
-    hint.textContent = `${cur().label} isn't available on Textile FX right now. Pick another currency, or try again in a few minutes.`;
-    return;
-  }
-  if (a.empty || a.value === 0) { fill(out, "—"); return; }
-  fill(out, el("span", { title: `${cur().name}, rounded down` }, "≈ " + formatCurrency(a.value * r, picker.value)));
-  const max = rate.maxUsd[picker.value];
-  if (a.value > CAP || (max && a.value > max)) {
-    out.classList.add("over");
-    hint.classList.add("err");
-    input.setAttribute("aria-invalid", "true");
-    hint.textContent = a.value > CAP
-      ? `Above the $${CAP} limit (≈ ${formatCurrency(CAP * r, picker.value)}). The agent refuses payments over $${CAP}.`
-      : `Textile can convert up to about $${max.toFixed(2)} into ${cur().plural} right now. Send less, or pick another currency.`;
-  }
-}
-input.addEventListener("input", renderQuote);
-
-function renderRate() {
+  const over = !a.empty && a.value > CAP;
+  hint.textContent = over
+    ? `Over the $${CAP} limit: the contract would refuse this before any money moves.`
+    : "They receive, after the conversion fee:";
+  if (over) hint.classList.add("err");
   if (!rate) return;
-  const r = perUsd();
-  const c = cur();
-  const flag = el("span", { class: "cur-inline" }, flagIcon(c.code), c.label);
-  if (!r) {
-    fill($("#st-rate"), "—");
-    fill($("#st-rate-sub"), flag, " · not available right now");
-    return;
+  for (const c of CURRENCIES) {
+    const cell = cells.get(c.code);
+    const r = rate.available[c.code] ? rate.rates[c.code] : null;
+    const max = rate.maxUsd[c.code];
+    cell.note.hidden = true;
+    if (!r) { show(c.code, "Not quoting now", "off"); continue; }
+    if (a.empty || a.value === 0) { show(c.code, "—", "off"); continue; }
+    show(c.code, formatCurrency(a.value * r, c.code), over ? "over" : "");
+    if (!over && max && a.value > max) {
+      cell.note.hidden = false;
+      cell.note.textContent = `Textile can convert up to about $${max.toFixed(2)} into ${c.plural} right now.`;
+    }
   }
-  fill($("#st-rate"), el("span", { class: "small soft" }, "1 USD₮ = "), formatCurrency(r, c.code, c.code === "cngn" ? 2 : c.places));
-  // a stale rate (an old rate.json on a host without the live API) shows its age instead of a clock time
-  const basis = rate.fromPreview ? "Fees included" : "Market bid, before fees";
-  if (rate.stale) fill($("#st-rate-sub"), flag, " · ", badge(`Stale · updated ${ageText(rate.ageMin)}`, "warn"));
-  else fill($("#st-rate-sub"), flag, " · ", rate.fromPreview ? `${basis} · ${lagosClock(rate.fetchedAt)} WAT` : basis);
 }
+input.addEventListener("input", renderConverter);
+input.addEventListener("focus", () => input.select());
 
 loadRate().then((r) => {
   rate = r;
-  picker.setAvailability(r.available);
-  fill($("#qq-basis"), r.fromPreview ? "Fees included" : "Before fees");
-  renderRate();
-  renderQuote();
+  $("#conv-time").textContent = r.stale ? "Delayed" : r.fetchedAt ? `${lagosClock(r.fetchedAt)} WAT` : "";
+  renderConverter();
+  renderCountries();
 }).catch(() => {
-  fail("#st-rate", "#st-rate-sub", "Rate unavailable right now. Reload to retry.");
-  fill(out, "—");
-  hint.classList.add("err");
-  hint.textContent = "No rate available, so no estimate. Reload, or try the full quote page.";
-  fill($("#qq-basis"), "Unavailable");
+  for (const c of CURRENCIES) show(c.code, "—", "off");
+  hint.textContent = "The live rate couldn't be loaded. Reload, or open the quote page.";
+  $("#conv-time").textContent = "Offline";
+  for (const li of $$("#countries-list li")) li.querySelector("[data-rate]").firstChild.textContent = "—";
 });
-renderQuote();
+renderConverter();
 
-// ---------- identity ----------
-loadIdentity().then((id) => {
-  fill($("#st-id"), "#" + AGENT_ID.toString());
-  fill($("#st-id-sub"), id.ok
-    ? badge("Verified owner", "ok")
-    : [badge("Owner mismatch", "err"), " ", el("a", { class: "link", href: celoscanAddr(id.owner) }, short(id.owner))]);
-}).catch(() => {
-  fill($("#st-id"), "#" + AGENT_ID.toString());
-  fill($("#st-id-sub"), "Could not check owner. ", el("a", { class: "link", href: "agent.html" }, "Open agent page"));
-});
-
-// ---------- transactions + activity ----------
-const activity = $("#activity");
-
-const HASH_RE = /^0x[0-9a-f]{64}$/i;
-
-function activityRow(tx) {
-  const tagged = isTagged(tx);
-  const hash = String(tx.hash ?? "");
-  const no = HASH_RE.test(hash) ? receiptNo(hash) : null;
-  return el("li", {},
-    el("span", {},
-      el("span", { class: "soft", style: "display:block" }, txLabel(tx)),
-      el("span", { class: "micro" }, tx.timestamp ? lagosTime(tx.timestamp) + " WAT" : "Pending"),
-    ),
-    el("span", { class: "row", style: "justify-content:flex-end;gap:8px;flex-wrap:wrap" },
-      badge(tagged ? "Tagged" : "No tag", tagged ? "ok" : "neutral"),
-      el("a", { class: "link mono", href: celoscanTx(tx.hash), "aria-label": `Transaction ${tx.hash} on Celoscan` }, short(tx.hash)),
-      no ? el("a", { class: "link", href: `receipt.html#${no}`, "aria-label": `Receipt ${no}`, title: no }, "Receipt") : null,
-    ),
-  );
+// ---------- the four countries ----------
+function renderCountries() {
+  for (const li of $$("#countries-list li")) {
+    const code = li.dataset.code;
+    const box = li.querySelector("[data-rate]");
+    const r = rate.available[code] ? rate.rates[code] : null;
+    const c = CURRENCIES.find((x) => x.code === code);
+    box.firstChild.textContent = r ? formatCurrency(r, code, code === "cngn" ? 2 : c.places) : "Not quoting now";
+    const max = rate.maxUsd[code];
+    box.lastChild.textContent = r ? (max && max < CAP ? `per $1 · up to about $${max.toFixed(2)} right now` : "per $1, fee included") : "Try again later";
+  }
 }
 
-loadTxPage().then(({ items, next }) => {
-  const count = items.length + (next ? "+" : "");
-  const tagged = items.filter(isTagged).length;
-  const payouts = items.filter((t) => txKind(t) === "payout").length;
+// ---------- the example card in "How it works" ----------
+const card = ntagCard({ tag: "ada", name: "Ada", kind: "live", currency: "cngn", tilt: !reducedMotion() });
+$("#how-card").append(stage(card));
 
-  fill($("#st-tx"), String(count));
-  fill($("#st-tx-sub"), `${tagged} carry the tag`);
-  fill($("#st-pay"), String(payouts));
-  fill($("#st-pay-sub"), payouts === 0 ? "No payout yet" : "Local money sent to recipients");
-
-  activity.removeAttribute("aria-busy");
-  if (!items.length) {
-    fill(activity, el("p", { class: "empty" }, "No transactions from the agent wallet yet."));
+// ---------- proof: real payouts, read from Celo (no addresses shown) ----------
+const payouts = $("#payouts");
+const msg = $("#payouts-msg");
+/** A payout's amount from its transfer(to, amount) calldata, in the token's own decimals. */
+function payoutAmount(tx) {
+  const t = tokenOf(tx.to?.hash);
+  const hex = String(tx.raw_input ?? "").slice(74, 138);
+  if (!t || !/^[0-9a-f]{64}$/i.test(hex)) return null;
+  const v = Number(BigInt("0x" + hex)) / 10 ** t.decimals;
+  const c = CURRENCIES.find((x) => x.token === t.symbol);
+  return c ? formatCurrency(v, c.code) + " " + t.symbol : `$${v.toFixed(2)} ${t.symbol}`;
+}
+loadTxPage().then(({ items }) => {
+  const rows = items.filter((t) => txKind(t) === "payout" && t.status === "ok" && /^0x[0-9a-f]{64}$/i.test(String(t.hash)));
+  if (!rows.length) {
+    msg.textContent = "The first real payout will appear here with its transaction.";
     return;
   }
-  fill(activity, el("ul", { class: "kv-list" }, items.slice(0, 5).map(activityRow)));
+  payouts.classList.add("has-rows");
+  msg.textContent = "Each one was paid by the agent on Celo mainnet. Open a receipt to check it.";
+  payouts.append(el("ul", {}, rows.slice(0, 5).map((t) => {
+    const no = receiptNo(t.hash);
+    return el("li", {},
+      el("span", {}, el("b", {}, payoutAmount(t) ?? "A payout"), el("span", { class: "muted" }, t.timestamp ? ` · ${lagosTime(t.timestamp)} WAT` : "")),
+      el("span", { class: "row" }, el("a", { class: "link mono", href: `receipt.html#${no}` }, no), el("a", { class: "link small", href: celoscanTx(t.hash) }, "Transaction ↗")));
+  })));
 }).catch(() => {
-  fail("#st-tx", "#st-tx-sub", "Explorer unavailable");
-  fail("#st-pay", "#st-pay-sub", "Explorer unavailable");
-  activity.removeAttribute("aria-busy");
-  fill(activity, el("div", { class: "alert err" },
-    icon("alert"),
-    el("span", {}, "Could not load transactions from Blockscout. Reload to retry, or ",
-      el("a", { class: "link", href: celoscanAddr(AGENT) }, "view the agent on Celoscan"), "."),
-  ));
+  msg.textContent = "Couldn't read the agent's payouts from Celo just now. The first real payout will appear here with its transaction.";
 });
 
-// ---------- slow loads ----------
-// A stat whose skeleton is still showing after 3 s gets a quiet note, so a slow network doesn't look frozen.
-setTimeout(() => {
-  for (const sub of $$(".stat .stat-sub")) {
-    const value = sub.previousElementSibling;
-    if (!value?.querySelector(".skel") || sub.querySelector(".still-loading")) continue;
-    const note = el("span", { class: "still-loading" }, "Still loading…");
-    sub.replaceChildren(note);
-  }
-}, 3000);
+// ---------- calm reveals on scroll ----------
+const io = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+}, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 }) : null;
+for (const n of $$(".reveal, .reveal-list")) { if (io) io.observe(n); else n.classList.add("in"); }

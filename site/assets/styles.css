@@ -13,17 +13,20 @@
 @font-face { font-family: "Sentient"; src: url("fonts/Sentient-500-italic.woff2") format("woff2"); font-weight: 500; font-style: italic; font-display: swap; }
 
 :root {
-  /* color */
-  --bg: #040806;
-  --bg-raise: #07100b;
+  /* color. Refined 21 Nov 2026: a deeper, calmer green ground, text that clears WCAG AA everywhere (text-3 is
+     about 6.5:1 on the ground), and Celo yellow kept for the few things that matter (the primary action, the one
+     cursive accent word, the current page marker). */
+  --bg: #06110c;          /* Night: the ground, a green-black */
+  --bg-raise: #0a1a12;    /* Canopy: raised bands and panels */
+  --frame: #0c1f16;       /* Pine: product frames */
   --surface: rgba(255, 255, 255, .04);
   --surface-2: rgba(255, 255, 255, .07);
   --surface-3: rgba(255, 255, 255, .11);
   --line: rgba(255, 255, 255, .09);
-  --line-strong: rgba(255, 255, 255, .16);
-  --text: #f1f5f2;
-  --text-2: rgba(241, 245, 242, .74);
-  --text-3: rgba(241, 245, 242, .56);
+  --line-strong: rgba(255, 255, 255, .17);
+  --text: #eef4ef;        /* Fog */
+  --text-2: rgba(238, 244, 239, .80);
+  --text-3: rgba(238, 244, 239, .64);
   --green: #00a862;
   --green-deep: #00512f;
   --mint: #6ff0b0;
@@ -58,6 +61,10 @@
   --gutter: 20px;
   --shadow: 0 10px 30px rgba(0, 0, 0, .35);
   --ease: cubic-bezier(.2, .7, .2, 1);
+  /* motion: calm, no bounce; transform and opacity only */
+  --calm: cubic-bezier(.25, .8, .25, 1);
+  --t-calm: .4s;
+  --t-press: 100ms;
 }
 
 /* ---------- base ---------- */
@@ -109,11 +116,11 @@ svg.i-lg { width: 20px; height: 20px; }
 .sky::before {
   content: ""; position: absolute; inset: -20% -10% 0 -10%;
   background:
-    radial-gradient(42% 38% at 22% 18%, rgba(111, 240, 176, .55), transparent 70%),
-    radial-gradient(55% 45% at 45% 26%, rgba(0, 168, 98, .75), transparent 72%),
+    radial-gradient(42% 38% at 22% 18%, rgba(111, 240, 176, .30), transparent 70%),
+    radial-gradient(55% 45% at 45% 26%, rgba(0, 150, 88, .50), transparent 72%),
     radial-gradient(60% 50% at 80% 10%, rgba(0, 81, 47, .9), transparent 70%),
     radial-gradient(70% 40% at 50% 62%, rgba(0, 120, 70, .35), transparent 75%),
-    radial-gradient(28% 24% at 86% 8%, rgba(252, 255, 82, .40), transparent 72%);
+    radial-gradient(28% 24% at 86% 8%, rgba(252, 255, 82, .22), transparent 72%);
   filter: blur(30px) saturate(115%);
   animation: sky-drift 24s ease-in-out infinite alternate;
 }
@@ -373,7 +380,7 @@ svg.i-lg { width: 20px; height: 20px; }
   border: 1px solid transparent; cursor: pointer; white-space: nowrap;
   transition: transform 120ms var(--ease), background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
-.btn:active { transform: scale(.98); }
+.btn:active { transform: scale(.97); transition: transform var(--t-press) ease-out; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .btn-primary { background: var(--celo); color: var(--on-celo); }
 .btn-primary:hover { background: var(--celo-hover); }
@@ -535,7 +542,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 /* A small pill at the top of the content, over the page header rather than over a form or its buttons. */
 .toast { position: fixed; left: 50%; top: 18px; transform: translate(-50%, -12px); opacity: 0; z-index: 100; max-width: min(420px, calc(100vw - 32px)); padding: 7px 14px; border-radius: var(--r-pill); background: #fff; color: var(--on-light); font-weight: 500; font-size: 13px; line-height: 1.35; text-align: center; box-shadow: 0 8px 24px rgba(0, 0, 0, .35); transition: opacity 160ms ease, transform 160ms var(--ease); pointer-events: none; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
-@media (min-width: 641px) { .toast { top: 96px; } } /* below the floating nav, never on top of it */
+@media (min-width: 641px) and (max-width: 1099.98px) { .toast { top: 72px; } } /* below the app bar, never on top of it */
+@media (min-width: 1100px) { .toast { top: 24px; } }
 @media (min-width: 1100px) { .toast { left: calc(50% + (var(--sb-w) + 12px) / 2); } }
 @media (max-width: 640px) { .toast { top: calc(68px + env(safe-area-inset-top, 0px)); font-size: 12.5px; padding: 6px 12px; } }
 
@@ -607,15 +615,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .card-h, .card-b { padding-left: 18px; padding-right: 18px; }
   .site-footer .cols { grid-template-columns: 1fr 1fr; }
   .site-footer .cols > :first-child { grid-column: 1 / -1; }
-  /* phones: a fixed, full-width glass app bar (brand left, menu right) */
-  body { padding-top: 60px; }
-  .nav-wrap { position: fixed; top: 0; left: 0; right: 0; padding: 0; }
-  .nav {
-    width: 100%; max-width: none; border-radius: 0; border-width: 0 0 1px; min-height: 60px;
-    padding: 10px 12px 10px 16px; background: rgba(4, 10, 7, .74); box-shadow: 0 10px 28px rgba(0, 0, 0, .28);
-  }
-  .nav-brand { margin-right: auto; font-size: 16px; gap: 10px; }
-  .nav-brand img { width: 32px; height: 32px; }
   .nav-links { display: none; }
   .nav .btn-secondary { display: none; }
   .nav .menu-btn { width: 40px; height: 40px; border-radius: 12px; }
@@ -731,8 +730,21 @@ details.operator > summary:focus-visible { outline-offset: -2px; border-radius: 
   .nav-wrap { display: none; }
   main { padding-top: 44px; }
 }
-@media (min-width: 641px) and (max-width: 1099.98px) {
-  .nav { background: rgba(6, 13, 9, .94); }
+/* Below the docked sidebar (phones, tablets, narrow desktop windows, or a desktop with a wallet side panel open):
+   one full-width app bar fixed to the top, whose height is RESERVED with body padding, so it never sits on top of
+   page content at any width. (It used to be a floating pill, sticky 14px from the top, that covered cards such as the
+   Account claim summary when scrolling.) In-page anchors and focus scrolling stop below it (scroll-padding-top). */
+@media (max-width: 1099.98px) {
+  html { scroll-padding-top: 76px; }
+  body { padding-top: 60px; }
+  .nav-wrap { position: fixed; top: 0; left: 0; right: 0; padding: 0; }
+  .nav {
+    width: 100%; max-width: none; border-radius: 0; border-width: 0 0 1px; min-height: 60px;
+    padding: 10px 12px 10px 16px; background: rgba(6, 17, 12, .94); box-shadow: 0 10px 28px rgba(0, 0, 0, .28);
+  }
+  .nav-brand { margin-right: auto; font-size: 16px; gap: 10px; }
+  .nav-brand img { width: 32px; height: 32px; }
+  .card, .page-head { scroll-margin-top: 76px; }
 }
 
 /* ---------- honest status labels: Live / Built, not yet used on mainnet / Planned ----------
@@ -744,3 +756,36 @@ details.operator > summary:focus-visible { outline-offset: -2px; border-radius: 
 .status-today li { display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); gap: 14px; align-items: baseline; font-size: var(--fs-small); color: var(--text-2); }
 .status-today li .status-pill { justify-self: start; }
 @media (max-width: 640px) { .status-today li { grid-template-columns: minmax(0, 1fr); gap: 6px; } }
+
+/* ---------- press feedback, contrast and transparency preferences (every page) ----------
+   Pressing anything tappable answers at once (scale .97, 100 ms ease-out). People who ask for more contrast get
+   stronger lines and text; people who ask for less transparency get solid panels instead of glass. */
+.icon-btn:active, .segmented button:active, .subnav a:active, .sb-nav a:active, .sb-user-chip:active, .card-link:active { transform: scale(.97); transition: transform var(--t-press) ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .btn:active, .icon-btn:active, .segmented button:active, .subnav a:active, .sb-nav a:active, .sb-user-chip:active, .card-link:active { transform: none; }
+}
+@media (prefers-contrast: more) {
+  :root { --line: rgba(255, 255, 255, .26); --line-strong: rgba(255, 255, 255, .42); --text-2: rgba(238, 244, 239, .92); --text-3: rgba(238, 244, 239, .82); }
+  .btn-secondary, .status-pill, .token, .input, .money, .segmented { border-color: var(--line-strong); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .sidebar, .nav, .np-menu, .consent, .sb-scrim, .card { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .sidebar { background: var(--bg-raise); }
+  .nav { background: var(--bg-raise); }
+  .consent { background: var(--bg-raise); }
+}
+
+/* ---------- secondary actions: a text link whose arrow nudges on hover ---------- */
+.text-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-weight: 500; text-decoration: none; white-space: nowrap; }
+.text-link .arrow { display: inline-block; color: var(--celo); transition: transform .24s var(--calm); }
+.text-link:hover .arrow, .text-link:focus-visible .arrow { transform: translateX(4px); }
+.text-link:hover { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { .text-link .arrow { transition: none; } .text-link:hover .arrow, .text-link:focus-visible .arrow { transform: none; } }
+
+/* ---------- signed-in only: the prompt visitors see instead (Activity, Dashboard) ---------- */
+.gate-card { max-width: 760px; }
+.gate-body { display: flex; gap: 18px; align-items: flex-start; padding: 28px; }
+.gate-body h2 { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; }
+.gate-icon { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: rgba(252, 255, 82, .08); color: var(--celo); box-shadow: inset 0 0 0 1px rgba(252, 255, 82, .22); }
+.gate-icon svg.i { width: 20px; height: 20px; }
+@media (max-width: 640px) { .gate-body { flex-direction: column; padding: 22px 18px; } }

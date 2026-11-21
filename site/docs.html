@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' https://forno.celo.org https://celo.blockscout.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Docs · Lokal</title>
 <meta name="description" content="How the Lokal agent quotes, converts and pays out in two corridors, how payment links and autopilot work, the safeguards it enforces in code, and how to run it from the command line.">
-<meta name="theme-color" content="#040806">
+<meta name="theme-color" content="#06110c">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Lokal: pay anyone in their local money">
 <meta property="og:description" content="Send dollars on Celo. They receive their local money. Converts on Textile FX and pays their own wallet.">
@@ -91,16 +91,16 @@
     <button class="icon-btn sm sb-close" type="button" aria-label="Close menu"><svg class="i"><use href="#i-x"/></svg></button>
   </div>
   <nav class="sb-nav" aria-label="Sections">
-    <a href="index.html" data-label="Overview"><svg class="i"><use href="#i-home"/></svg><span class="sb-label">Overview</span></a>
+    <a href="app.html" data-label="Dashboard"><svg class="i"><use href="#i-home"/></svg><span class="sb-label">Dashboard</span></a>
     <a href="quote.html" data-label="Send" data-also="pay.html tag.html"><svg class="i"><use href="#i-quote"/></svg><span class="sb-label">Send</span></a>
-    <a href="get-paid.html" data-label="Get paid" data-also="account.html"><svg class="i"><use href="#i-wallet"/></svg><span class="sb-label">Get paid</span></a>
-    <a href="transactions.html" data-label="Activity" data-also="receipt.html verify.html"><svg class="i"><use href="#i-list"/></svg><span class="sb-label">Activity</span></a>
-    <a href="agent.html" data-label="Agent" data-also="autopilot.html"><svg class="i"><use href="#i-id"/></svg><span class="sb-label">Agent</span></a>
+    <a href="get-paid.html" data-label="Get paid"><svg class="i"><use href="#i-wallet"/></svg><span class="sb-label">Get paid</span></a>
+    <a href="transactions.html" data-label="Activity" data-also="receipt.html verify.html agent.html autopilot.html"><svg class="i"><use href="#i-list"/></svg><span class="sb-label">Activity</span></a>
+    <a href="account.html" data-label="Account"><svg class="i"><use href="#i-user"/></svg><span class="sb-label">Account</span></a>
     <span class="sb-sep" aria-hidden="true"></span>
     <a href="docs.html" data-label="Docs" data-also="privacy.html terms.html cash-out.html"><svg class="i"><use href="#i-book"/></svg><span class="sb-label">Docs</span></a>
   </nav>
   <div class="sb-foot">
-    <div class="sb-user" id="sb-user"><a class="sb-user-chip signed-out" href="account.html" data-label="Sign in" aria-label="Sign in with your wallet"><span class="np-avatar is-anon" aria-hidden="true"><svg class="i"><use href="#i-user"/></svg></span><span class="sb-user-text sb-label"><b>Sign in</b><span>With your wallet, free</span></span></a></div>
+    <div class="sb-user" id="sb-user"><a class="sb-user-chip signed-out" href="start.html" data-label="Sign in" aria-label="Sign in with your wallet"><span class="np-avatar is-anon" aria-hidden="true"><svg class="i"><use href="#i-user"/></svg></span><span class="sb-user-text sb-label"><b>Sign in</b><span>With your wallet, free</span></span></a></div>
     <div class="sb-status" title="Celo mainnet">
       <span class="live-dot" aria-hidden="true"></span>
       <div><b>Celo mainnet · live</b><span class="sb-label" id="sb-rate" aria-live="polite">Loading rate…</span></div>
@@ -113,12 +113,12 @@
   <nav class="nav" aria-label="Main">
     <a class="nav-brand" href="index.html"><img src="logo.svg?v=lokal2" alt="" width="30" height="30"><span>Lokal</span></a>
     <div class="nav-links">
-      <a href="index.html">Overview</a>
+      <a href="app.html">Dashboard</a>
       <a href="quote.html" data-also="pay.html tag.html">Send</a>
-      <a href="get-paid.html" data-also="account.html">Get paid</a>
-      <a href="transactions.html" data-also="receipt.html verify.html">Activity</a>
+      <a href="get-paid.html">Get paid</a>
+      <a href="transactions.html" data-also="receipt.html verify.html agent.html autopilot.html">Activity</a>
     </div>
-    <div class="nav-user" id="nav-user"><a class="nav-user-btn signed-out" href="account.html" aria-label="Sign in with your wallet"><svg class="i"><use href="#i-user"/></svg><span>Sign in</span></a></div>
+    <div class="nav-user" id="nav-user"><a class="nav-user-btn signed-out" href="start.html" aria-label="Sign in with your wallet"><svg class="i"><use href="#i-user"/></svg><span>Sign in</span></a></div>
     <button class="icon-btn menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar"><svg class="i"><use href="#i-menu"/></svg></button>
   </nav>
 </div>
@@ -486,11 +486,12 @@ node src/agent.mjs watch"><svg class="i"><use href="#i-copy"/></svg></button>
     <div class="cols">
       <div>
         <div class="foot-brand"><img src="logo.svg?v=lokal2" alt="" width="28" height="28">Lokal</div>
-        <p class="small soft" style="max-width:40ch">An agent that turns USD₮ into naira, rupiah or pesos on Textile FX and pays recipients on Celo.</p>
+        <p class="small soft" style="max-width:40ch">Send dollars on Celo. They receive their local money: naira, rupiah or pesos, in their own wallet.</p>
+        <p class="small mt-16"><a href="index.html?about">About Lokal</a></p>
       </div>
       <div>
         <h4>Product</h4>
-        <ul><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Transactions</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="cash-out.html">Cash out</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
+        <ul><li><a href="app.html">Dashboard</a></li><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Your activity</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="cash-out.html">Cash out</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
       </div>
       <div>
         <h4>Resources</h4>

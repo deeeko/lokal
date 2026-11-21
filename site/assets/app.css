@@ -1,0 +1,75 @@
+/* =====================================================================
+   The dashboard (app.html): your tag, money received, your payments and
+   links, add-to-wallet, settings. Builds on styles.css and ntags.css.
+   Flat panels (no glass) on the Canopy tone, one card per job.
+   ===================================================================== */
+.dash-head .lead { max-width: 60ch; }
+#dash-root { display: grid; gap: 22px; }
+#dash-root > .alert { max-width: 760px; }
+
+/* your tag: the card on its stage, then what to do with it */
+.dash-hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(24px, 4vw, 56px); align-items: center;
+  padding: clamp(22px, 3vw, 34px); border-radius: var(--r-lg); background: var(--bg-raise); border: 1px solid var(--line); }
+.dash-hero .ntag-stage { margin: 0; }
+.dash-hero-copy { display: grid; gap: 16px; min-width: 0; }
+.dash-h2 { font-size: clamp(24px, 2.6vw, 34px); font-weight: 400; line-height: 1.12; letter-spacing: -0.03em; }
+.dash-h2 .np-tagname { color: var(--celo); }
+.dash-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+
+.dash-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 22px; align-items: start; }
+.dash-grid > #received { grid-column: span 5; }
+.dash-grid > #recent { grid-column: span 7; }
+.dash-grid > #links { grid-column: span 7; }
+.dash-grid > #wallet { grid-column: span 5; }
+.dash-card { display: flex; flex-direction: column; backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-raise); }
+.dash-card > .card-b { flex: 1; }
+.dash-card .card-f { justify-content: space-between; }
+
+/* money received: one line per currency, the amount set large in tabular figures */
+.dash-totals { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.dash-totals li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "cur amt" "n amt"; gap: 0 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.dash-totals li:first-child { padding-top: 0; }
+.dash-totals li:last-child { border-bottom: 0; }
+.dash-totals .cur-inline { grid-area: cur; font-weight: 500; }
+.dash-totals b { grid-area: amt; align-self: center; font-size: clamp(22px, 2.4vw, 30px); font-weight: 400; letter-spacing: -0.02em; }
+.dash-totals .micro { grid-area: n; }
+
+/* lists: recent payments, payment links */
+.dash-list { list-style: none; margin: 0; padding: 0; }
+.dash-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.dash-list li:first-child { padding-top: 0; }
+.dash-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.dash-list-main { display: grid; gap: 2px; min-width: 0; }
+.dash-list-label { font-size: 14.5px; color: var(--text); overflow-wrap: anywhere; }
+.dash-list-end { display: flex; align-items: center; gap: 10px; flex: none; }
+
+.dash-empty { display: grid; gap: 6px; padding: 6px 0; }
+.dash-empty-title { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+
+/* add to wallet */
+.atw-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.atw-btn { gap: 9px; }
+.atw-status { min-height: 1.5em; display: flex; align-items: center; gap: 6px; }
+.atw-status svg.i { color: var(--mint); }
+
+/* settings */
+.dash-settings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
+.dash-set { display: grid; gap: 10px; min-width: 0; }
+.dash-set h3.label { font-size: var(--fs-small); letter-spacing: 0; }
+.dash-set-row { display: flex; gap: 8px; }
+.dash-set-row .input { flex: 1; min-width: 0; }
+.dash-release summary { list-style: none; cursor: pointer; display: grid; gap: 2px; }
+.dash-release summary::-webkit-details-marker { display: none; }
+.dash-release summary .label::after { content: " +"; color: var(--text-3); }
+.dash-release[open] summary .label::after { content: " −"; }
+
+@media (max-width: 1180px) { .dash-settings { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 960px) {
+  .dash-hero { grid-template-columns: minmax(0, 1fr); }
+  .dash-grid > #received, .dash-grid > #recent, .dash-grid > #links, .dash-grid > #wallet { grid-column: 1 / -1; }
+  .dash-settings { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .dash-hero { padding: 18px; }
+  .dash-list li { flex-direction: column; align-items: flex-start; }
+}
