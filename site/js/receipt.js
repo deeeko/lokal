@@ -3,7 +3,7 @@ import {
   $, el, badge, icon, naira, usd, num2, short, lagos, lagosTime, celoscanTx, celoscanAddr,
   rpc, getJson, loadTxByHash, loadReceipt, decodeTransfers, decodeTag, loadTxPage, loadRegistrations,
   txKind, txLabel, txStatus, receiptNo, parseReceiptNo,
-  tokenSymbol, units6, tokenUnits, encodeCall, CURRENCIES, currencyOfCorridor, formatCurrency, tagSuffix, loadIdentity, copyText, toast, initChrome, isNetworkError,
+  tokenSymbol, tokenUnits, encodeCall, CURRENCIES, currencyOfCorridor, formatCurrency, tagSuffix, loadIdentity, copyText, toast, initChrome, isNetworkError,
 } from "../assets/core.js";
 import { disconnectWallet, markWalletConnected, DISCONNECT_NOTE_FULL, DISCONNECT_NOTE_PARTIAL, toast as toastMsg } from "../assets/core.js";
 

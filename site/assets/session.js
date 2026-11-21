@@ -1,7 +1,7 @@
 // Wallet sign-in for the site. "Sign in" = connect a wallet and sign a free EIP-4361 style message with personal_sign.
 // No password, no gas, nothing sent onchain. The session lives in this browser's localStorage under "np-session".
 // On Vercel the signature is also checked by /api/session (stateless, stores nothing). On GitHub Pages and the local
-// preview there is no server, so the signature the wallet returns is accepted as is. See site/_spec/NTAGS.md section 3.
+// preview there is no server, so the signature the wallet returns is accepted as is. See docs/spec/NTAGS.md section 3.
 // Everything at the top level must stay free of window/document access: api/session.js and the tests import this file.
 import {
   HAS_API, el, icon, short, toast, avatarSeed, loadNtagOps, resolveNtags, ntagOf, ownerOf, timeoutSignal,

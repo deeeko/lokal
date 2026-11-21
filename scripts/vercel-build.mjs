@@ -9,9 +9,6 @@ run("npm test");
 run("node scripts/check-site.mjs");
 run("node scripts/fetch-rate.mjs site/rate.json"); // static fallback behind the live /api/rate
 
-// The site never ships the build spec / harness files.
-fs.rmSync("site/_spec", { recursive: true, force: true });
-
 // 404.html uses absolute URLs for GitHub Pages' /lokal/ prefix; on Vercel the site is at the root.
 const f = "site/404.html";
 fs.writeFileSync(f, fs.readFileSync(f, "utf8").replaceAll("/lokal/", "/"));

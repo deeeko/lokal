@@ -9,7 +9,7 @@
 // approve + payTag for cNGN), with the currency the payer chose in the payment's ref ("cur:<code>"). Every call is
 // simulated first and a refusal is explained before anything is signed; every call carries the attribution suffix.
 // A tag claimed with the older memo protocol before the cutover (and not on the contract) is still paid the old way:
-// a USD₮ (or cNGN) transfer to the agent with "NTP:ada" (or "NTP:ada:idrx") appended (see site/_spec/NTAGS.md).
+// a USD₮ (or cNGN) transfer to the agent with "NTP:ada" (or "NTP:ada:idrx") appended (see docs/spec/NTAGS.md).
 // The agent then pays @ada's wallet in naira, rupiah or pesos (or dollars). This tool uses YOUR wallet only:
 // it never touches the agent's key, never prints a key, and asks you to type the tag before any money moves.
 import crypto from "node:crypto";
@@ -26,12 +26,12 @@ import {
   AGENT_ADDRESS, EXPLORER_API, KEY_FILE, MAX_DAILY_USD, MAX_SLIPPAGE_BPS, MAX_USD, MAX_WALLET_DAILY_USD, SITE_URL, TOKENS,
 } from "./config.mjs";
 import {
-  decodeNtagPayment, decodeNtagOp, encodeNtagClaim, encodeNtagRelease, encodeNtagTransfer, loadNtagOpsCache, ntagAvailability,
+  decodeNtagPayment, decodeNtagOp, encodeNtagTransfer, loadNtagOpsCache,
   ntagError, ntagNameError, ntagOf, normalizeNtag, ownerOf, refreshNtagOpsCache, resolveNtags, resolveNtagsBefore,
   verifyNtagOpOnchain, RELEASE_LOCK_DAYS, legacyNtagOps,
 } from "./ntags.mjs";
 import {
-  LOKAL_TAGS, PAYOUT_WALLET, USDT_DOMAIN_SEPARATOR, USDT_PERMIT_DOMAIN, ZERO_ADDRESS, approveData, availabilityName, claimData, currencyOfRef,
+  LOKAL_TAGS, USDT_DOMAIN_SEPARATOR, USDT_PERMIT_DOMAIN, ZERO_ADDRESS, approveData, availabilityName, claimData, currencyOfRef,
   currencyRef, decodeTagPaid, explainRevert, payTagData, payTagWithPermitData, releaseData, revertDataOf, setNameData, setReceiveTokenData,
   tokenAmountText, tokenCode, tokenOfCode,
 } from "../site/assets/lokal-contracts.js";

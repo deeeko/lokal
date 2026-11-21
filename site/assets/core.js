@@ -139,7 +139,6 @@ export const SEL = {
   readAllFeedback: "0xd9d84224", // readAllFeedback(uint256,address[],string,string,bool) -> (address[],uint64[],int128[],uint8[],string[],string[],bool[])
   transfer: "0xa9059cbb",
 };
-export const REPO = "https://github.com/deeeko/lokal";
 export const celoscanTx = (h) => `https://celoscan.io/tx/${h}`;
 export const celoscanAddr = (a) => `https://celoscan.io/address/${a}`;
 const MARKER = "80218021802180218021802180218021"; // ERC-8021 suffix marker
@@ -335,7 +334,7 @@ export const tokenUnits = (v, addr) => Number(v) / 10 ** (tokenOf(addr)?.decimal
 // A zero-value tx FROM the recipient TO the agent with input = hex(utf8("NP1:" + JSON)) + tag suffix.
 // JSON { a: "5.03", d: "usdt-cngn"|"usdt-idrx"|"usdt-wars"|"usdt-wcop"|"cngn-usdt", e: <expiry unix seconds>, n: <name 1-40>,
 // m?: <note <=80> }. d = the corridor: usdt-<currency> is what the recipient receives (naira, rupiah, pesos), USD₮ in.
-// The recipient is tx.from. Request id = the registration tx hash. See site/_spec/FEATURES2.md.
+// The recipient is tx.from. Request id = the registration tx hash. See docs/spec/REGISTRATIONS.md.
 export const REG_PREFIX = "NP1:";
 const utf8Hex = (s) => [...new TextEncoder().encode(s)].map((b) => b.toString(16).padStart(2, "0")).join("");
 export const MAX_REG_HOURS = 168;
@@ -421,7 +420,7 @@ export async function loadRegistrations(maxPages = 100) {
 // ---------- nTags (handles tied to a wallet, onchain) ----------
 // A claim is a zero-value tx FROM the wallet TO the agent with input hex(utf8("NT1:" + JSON)) + tag suffix:
 // {"t":"ada"} or {"t":"ada","n":"Ada Obi"}; {"t":""} releases the sender's tag. Paying a tag = an ERC-20 transfer to the
-// agent with hex(utf8("NTP:" + tag)) appended after the standard 68 bytes. See site/_spec/NTAGS.md.
+// agent with hex(utf8("NTP:" + tag)) appended after the standard 68 bytes. See docs/spec/NTAGS.md.
 // The block between the "port" markers is copied byte-for-byte into src/ntags.mjs (test/ntags.test.mjs checks it).
 // ---------- port: start ----------
 export const NTAG_PREFIX = "NT1:";

@@ -1,7 +1,7 @@
 // nTags: human handles (@ada) tied to a Celo wallet, claimed onchain from the owner's own wallet (site/account.html).
 // A claim is a zero-value tx FROM the wallet TO the agent whose input is hex(utf8("NT1:" + JSON)) + attribution suffix,
 // JSON {"t":"ada"} or {"t":"ada","n":"Ada Obi"}; {"t":""} releases the sender's tag. Paying a tag is an ordinary
-// ERC-20 transfer to the agent with hex(utf8("NTP:" + tag)) appended after the standard 68 bytes. See site/_spec/NTAGS.md.
+// ERC-20 transfer to the agent with hex(utf8("NTP:" + tag)) appended after the standard 68 bytes. See docs/spec/NTAGS.md.
 //
 // Everything between the "ported" markers is a byte-identical copy of the nTags section of site/assets/core.js
 // (test/ntags.test.mjs cross-checks them), so the site and the agent always agree on who owns a tag.

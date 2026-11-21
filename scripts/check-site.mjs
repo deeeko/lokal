@@ -180,7 +180,7 @@ for (const page of pages) {
 
 // every script parses
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? walk(path.join(dir, d.name)) : [path.join(dir, d.name)]));
-for (const file of walk(SITE).filter((f) => f.endsWith(".js") && !f.includes(`${path.sep}_spec${path.sep}`))) {
+for (const file of walk(SITE).filter((f) => f.endsWith(".js"))) {
   try { execFileSync(process.execPath, ["--check", file], { stdio: "pipe" }); }
   catch (e) { fail(`${path.relative(".", file)}: ${String(e.stderr || e.message).split("\n").find((l) => l.trim()) || "syntax error"}`); }
 }

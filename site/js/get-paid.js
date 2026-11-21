@@ -11,7 +11,7 @@ import { isDesktop, noWalletHelp } from "../assets/ntag-ui.js";
 initChrome();
 
 // A recipient registers their own payment request onchain: a zero-value tx from their wallet to the agent whose
-// calldata is the request (see site/_spec/FEATURES2.md). The page never moves money; the wallet asks before sending.
+// calldata is the request (see docs/spec/REGISTRATIONS.md). The page never moves money; the wallet asks before sending.
 
 const explain = explainWalletError;
 const ensureCelo = () => ensureCeloOn(eth);
@@ -43,7 +43,6 @@ const code = () => (isNaira() ? state.corridor.slice(5) : null);
 const cur = () => currencyOf(code());
 const perUsd = () => (state.rate && code() && state.rate.available[code()] ? state.rate.rates[code()] : null);
 const sellSym = () => TOKENS[CORRIDORS[state.corridor].sell].symbol;
-const buySym = () => TOKENS[CORRIDORS[state.corridor].buy].symbol;
 const centsStr = (c) => (c / 100).toFixed(2);
 const fmtAmount = (c) => num2.format(c / 100);
 

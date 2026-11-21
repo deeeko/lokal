@@ -12,7 +12,6 @@ import path from "node:path";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SITE = path.join(ROOT, "site");
 
-export const VERSIONED_ASSETS = ["logo.svg", "logo.png", "favicon.svg", "apple-touch-icon.png", "og.png"];
 // a reference: the file name right after a quote or a "/" and right before a quote or ")", with or without ?v=...
 export const ASSET_REF_RE = /(?<=["'/(])(logo\.svg|logo\.png|favicon\.svg|apple-touch-icon\.png|og\.png)(?:\?v=([A-Za-z0-9._-]*))?(?=["')])/g;
 export const VERSION_RE = /^[A-Za-z0-9._-]{1,40}$/;
