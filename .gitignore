@@ -13,6 +13,7 @@ registrations-state.json
 .vercel
 .env*
 ntag-payments.json
+contract-payments.json
 status-outbox*
 status-secret
 .claude/

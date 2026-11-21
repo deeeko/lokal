@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getAddress } from "viem";
-import { AGENT_ADDRESS, ATTRIBUTION_CODE, EXPLORER_API, NTAG_PAYMENTS_FILE } from "./config.mjs";
+import { AGENT_ADDRESS, ATTRIBUTION_CODE, EXPLORER_API, LEGACY_CUTOVER_BLOCK, NTAG_PAYMENTS_FILE } from "./config.mjs";
 import { refusal } from "./guards.mjs";
 
 const AGENT = AGENT_ADDRESS;
@@ -210,6 +210,14 @@ export function decodeNtagPayment(input) {
 /** The tag in a transfer's memo, or null (see decodeNtagPayment). */
 export const decodeNtagMemo = (input) => decodeNtagPayment(input)?.tag ?? null;
 // ---------- port: end ----------
+
+// ---------- the cutover to LokalTags (not ported: the formats above are frozen) ----------
+
+/**
+ * The legacy ops that still count: those mined before LEGACY_CUTOVER_BLOCK. From that block on, tags are claimed,
+ * renamed and released only on the LokalTags contract, so a later NT1: op changes nothing (the formats stay frozen).
+ */
+export const legacyNtagOps = (ops, cutover = LEGACY_CUTOVER_BLOCK) => (ops ?? []).filter((o) => o && BigInt(Number(o.block)) < BigInt(cutover));
 
 // ---------- nTag attempts (not ported: the agent's own safety net) ----------
 

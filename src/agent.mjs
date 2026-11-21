@@ -40,6 +40,7 @@
 // One agent at a time: watch --execute and every other command with --execute (pay, ask, retry, register, refund) take
 // agent.lock. A lock left by a crash is never removed automatically: add --clear-stale-lock once you have checked.
 import { createPublicClient, erc20Abi, formatUnits, http, isAddress, parseUnits } from "viem";
+import { loadContractDeposits } from "./contract-watch.mjs"; // contract payments count as deposits (refunds, status)
 import { verifyTx } from "@celo/attribution-tags";
 import {
   AGENT_ADDRESS, ATTRIBUTION_CODE, CELO_MIN_USDT, CHAIN, DEFAULT_CORRIDOR, MAX_DAILY_USD, MAX_USD, MAX_WALLET_DAILY_USD,
@@ -554,13 +555,13 @@ async function main() {
       console.log("Signed check accepted (the secret and this PC's clock are fine).");
       if (has("backfill")) {
         const events = eventsFromRecords({
-          requests: loadRequests(), registrations: loadRegState(), ntagPayments: loadNtagPayments(), receipts: readReceipts(),
+          requests: loadRequests(), registrations: loadRegState(), ntagPayments: { ...loadNtagPayments(), ...loadContractDeposits() }, receipts: readReceipts(),
           agent: agentAddress(), sinceMs: Date.now() - 30 * 86_400_000,
         });
         console.log(`Queued ${rep.report(events)} report(s) from the saved records of the last 30 days.`);
       } else {
         // like autopilot on start: anything from the last 48 h the server hasn't confirmed yet
-        const n = rep.syncRecords({ requests: loadRequests(), registrations: loadRegState(), ntagPayments: loadNtagPayments(), receipts: readReceipts() }, { agent: agentAddress() });
+        const n = rep.syncRecords({ requests: loadRequests(), registrations: loadRegState(), ntagPayments: { ...loadNtagPayments(), ...loadContractDeposits() }, receipts: readReceipts() }, { agent: agentAddress() });
         if (n) console.log(`Queued ${n} report(s) from the last 48 hours that the server hadn't confirmed.`);
       }
       const r = await rep.flush();
@@ -581,7 +582,7 @@ async function main() {
       break;
     case "refunds": {
       // Refundable deposits (refused, unmatched incl. expired or used links, ambiguous) and every refund so far.
-      const records = { requests: loadRequests(), registrations: loadRegState(), ntagPayments: loadNtagPayments(), receipts: readReceipts() };
+      const records = { requests: loadRequests(), registrations: loadRegState(), ntagPayments: { ...loadNtagPayments(), ...loadContractDeposits() }, receipts: readReceipts() };
       const rows = refundRows(records, loadRefunds());
       if (!rows.length) { console.log("Nothing to refund: autopilot has no refused, unmatched or ambiguous deposits on record."); break; }
       for (const r of rows) {
@@ -608,7 +609,7 @@ async function main() {
         pub: readClient(), agent, own: loadContacts().own, contracts: BLOCKED_RECIPIENTS, preview, verifyTx, attributionCode: ATTRIBUTION_CODE,
         wallet: execute ? makeClients(account).wallet : null, // the attribution-tagged wallet client (src/chain.mjs)
         loadRecords: () => ({
-          requests: loadRequests(), registrations: loadRegState(), ntagPayments: loadNtagPayments(), receipts: readReceipts(), refunds: loadRefunds(),
+          requests: loadRequests(), registrations: loadRegState(), ntagPayments: { ...loadNtagPayments(), ...loadContractDeposits() }, receipts: readReceipts(), refunds: loadRefunds(),
         }),
         loadRefunds, saveRefunds, log, now: () => Date.now(), say: (m) => console.log(m), confirm,
         lock: () => takeLock("refund --execute"),

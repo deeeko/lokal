@@ -89,6 +89,21 @@ export const WATCH_STATE_FILE = process.env.WATCH_STATE_FILE ?? path.join(root, 
 export const REGISTRATIONS_STATE_FILE = process.env.REGISTRATIONS_STATE_FILE ?? path.join(root, "registrations-state.json");
 // nTag payments autopilot has seen (deposits whose transfer memo names a tag), keyed by `${tx}:${logIndex}`.
 export const NTAG_PAYMENTS_FILE = process.env.NTAG_PAYMENTS_FILE ?? path.join(root, "ntag-payments.json");
+// Payments through the contracts (LokalTags TagPaid, LokalPots PotPaid) autopilot has seen, keyed by the EVENT's
+// `${tx}:${logIndex}`. Same shape as ntag-payments.json; refusals are kept so a rescan never pays them.
+export const CONTRACT_PAYMENTS_FILE = process.env.CONTRACT_PAYMENTS_FILE ?? path.join(root, "contract-payments.json");
+
+// The contracts (Celo mainnet, verified on Sourcify; ABIs in contracts/deployments/). Payments go from the payer
+// straight to the payout wallet (this agent) inside the contract call, after every limit was checked.
+export const LOKAL_TAGS = "0xFF2f8ADC0c97B6E40b201848d378C11325bC7187";
+export const LOKAL_POTS = "0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF";
+export const LOKAL_TAGS_BLOCK = 83385019n; // deployment blocks: no TagPaid / PotPaid can exist before them
+export const LOKAL_POTS_BLOCK = 83385026n;
+// The cutover from the memo protocol to the contracts (about 2026-11-22 00:00 UTC). Legacy NT1: claims, renames and
+// releases in this block or later are ignored (new claims go to LokalTags only). Legacy NTP: memo payments keep being
+// paid; from this block on, a tag that is also held on LokalTags pays the contract's owner (the contract wins).
+// Same number as LEGACY_CUTOVER_BLOCK in site/assets/lokal-contracts.js (test/contracts-site.test.mjs checks it).
+export const LEGACY_CUTOVER_BLOCK = 83405000n;
 
 // Status server (api/status.js on the site): autopilot reports what happened to each deposit, so the site shows exact
 // facts. Reports wait in a local outbox and are sent in the background; reporting never blocks or changes a payout.

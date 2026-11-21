@@ -40,8 +40,13 @@
 //     (checked at most once a minute, re-warned at most hourly), status server unreachable 10+ minutes, deposit refused,
 //     payout paid. They wait in an outbox and never block a payout. With a status secret, a signed heartbeat goes to the
 //     status server about once a minute (fire and forget).
+//   - Payments through the contracts (src/contract-watch.mjs): LokalTags TagPaid and LokalPots PotPaid events in the same
+//     block range pay the recipient they name, through the same safety path, exactly once per event. The Transfer into
+//     the agent inside such a transaction is that payment, so it never reaches the deposit matching above. From the
+//     cutover block (LEGACY_CUTOVER_BLOCK) legacy NT1: claims are ignored and an NTP: memo to a tag also held on
+//     LokalTags pays the contract's owner.
 import fs from "node:fs";
-import { createPublicClient, formatUnits, http, parseAbiItem, parseUnits } from "viem";
+import { createPublicClient, formatUnits, getAddress, http, parseAbiItem, parseUnits } from "viem";
 import { verifyTx } from "@celo/attribution-tags";
 import { AGENT_ADDRESS, ATTRIBUTION_CODE, CHAIN, CORRIDORS, LOW_CELO_WARN, MIN_CELO_RESERVE, TOKENS, WATCH_STATE_FILE } from "./config.mjs";
 import { corridorFor, currencyOf } from "./currencies.mjs";
@@ -62,6 +67,8 @@ import {
   saveNtagPayments, verifyNtagOpOnchain,
 } from "./ntags.mjs";
 import { agentVersion, depositEvent, makeStatusReporter, refundEvent } from "./status-report.mjs";
+import { legacyNtagOps } from "./ntags.mjs";
+import { CONTRACT_IO, contractDepositRecords, makeContractWatch } from "./contract-watch.mjs";
 
 export const MAX_BLOCK_RANGE = 5000n; // Forno eth_getLogs limit
 export const HEARTBEAT_MS = 60_000;
@@ -136,7 +143,7 @@ export const NTAG_BAD_MEMO = "the transfer looks like a Lokal tag payment, but i
  * The memo's transfer must be the deposit itself (sent to the token, to the agent, same amount, same sender), and the
  * owner is resolved from the ops strictly before the deposit's (block, position).
  */
-export function classifyNtagDeposit(dep, ops, payments, agent) {
+export function classifyNtagDeposit(dep, ops, payments, agent, contractEntry = null) {
   if (payments?.[dep.key]) return { action: "handled", record: payments[dep.key] };
   if (!dep.tag) return { action: "refuse", reason: NTAG_BAD_MEMO };
   const corridor = ntagCorridor(dep.token, dep.currency ?? null);
@@ -155,6 +162,8 @@ export function classifyNtagDeposit(dep, ops, payments, agent) {
   ) return { action: "refuse", reason: "the Lokal tag memo does not match this transfer" };
   const { amount, units, dust } = ntagPayAmount(dep.value);
   if (units < parseUnits(NTAG_MIN[corridor], 6)) return { action: "refuse", reason: `below the Lokal tag minimum of ${NTAG_MIN[corridor]}` };
+  // From the cutover on, a tag that is also held on LokalTags pays its contract owner (src/contract-watch.mjs memoOwner).
+  if (contractEntry) return { action: "pay", tag: dep.tag, currency: currencyOf(CORRIDORS[corridor]?.currency)?.code ?? null, entry: contractEntry, op: null, corridor, amount, units, dust };
   if (ops == null) return { action: "hold" };
   const entry = ownerOf(resolveNtagsBefore(ops, dep.block, dep.position), dep.tag);
   if (!entry) return { action: "refuse", reason: "unknown Lokal tag" };
@@ -234,6 +243,7 @@ const DEFAULT_IO = {
   /** What an auto-refund needs beyond autopilot's own reads: the attribution-tagged wallet, prices, own_wallets. */
   refundChain: ({ account }) => ({ wallet: makeClients(account).wallet, verifyTx, preview, own: loadContacts().own }),
   version: () => agentVersion(),
+  ...CONTRACT_IO, // payments through LokalTags / LokalPots (src/contract-watch.mjs)
 };
 
 /**
@@ -328,7 +338,7 @@ async function runWatch({ execute = false, interval = 15, polls = Infinity, auto
     }
   }
 
-  say(`Watching ${agent} for USDT and cNGN deposits every ${intervalMs / 1000}s. ${execute ? "EXECUTE MODE: matched requests are paid for real." : "DRY RUN: nothing is paid or saved. Add --execute to pay."}`);
+  say(`Watching ${agent} for USDT and cNGN deposits and LokalTags / LokalPots payments every ${intervalMs / 1000}s. ${execute ? "EXECUTE MODE: matched requests are paid for real." : "DRY RUN: nothing is paid or saved. Add --execute to pay."}`);
   const open = requests().filter((r) => requestStatus(r) === "open");
   say(`${open.length} open request(s)${open.length ? ": " + open.map((r) => `${r.id} ${r.amount} ${getCorridor(r.dir).sellToken.symbol} for ${r.name}`).join(", ") : ". Create one with: node src/agent.mjs request --to NAME --amount N"}`);
 
@@ -340,8 +350,8 @@ async function runWatch({ execute = false, interval = 15, polls = Infinity, auto
       if (status?.enabled) {
         say("Status server: reporting each deposit's status to the site in the background.");
         status.syncRecords({
-          requests: io.loadRequests(), registrations: io.loadRegState(), ntagPayments: io.loadNtagPayments(), receipts: io.readReceipts(),
-          refunds: io.loadRefunds(),
+          requests: io.loadRequests(), registrations: io.loadRegState(), ntagPayments: { ...io.loadNtagPayments(), ...contractDepositRecords(io.loadContractPayments()) },
+          receipts: io.readReceipts(), refunds: io.loadRefunds(),
         }, { agent });
         status.flush().catch(() => {});
       }
@@ -374,7 +384,9 @@ async function runWatch({ execute = false, interval = 15, polls = Infinity, auto
       pub, agent, own: refundChain.own ?? [], contracts: BLOCKED_RECIPIENTS, wallet: refundChain.wallet, verifyTx: refundChain.verifyTx,
       preview: refundChain.preview, attributionCode: ATTRIBUTION_CODE, now: io.now, say,
       loadRecords: () => ({
-        requests: io.loadRequests(), registrations: io.loadRegState(), ntagPayments: io.loadNtagPayments(), receipts: io.readReceipts(), refunds: io.loadRefunds(),
+        requests: io.loadRequests(), registrations: io.loadRegState(), receipts: io.readReceipts(), refunds: io.loadRefunds(),
+        // contract payments count as deposits too (keyed by their inner Transfer): a refused one refunds to its payer
+        ntagPayments: { ...io.loadNtagPayments(), ...contractDepositRecords(io.loadContractPayments()) },
       }),
       loadRefunds: io.loadRefunds, saveRefunds: io.saveRefunds, log: io.log, alert,
       report: (rec) => { if (status?.enabled) { const ev = refundEvent(rec); if (ev) status.report(ev); } },
@@ -391,6 +403,15 @@ async function runWatch({ execute = false, interval = 15, polls = Infinity, auto
   }
 
   let cursor = null; // last fully processed block
+  // Payments through the contracts (TagPaid / PotPaid): handled in chain order with the deposits, see contract-watch.mjs.
+  const contracts = makeContractWatch({
+    io, pub, agent, execute, say, report, pin: () => pin(), StopError, rescanFrom: () => (cursor == null ? "?" : cursor + 1n),
+    onRefused: async (depositKey, reason, where) => {
+      alert("deposit_refused", `Refused ${where.amount} ${where.token} from ${where.from} (${where.what}): ${firstSentence(reason)} ` +
+        `It stays in the agent wallet${autoRefundOn ? "; auto-refund is on" : `; refund it to the payer with: node src/agent.mjs refund --deposit ${depositKey}`}.`);
+      await autoRefundDeposit(depositKey);
+    },
+  });
   let failures = 0;
   let caughtUp = false;
 
@@ -658,9 +679,10 @@ async function runWatch({ execute = false, interval = 15, polls = Infinity, auto
     const deposit = { payer, tx: l.transactionHash, logIndex: l.logIndex, block: String(l.blockNumber), at: new Date(timeMs).toISOString() };
     const where = { ntag: tag, token: sym, amount, from: payer, tx: l.transactionHash, logIndex: l.logIndex, block: String(l.blockNumber) };
     const ready = ntagCache != null && BigInt(l.blockNumber) <= ntagOpsHeight;
+    const contractEntry = tag ? await contracts.memoOwner(tag, l.blockNumber) : null; // the contract owner wins from the cutover on
     const d = classifyNtagDeposit({
       key, tag, currency, token: l.address, value: l.args.value, payer, tx, block: l.blockNumber, position: l.transactionIndex ?? tx.index,
-    }, ready ? ntagCache.ops : null, ntagPayments(), agent);
+    }, ready ? legacyNtagOps(ntagCache.ops) : null, ntagPayments(), agent, contractEntry);
     if (d.action === "handled") {
       say(`Deposit ${l.transactionHash}${tag ? ` for @${tag}` : ""} was already handled${d.record?.status === "refused" ? ` (refused: ${d.record.reason})` : ""}. Skipping.`);
       return;
@@ -678,13 +700,13 @@ async function runWatch({ execute = false, interval = 15, polls = Infinity, auto
     say(`Lokal tag payment: ${amount} ${sym} from ${short(payer)} (tx ${l.transactionHash}) -> pay @${tag} (${short(d.entry.owner)}) via ${d.corridor}.`);
     if (d.dust > 0n) say(`  Paying ${d.amount} ${sym}; ${formatUnits(d.dust, 6)} ${sym} of dust stays in the agent wallet.`);
     const record = (from) => ({
-      id: key, tag, name: `@${tag}`, from, owner: from, claim: d.entry.hash, ...(d.entry.name ? { ownerName: d.entry.name } : {}),
+      id: key, tag, name: `@${tag}`, from, owner: from, claim: d.entry.hash, ...(d.entry.source ? { ownerSource: d.entry.source } : {}), ...(d.entry.name ? { ownerName: d.entry.name } : {}),
       token: sym, amount: d.amount, dir: d.corridor, ...(d.currency ? { currency: d.currency } : {}), ...(d.dust > 0n ? { dust: formatUnits(d.dust, 6) } : {}), deposit,
     });
 
     if (!execute) {
       try {
-        await io.verifyNtagOpOnchain(pub, d.op, agent);
+        if (d.op) await io.verifyNtagOpOnchain(pub, d.op, agent);
         await io.ntagUsdFloor(d.corridor, d.units);
         await io.pay({ ...args, execute: false });
         dryNtag.set(key, record(d.entry.owner));
@@ -700,7 +722,7 @@ async function runWatch({ execute = false, interval = 15, polls = Infinity, auto
     // contracts, zero), per-payout / daily / per-wallet caps and a live preview.
     let from;
     try {
-      ({ from } = await io.verifyNtagOpOnchain(pub, d.op, agent));
+      ({ from } = d.op ? await io.verifyNtagOpOnchain(pub, d.op, agent) : { from: getAddress(d.entry.owner) });
       await io.ntagUsdFloor(d.corridor, d.units);
       await io.preflight({ ...args, recipientAddress: from, agent });
     } catch (e) {
@@ -853,10 +875,14 @@ async function runWatch({ execute = false, interval = 15, polls = Infinity, auto
           const logs = await pub.getLogs({
             address: [TOKENS.USDT.address, TOKENS.CNGN.address], event: TRANSFER, args: { to: agent }, fromBlock: from, toBlock: to, strict: true,
           });
-          logs.sort((a, b) => (a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1));
-          for (const l of logs) {
+          // Contract payments in the same range join in chain order; their inner Transfer into the agent is dropped here,
+          // so the deposit path below never sees it (contract-watch.mjs).
+          const items = contracts.merge(logs, await contracts.scan(from, to));
+          for (const it of items) {
             try {
-              await handle(l); // a payout is never interrupted mid-flow by Ctrl+C
+              // a payout is never interrupted mid-flow by Ctrl+C
+              if (it.contract) await contracts.handle(it.contract);
+              else await handle(it.transfer);
             } catch (e) {
               if (!(e instanceof HoldError)) throw e;
               held = e;
