@@ -477,13 +477,6 @@ export async function simulate({ from, to, data, value = "0x0" }, ctx = {}, opts
   const r = await ethCall({ from, to, data, value }, "latest", opts);
   return r.ok ? { ok: true, result: r.result } : { ok: false, ...explainRevert(r.revert, ctx) };
 }
-/** The payout wallet the contract pays into now. */
-export async function readPayoutWallet(opts) {
-  return abiDecode(["address"], await mustCall({ to: LOKAL_TAGS, data: FN.payoutWallet }, opts))[0];
-}
-export async function readPaused(opts) {
-  return abiDecode(["bool"], await mustCall({ to: LOKAL_TAGS, data: FN.paused }, opts))[0];
-}
 /** ERC-20 helpers. */
 export async function readAllowance(token, owner, spender, opts) {
   return abiDecode(["uint256"], await mustCall({ to: token, data: enc(FN.allowance, ["address", "address"], [owner, spender]) }, opts))[0];
@@ -496,8 +489,6 @@ export async function permitDomainOk(token = USDT_ADDRESS, opts) {
   if (lc(token) !== lc(USDT_ADDRESS)) return false;
   try { return lc(abiDecode(["bytes32"], await mustCall({ to: token, data: FN.DOMAIN_SEPARATOR }, opts))[0]) === USDT_DOMAIN_SEPARATOR; } catch { return false; }
 }
-/** TOKENS entry for a token address (symbol + decimals), or null. */
-export const tokenInfo = (addr) => Object.values(TOKENS).find((t) => lc(t.address) === lc(addr)) ?? null;
 
 // ---------- LokalPots reads ----------
 /** Everything a pot page needs (see decodePotInfo). An unknown id throws with `.revert` (PotNotFound). */

@@ -2,19 +2,24 @@ name: contracts
 
 # Builds and tests the LokalTags contract, then runs the canonical demo. The demo asserts every outcome in the
 # README's table, so the README and the contract can't drift apart without this going red. The parity tests also
-# read the site's nTag rules (site/assets/core.js, src/ntags.mjs), so a change there runs this too.
+# read the site's tag rules and its contract calldata builders (site/assets/core.js, lokal-contracts.js, pots.js,
+# src/ntags.mjs), so a change there runs this too.
 # Nothing here deploys, holds a key or touches Celo mainnet.
 on:
   push:
     paths:
       - "contracts/**"
       - "site/assets/core.js"
+      - "site/assets/lokal-contracts.js"
+      - "site/assets/pots.js"
       - "src/ntags.mjs"
       - ".github/workflows/contracts.yml"
   pull_request:
     paths:
       - "contracts/**"
       - "site/assets/core.js"
+      - "site/assets/lokal-contracts.js"
+      - "site/assets/pots.js"
       - "src/ntags.mjs"
       - ".github/workflows/contracts.yml"
   workflow_dispatch: {}

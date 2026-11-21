@@ -1,9 +1,10 @@
 # Runbook: the first real payouts
 
-Copy-paste steps, in PowerShell, for the operator. Every command runs from the repo folder:
+Copy-paste steps, in PowerShell, for the operator. Every command runs from the repo folder (the folder you cloned
+https://github.com/deeeko/lokal into):
 
 ```powershell
-cd C:\Users\DEL\celo-naira-payout-agent
+cd lokal
 ```
 
 Nothing here moves money until a command has `--execute` **and** you type `yes`.

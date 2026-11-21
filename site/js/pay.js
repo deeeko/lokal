@@ -8,7 +8,7 @@ import {
 import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 import { ensureCelo, explainWalletError } from "../assets/session.js";
 import {
-  agentStatus, depositStatus, allowanceFromStatus, globalFromStatus, receivedStale, statusFinal, reasonText, sourceNote, refusedNote, refundedLine, refundedText,
+  agentStatus, depositStatus, allowanceFromStatus, globalFromStatus, receivedStale, statusFinal, sourceNote, refusedNote, refundedLine, refundedText,
   DELAYED_NOTE, SLOW_NOTE,
 } from "../assets/ntag-ui.js";
 

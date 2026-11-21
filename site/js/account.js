@@ -1,6 +1,6 @@
 import {
-  AGENT, HAS_API, $, el, icon, badge, short, num2, lagosTime, celoscanAddr, celoscanTx, initChrome, toast,
-  rpc, readContract, ntagUrl, receiptNo, loadNtagOps, resolveNtags, ntagOf, ownerOf, ntagAvailability, ntagNameError,
+  HAS_API, $, el, icon, badge, short, num2, lagosTime, celoscanAddr, celoscanTx, initChrome, toast,
+  rpc, readContract, ntagUrl, receiptNo, loadNtagOps, resolveNtags, ntagOf, ownerOf, ntagNameError,
   RELEASE_LOCK_DAYS, DISCONNECT_NOTE_FULL, DISCONNECT_NOTE_PARTIAL, TOKENS, loadRate, usd, legacyNtagOps, ntagError,
 } from "../assets/core.js";
 import {
@@ -12,7 +12,7 @@ import {
 } from "../assets/session.js";
 import {
   ntagCard, stage, revealCard, shareBlock, alertBox, availabilityMessage, ntagRules, cleanTagInput, suggestNtags, waitForReceipt,
-  plainError, sameAddr, sleep, nameText, LIMITS, LIMITS_TEXT, REFUSED_NOTE, receivableToday, loadNtagStateFresh, loadTagLedger,
+  plainError, sameAddr, sleep, nameText, LIMITS, LIMITS_TEXT, REFUSED_NOTE, receivableToday, loadTagLedger,
   slowNotice, scrollToNode, focusHeading, noWalletHelp, noCeloAlert, celoBalance,
   agentStatus, allowanceFromStatus, combineAllowance, statusFinal, receivedStale, reasonText, paidText, sourceNote, units6Of, refundedText,
   STATUS_SOURCE, DELAYED_NOTE, SLOW_NOTE, payoutText, contractEntry,

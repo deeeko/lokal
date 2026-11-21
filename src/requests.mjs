@@ -14,7 +14,6 @@ export const MAX_HOURS = 168;
 
 /** Same as core.js encodeRequest / parseRequest. */
 export const encodeRequest = (req) => Buffer.from(JSON.stringify(req), "utf8").toString("base64url");
-export const decodeRequest = (token) => JSON.parse(Buffer.from(String(token), "base64url").toString("utf8"));
 
 /** Only the public fields go into the link, in a fixed order. */
 export function publicRequest(r) {

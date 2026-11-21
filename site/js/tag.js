@@ -1,20 +1,20 @@
 import {
   AGENT, CAP, TOKENS, $$, el, icon, badge, short, num2, naira, usd, celoscanAddr, celoscanTx, initChrome,
-  toast, readContract, loadRate, loadNtagOps, resolveNtags, ownerOf, ntagAvailability, normalizeNtag, ntagError,
+  toast, readContract, loadRate, loadNtagOps, resolveNtags, ownerOf, normalizeNtag, ntagError,
   encodeNtagTransfer, ntagUrl, receiptNo, walletDisconnected, markWalletConnected, parseMoneyInput, lagosTime, $,
-  currencyOf, formatCurrency, celoscanAddr as addrLink, legacyNtagOps, getConsent,
+  currencyOf, formatCurrency, legacyNtagOps, getConsent,
 } from "../assets/core.js";
 import {
   LOKAL_TAGS, ZERO_ADDRESS, approveData, checkPayment, currencyRef, payTagData, payTagWithPermitData, permitDomainOk,
   permitTypedData, readAllowance, readNonce, readPaymentRoom, readTagInfo, simulate, splitSignature, tokenAmountText,
 } from "../assets/lokal-contracts.js";
-import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
+import { currencyPicker } from "../assets/currency-ui.js";
 import { getSession, explainWalletError, injectedWallet, ensureCelo, CELO_CHAIN } from "../assets/session.js";
 import {
   ntagCard, stage, alertBox, availabilityMessage, ntagFinder, waitForReceipt, plainError, sameAddr, sleep, dayMonthYear,
   nameText, LIMITS, LIMITS_TEXT, CNGN_CAP_USD, REFUSED_NOTE, receivableToday, allowanceResetAt, loadNtagStateFresh,
   loadTagLedger, slowNotice, scrollToNode, focusHeading, noWalletHelp, noCeloAlert, celoBalance,
-  agentStatus, depositStatus, allowanceFromStatus, combineAllowance, receivedStale, reasonText, paidText, sourceNote, refusedNote, refundedLine,
+  agentStatus, depositStatus, allowanceFromStatus, combineAllowance, receivedStale, paidText, sourceNote, refusedNote, refundedLine,
   DELAYED_NOTE, SLOW_NOTE, payoutText, lookupTag,
 } from "../assets/ntag-ui.js";
 import {
@@ -34,7 +34,7 @@ for (const a of document.querySelectorAll(".sb-nav a, .nav-links a")) {
 // every limit before the money moves straight to the agent, which then pays the holder in the currency they chose.
 // Every refusal is simulated (eth_call) and explained before the wallet opens. A tag claimed with the older memo
 // protocol before the cutover, and not on the contract, is still paid the old way: one ERC-20 transfer to the agent
-// with "NTP:<tag>" after the usual calldata (site/_spec/NTAGS.md section 1e).
+// with "NTP:<tag>" after the usual calldata (docs/spec/NTAGS.md section 1e).
 
 const root = $("#tag-root");
 const title = $("#tag-title"), lead = $("#tag-lead");

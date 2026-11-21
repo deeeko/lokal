@@ -36,10 +36,6 @@
         { "key": "Content-Disposition", "value": "inline" },
         { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
       ]
-    },
-    {
-      "source": "/_spec/(.*)",
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     }
   ]
 }
