@@ -150,7 +150,7 @@ function renderProfile(tag, entry) {
   const card = ntagCard({ tag, name: entry.name, address: entry.owner, since: entry.since, currency: entry.currency, as: "button", label: `Lokal tag @${tag}. Copy the link to this page` });
   card.dataset.copy = ntagUrl(tag);
   card.dataset.copyLabel = "Link copied";
-  const who = whoCard(tag, entry, pref);
+  const who = whoCard(tag, entry);
   root.replaceChildren(el("div", { class: "grid-main" }, payCard(tag, entry, who.before), el("div", { class: "nt-profile" }, stage(card), who.section)));
   const my = renderSeq;
   loadTrust(tag, entry).then((a) => { if (my === renderSeq) who.show(a); });
@@ -178,68 +178,44 @@ async function loadTrust(tag, entry) {
   return assessTag({ tag, entry, history, legacyClaims, paid: readPaidTags(paidStore(), getConsent()), nowSec: Math.floor(Date.now() / 1000) });
 }
 /**
- * The card on the right ("Who am I paying?") and a short note for the pay card (`before`, shown above the Pay button,
- * so the warnings are in front of the payer on a phone too). show(assessment) fills both in.
+ * The card on the right ("Who am I paying?"): three facts (tag age, payments received, owner) and one line per warning
+ * that applies, plus a one-line note for the pay card (`before`, above the Pay button, so a phone shows it first).
+ * show(assessment) fills both in.
  */
-function whoCard(tag, entry, pref) {
-  const C = entry.source === "contract";
-  const at = "@" + tag;
+function whoCard(tag, entry) {
   const pending = (w = "8em") => el("span", { class: "skel", style: `width:${w}` });
-  const ageCell = el("span", { class: "nt-namecell" }, pending());
-  const paidCell = el("span", { class: "nt-namecell" }, pending("10em"));
-  const checks = el("div", { class: "trust-checks", "aria-live": "polite" },
-    el("p", { class: "small muted trust-loading", role: "status" }, el("span", { class: "skel", style: "width:14px;height:14px;border-radius:50%" }), `Checking ${at}'s history on Celo…`));
+  const ageCell = el("span", {}, pending());
+  const paidCell = el("span", {}, pending("9em"));
+  const notes = el("div", { class: "trust-checks", "aria-live": "polite" });
   const before = el("div", { class: "trust-before", "aria-live": "polite" });
-  const owner = el("span", { class: "trust-owner" },
-    el("a", { class: "mono link", href: celoscanAddr(entry.owner), title: `${entry.owner} on Celoscan` }, short(entry.owner), " ", icon("ext")),
-    el("button", { class: "icon-btn sm", type: "button", "aria-label": "Copy the owner's address", title: "Copy address", dataset: { copy: entry.owner, copyLabel: "Address copied" } }, icon("copy")));
+  const owner = el("span", { class: "nt-namecell" },
+    el("span", { class: "trust-owner" },
+      el("a", { class: "mono link", href: celoscanAddr(entry.owner), title: `${entry.owner} on Celoscan` }, short(entry.owner), " ", icon("ext")),
+      el("button", { class: "icon-btn sm", type: "button", "aria-label": "Copy the owner's address", title: "Copy address", dataset: { copy: entry.owner, copyLabel: "Address copied" } }, icon("copy"))),
+    entry.name ? el("small", { class: "micro muted" }, "“", nameText(entry.name), "” is set by the owner, not checked by anyone") : null);
   const section = el("section", { class: "card trust-card", "aria-labelledby": "who-h" },
-    el("div", { class: "card-h" }, el("h2", { id: "who-h", tabindex: "-1" }, "Who am I paying?"), badge(C ? "On the LokalTags contract" : "Older memo tag", "neutral")),
-    el("div", { class: "card-b stack" },
-      checks,
+    el("div", { class: "card-h" }, el("h2", { id: "who-h", tabindex: "-1" }, "Who am I paying?")),
+    el("div", { class: "card-b" },
       el("ul", { class: "kv-list" },
-        el("li", {}, el("span", {}, "Lokal tag"), el("span", { class: "np-tagname", style: "font-size:17px;color:var(--celo)" }, at)),
         el("li", {}, el("span", {}, "Tag age"), ageCell),
-        el("li", {}, el("span", {}, "Owner"), owner),
-        el("li", {}, el("span", {}, "Name"), entry.name
-          ? el("span", { class: "nt-namecell" }, nameText(entry.name), el("small", { class: "micro muted" }, "Set by the owner, not checked by anyone"))
-          : el("span", { class: "soft" }, "None set")),
-        el("li", {}, el("span", {}, "Paid through Lokal"), paidCell),
-        el("li", {}, el("span", {}, "Prefers"), pref
-          ? el("span", { class: "cur-inline" }, flagIcon(pref.code), `${pref.label} (${pref.token})`)
-          : C && entry.receive === "usdt" ? el("span", { class: "cur-inline" }, flagIcon("usd"), "Dollars (USD₮)")
-            : el("span", { class: "soft" }, "Not set (naira by default)")),
-        C ? el("li", {}, el("span", {}, "Registry"), el("a", { class: "link", href: addrLink(LOKAL_TAGS) }, "LokalTags contract ", icon("ext")))
-          : el("li", {}, el("span", {}, "Claim"), el("a", { class: "link", href: celoscanTx(entry.hash) }, "Transaction ", icon("ext"))))),
-    el("div", { class: "card-f" }, el("span", { class: "small muted" }, "Read from Celo just now. Lokal can't tell you who owns a tag: if anything looks off, ask them before you pay."),
-      el("button", { class: "btn btn-ghost btn-sm", type: "button", dataset: { copy: ntagUrl(tag), copyLabel: "Link copied" } }, icon("copy"), "Copy link")));
+        el("li", {}, el("span", {}, "Payments received"), paidCell),
+        el("li", {}, el("span", {}, "Owner"), owner)),
+      notes));
 
   function show(a) {
-    ageCell.replaceChildren(el("span", {}, a.age.since ? a.age.text.replace(/^Claimed /, "") : "Unknown"),
-      a.age.since ? el("small", { class: "micro muted" }, `${dayMonthYear(a.age.since)}${C ? "" : ", older memo claim"}`) : null);
+    ageCell.textContent = a.age.since ? `${a.age.text.replace(/^Claimed /, "").replace(/ ago$/, "")} (${dayMonthYear(a.age.since)})` : "Couldn't check";
     const p = a.payments;
-    if (p.state === "unknown" && p.count == null) paidCell.replaceChildren(el("span", { class: "soft" }, "Couldn't check"), el("small", { class: "micro muted" }, p.reason));
-    else {
-      const n = p.count;
-      const text = n === 0 ? "No payments yet" : `${n}${p.capped ? "+" : ""} payment${n === 1 ? "" : "s"}${p.since ? ` since ${dayMonthYear(p.since)}` : ""}`;
-      paidCell.replaceChildren(el("span", {}, text), el("small", { class: "micro muted" }, p.state === "ok" ? "To this owner, through LokalTags. Payers aren't shown." : p.reason));
-    }
-    const row = (c) => el("li", { class: `trust-${c.state}` },
-      el("span", { class: "trust-mark", "aria-hidden": "true" }, icon(c.state === "warn" ? "alert" : c.state === "ok" ? "check" : "info")),
-      el("div", {}, el("b", {}, c.state === "warn" ? el("span", { class: "sr-only" }, "Warning: ") : null, c.title), c.reason ? el("span", {}, c.reason) : null));
-    const order = { warn: 0, unknown: 1, ok: 2 };
-    const sorted = [...a.checks].sort((x, y) => order[x.state] - order[y.state]);
-    checks.replaceChildren(
-      el("p", { class: "trust-sum" }, a.warnings.length
-        ? el("b", {}, `${a.warnings.length} thing${a.warnings.length === 1 ? "" : "s"} to check before you pay`)
-        : el("b", {}, `No warnings for ${at}`),
-        el("span", { class: "muted" }, a.warnings.length ? " · none of these stop a payment" : " · what was checked")),
-      el("ul", { class: "trust-list" }, sorted.map(row)));
+    paidCell.textContent = p.state !== "ok" ? "Couldn't check" : p.count === 0 ? "None yet" : `${p.count}${p.capped ? "+" : ""} since ${dayMonthYear(p.since ?? a.age.since)}`;
+    paidCell.title = p.state === "ok" ? "Through LokalTags, to this owner. Payers aren't shown." : p.reason;
+    const warn = (c) => el("li", { title: c.reason }, icon("alert"), el("span", {}, el("span", { class: "sr-only" }, "Warning: "), c.title));
+    notes.replaceChildren(...[
+      a.warnings.length ? el("ul", { class: "trust-warns" }, a.warnings.map(warn)) : null,
+      a.unknown.length ? el("p", { class: "micro muted trust-unknown" }, `Couldn't check: ${a.unknown.map((u) => u.short).join(", ")}.`) : null,
+    ].filter(Boolean));
     if (a.warnings.length) {
-      const why = el("a", { class: "link", href: "#who-h" }, "Why");
+      const why = el("a", { class: "link", href: "#who-h" }, "See why");
       why.addEventListener("click", (e) => { e.preventDefault(); scrollToNode(section); section.querySelector("#who-h")?.focus({ preventScroll: true }); });
-      before.replaceChildren(alertBox("warn", "alert",
-        el("p", {}, el("b", {}, "Before you pay: "), a.warnings.map((w) => w.title).join(" "), " ", why)));
+      before.replaceChildren(alertBox("warn", "alert", el("p", {}, el("b", {}, "Before you pay: "), a.warnings.map((w) => w.short).join(", "), ". ", why)));
     } else before.replaceChildren();
   }
   return { section, before, show };

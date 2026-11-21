@@ -148,7 +148,7 @@ for (const s of TAG_SCENES) {
     const ctx = await context({ width, mock: mockChain({ tags: { ada, bola } }), consent: s.consent, paid: s.paid });
     const page = await ctx.newPage();
     await page.goto(`${ORIGIN}/tag.html?t=${s.tag}`);
-    await page.waitForSelector(".trust-list", { timeout: 30000 });
+    await page.waitForFunction(() => document.querySelector(".trust-card") && !document.querySelector(".trust-card .skel"), null, { timeout: 30000 });
     await page.waitForTimeout(1200);
     await tall(page, `${s.name}-${width}`);
     await ctx.close();
