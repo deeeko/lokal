@@ -1,8 +1,12 @@
 import {
   AGENT, HAS_API, $, el, icon, badge, short, num2, lagosTime, celoscanAddr, celoscanTx, initChrome, toast,
   rpc, readContract, ntagUrl, receiptNo, loadNtagOps, resolveNtags, ntagOf, ownerOf, ntagAvailability, ntagNameError,
-  encodeNtagClaim, encodeNtagRelease, RELEASE_LOCK_DAYS, DISCONNECT_NOTE_FULL, DISCONNECT_NOTE_PARTIAL, TOKENS, loadRate, usd,
+  RELEASE_LOCK_DAYS, DISCONNECT_NOTE_FULL, DISCONNECT_NOTE_PARTIAL, TOKENS, loadRate, usd, legacyNtagOps, ntagError,
 } from "../assets/core.js";
+import {
+  LOKAL_TAGS, claimData, releaseData, setNameData, setReceiveTokenData, simulate, readAvailability, readTagInfo, readTagOf, tokenOfCode,
+  LEGACY_CUTOVER_BLOCK,
+} from "../assets/lokal-contracts.js";
 import {
   getSession, signIn, signOut, onSessionChange, watchSession, explainWalletError, injectedWallet, ensureCelo, rememberNtag, avatar,
 } from "../assets/session.js";
@@ -11,21 +15,25 @@ import {
   plainError, sameAddr, sleep, nameText, LIMITS, LIMITS_TEXT, REFUSED_NOTE, receivableToday, loadNtagStateFresh, loadTagLedger,
   slowNotice, scrollToNode, focusHeading, noWalletHelp, noCeloAlert, celoBalance,
   agentStatus, allowanceFromStatus, combineAllowance, statusFinal, receivedStale, reasonText, paidText, sourceNote, units6Of,
-  STATUS_SOURCE, DELAYED_NOTE, SLOW_NOTE, payoutText,
+  STATUS_SOURCE, DELAYED_NOTE, SLOW_NOTE, payoutText, contractEntry,
 } from "../assets/ntag-ui.js";
 import { currencyOf, formatCurrency } from "../assets/core.js";
 import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 
 initChrome();
 
-// Account: sign in with a wallet, claim / change / release an nTag, share it, see the wallet and payments to the tag.
-// Claims and releases are zero-value transactions from the user's own wallet to the agent (site/_spec/NTAGS.md).
+// Account: sign in with a wallet, claim / change / release a Lokal tag, choose the currency you receive, share it, and
+// see the wallet and payments to the tag. All of it happens on the LokalTags contract, from the user's own wallet:
+// claim(tag, name), setName(name), setReceiveToken(token) and release(), each simulated first so a refusal is explained
+// before the wallet opens, and each with the attribution suffix. The tag is read back from the contract over RPC.
+// A tag claimed with the older memo protocol (before the cutover) is shown so its holder can claim it on the contract.
 // New users follow one guide: Sign in → Your name → Claim your @nTag → Done. Returning users with a tag see their tag.
 
 const root = $("#account-root");
 const A = {
   rendered: undefined, // the address the page was built for (null = signed out), so session pings don't rebuild it
-  ops: null, st: null, opsErr: false,
+  tag: null, entry: null, opsErr: false, loaded: false, // the wallet's tag on LokalTags (entry = contractEntry)
+  legacy: null, legacySt: null, // a memo-protocol tag of this wallet from before the cutover, and every legacy claim
   view: null, // null (default for the state) | "change"
   busy: false, // a transaction is in flight: never rebuild under it
   rerender: false, // the session changed while busy: rebuild once it's done
@@ -49,34 +57,32 @@ function setBusy(on) {
 }
 
 // ---------- shared state ----------
-async function loadState(force = false) {
+/** Reads the wallet's tag from LokalTags (RPC), and any legacy memo tag it claimed before the cutover (Blockscout). */
+async function loadState(addr) {
   try {
-    A.ops = await loadNtagOps({ force });
-    A.st = resolveNtags(A.ops);
+    A.tag = await readTagOf(addr);
+    A.entry = A.tag ? contractEntry(await readTagInfo(A.tag)) : null;
     A.opsErr = false;
   } catch {
     A.opsErr = true;
   }
+  try {
+    A.legacySt = resolveNtags(legacyNtagOps(await loadNtagOps()));
+    const t = ntagOf(A.legacySt, addr);
+    A.legacy = t ? { tag: t, entry: ownerOf(A.legacySt, t) } : null;
+  } catch { A.legacySt = null; A.legacy = null; }
+  A.loaded = true;
 }
-/** Reads every nTag straight from Blockscout (no edge cache) and keeps it. Throws if the explorer can't be reached. */
-async function loadFresh() {
-  const { ops, state } = await loadNtagStateFresh();
-  A.ops = ops;
-  A.st = state;
-  A.opsErr = false;
-  return state;
+/** Re-reads the wallet's tag from the contract (after a transaction). */
+async function reloadTag(addr) {
+  A.tag = await readTagOf(addr);
+  A.entry = A.tag ? contractEntry(await readTagInfo(A.tag)) : null;
+  return A.tag;
 }
-/** Polls Blockscout (no cache) until the op `hash` is listed (about 2 minutes). Returns its status, or null if not listed yet. */
-async function waitIndexed(hash) {
-  for (let i = 0; i < 30; i++) {
-    try {
-      const st = await loadFresh();
-      const op = A.ops.find((o) => String(o.hash).toLowerCase() === String(hash).toLowerCase());
-      if (op) return st.statuses.get(op.hash) ?? "invalid";
-    } catch { /* explorer hiccup: keep polling */ }
-    await sleep(4000);
-  }
-  return null;
+/** Simulates a LokalTags call from the wallet; throws the refusal in plain English (nothing is sent). */
+async function mustSimulate(addr, data, ctx) {
+  const sim = await simulate({ from: addr, to: LOKAL_TAGS, data }, ctx);
+  if (!sim.ok) throw plainError(sim.message, { revert: sim.name, race: sim.name === "TagTaken" || sim.name === "TagLocked" });
 }
 /** Asks the wallet for the signed-in account and Celo. Throws a plain error if the wallet is on another account. */
 async function walletReady(addr) {
@@ -138,7 +144,7 @@ function guide(mode, s, current) {
   const addr = s?.address ?? null;
   const ids = mode === "change" ? ["name", "claim", "done"] : ["signin", "name", "claim", "done"];
   const labels = { signin: "Sign in", name: "Your name", claim: mode === "change" ? "Your Lokal tag" : "Claim your Lokal tag", done: "Done" };
-  const f = { tag: mode === "change" ? current.tag : prefill, name: current?.name ?? "", agree: false, hash: null, celoAnyway: false };
+  const f = { tag: mode === "change" ? current.tag : prefill || A.legacy?.tag || "", name: current?.name ?? A.legacy?.entry?.name ?? "", agree: false, hash: null, celoAnyway: false };
   const isRename = () => mode === "change" && f.tag === current.tag;
   let started = false; // focus follows the steps only after the person has done something
 
@@ -232,15 +238,15 @@ function guide(mode, s, current) {
   function nameBody() {
     const had = (current?.name ?? "").trim();
     const baseHint = mode === "change"
-      ? "Names can be changed but not removed. Shown on your card and pay page; up to 40 characters."
-      : "Optional. Shown on your card and pay page, up to 40 characters. It's public and stays onchain; you can change it later, but not remove it.";
+      ? "Shown on your card and pay page; up to 40 characters. Leave it empty to remove it."
+      : "Optional. Shown on your card and pay page, up to 40 characters. It's public onchain; you can change or remove it later.";
     const nameIn = el("input", { class: "input", id: "claim-name", type: "text", value: f.name, maxlength: "40", autocomplete: "name", placeholder: "Ada Obi", "aria-describedby": "claim-name-hint" });
     const hint = el("p", { class: "hint", id: "claim-name-hint" }, baseHint);
     const next = el("button", { class: "btn btn-primary btn-lg", type: "button" }, "Continue", icon("right"));
     const problem = () => {
       const v = nameIn.value.trim();
       if (v) return ntagNameError(nameIn.value) ? `The ${ntagNameError(nameIn.value)}.` : null;
-      return mode === "change" && had ? "Names can be changed but not removed. Enter a name." : null;
+      return null;
     };
     const update = () => {
       f.name = nameIn.value.trim();
@@ -250,7 +256,7 @@ function guide(mode, s, current) {
       hint.textContent = p ?? baseHint;
       nameIn.setAttribute("aria-invalid", String(!!p));
       next.disabled = !!p;
-      next.firstChild.textContent = !f.name && mode !== "change" ? "Skip for now" : "Continue";
+      next.firstChild.textContent = !f.name && (mode !== "change" || !had) ? "Skip for now" : "Continue";
     };
     nameIn.addEventListener("input", () => { started = true; update(); });
     nameIn.addEventListener("keydown", (e) => { if (e.key === "Enter" && !next.disabled) next.click(); });
@@ -286,34 +292,39 @@ function guide(mode, s, current) {
       box, msg, sugg, rules,
       el("ul", { class: "kv-list" },
         el("li", {}, el("span", {}, "Wallet"), el("a", { class: "mono link", href: celoscanAddr(addr), title: addr }, short(addr))),
-        el("li", {}, el("span", {}, "Sends"), el("span", {}, "0 CELO to the agent, with your tag in the data")),
+        el("li", {}, el("span", {}, "Sends"), el("span", {}, "A claim to the LokalTags contract (0 CELO)")),
         el("li", {}, el("span", {}, "Network fee"), el("span", {}, "Paid in CELO, usually well under $0.01"))),
       switchNote,
       alertBox("", "lock", el("p", {}, el("b", {}, "Public and permanent. "),
-        "Your tag, display name and wallet address are written to Celo, where anyone can read them. You can release a tag later, but the record stays onchain.")),
+        "Your tag, display name and wallet address are written to the LokalTags contract on Celo, where anyone can read them. You can release a tag later, but the record stays onchain.")),
       el("label", { class: "toggle", for: "claim-agree" }, agree, "I understand my tag, name and wallet are public and permanent."),
       el("div", { class: "nt-actions" }, go3));
     const wrap = el("div", { class: "stack", style: "gap:16px" }, pick, out, after);
-    let timer = null, kind = "idle", running = false;
+    let timer = null, kind = "idle", running = false, evalSeq = 0;
 
     const setPill = (k) => { pill.dataset.state = k; box.dataset.state = k; pillText.textContent = AVAIL_LABEL[k] ?? ""; };
     const renameProblem = () => {
       if (!isRename()) return null;
-      if (!f.name) return `Names can be changed but not removed. To keep @${f.tag}, go back and enter a new display name.`;
-      if (f.name === (current.name ?? "").trim()) return `That's already your name on @${f.tag}. Change the display name, or pick a different tag.`;
+      if (f.name === (current.name ?? "").trim()) return f.name ? `That's already your name on @${f.tag}. Change the display name, or pick a different tag.` : `@${f.tag} has no display name. Add one, or pick a different tag.`;
       return null;
     };
     const canGo = () => !running && f.agree && (kind === "free" || (kind === "yours" && isRename() && !renameProblem()));
     const refresh = () => {
       go3.disabled = !canGo();
-      go3.textContent = isRename() ? "Update my name" : f.tag ? `Claim @${f.tag}` : "Claim";
+      go3.textContent = isRename() ? (f.name ? "Update my name" : "Remove my name") : f.tag ? `Claim @${f.tag}` : "Claim";
       switchNote.replaceChildren(...(mode === "change" && !isRename() && kind === "free" ? [alertBox("warn", "alert", el("p", {}, el("b", {}, `@${current.tag} will be released.`),
-        ` For ${RELEASE_LOCK_DAYS} days only you can claim it back; after that anyone can. Payments sent to @${current.tag} after the switch are refused, not paid.`))] : []));
+        ` For ${RELEASE_LOCK_DAYS} days only you can claim it back; after that anyone can. After the switch the contract refuses payments to @${current.tag} before any money moves.`))] : []));
     };
-    const showSuggestions = (t, st) => {
+    /** Up to three free tags close to `t`, each checked on the contract. */
+    const showSuggestions = async (t) => {
       sugg.replaceChildren();
-      const picks = suggestNtags(t, f.name, st, addr);
-      if (!picks.length) return;
+      const cands = suggestNtags(t, f.name, resolveNtags([]), addr, 8);
+      let picks = [];
+      try {
+        const kinds = await Promise.all(cands.map((c) => readAvailability(c, addr).catch(() => "error")));
+        picks = cands.filter((c, i) => kinds[i] === "free" && !(A.legacySt && ownerOf(A.legacySt, c) && !sameAddr(ownerOf(A.legacySt, c).owner, addr))).slice(0, 3);
+      } catch { picks = []; }
+      if (!picks.length || f.tag !== t) return;
       sugg.append(el("span", { class: "nt-suggest-label" }, "Free right now:"));
       for (const p of picks) {
         const c = el("button", { class: "nt-chip", type: "button", "aria-label": `Use @${p}` }, el("span", { class: "ntag-at" }, "@"), p);
@@ -321,17 +332,37 @@ function guide(mode, s, current) {
         sugg.append(c);
       }
     };
-    const evaluate = () => {
+    /** The contract's answer for `t` (free, yours, taken, reserved, locked, invalid), with the lock's end when locked. */
+    const check = async (t) => {
+      const local = ntagError(t);
+      if (local && !/reserved/.test(local)) return { kind: "invalid" };
+      const k = await readAvailability(t, addr);
+      return { kind: k, lock: k === "locked" ? { until: (await readTagInfo(t)).lockedUntil } : null };
+    };
+    const evaluate = async () => {
       const t = f.tag;
+      const my = ++evalSeq;
       if (!t) { setPill("idle"); msg.textContent = ""; sugg.replaceChildren(); kind = "idle"; refresh(); return; }
-      kind = ntagAvailability(A.st, t, addr);
+      let r;
+      try { r = await check(t); } catch {
+        if (my !== evalSeq) return;
+        kind = "idle"; setPill("idle");
+        msg.replaceChildren("Couldn't reach Celo to check this tag. Try again in a moment.");
+        refresh();
+        return;
+      }
+      if (my !== evalSeq) return;
+      kind = r.kind;
       setPill(kind);
-      let text = availabilityMessage(t, kind, { owner: ownerOf(A.st, t), lock: A.st.locks.get(t) }).text;
+      let text = availabilityMessage(t, kind, { lock: r.lock }).text;
       if (kind === "taken") text = `@${t} is taken — pick another.`;
-      if (kind === "yours") text = mode === "change" ? (renameProblem() ?? `@${t} is already yours. Claiming it again updates the display name.`) : text;
+      if (kind === "yours") text = mode === "change" ? (renameProblem() ?? `@${t} is already yours. Saving updates the display name.`) : text;
       if (kind === "free" && mode === "change") text = `@${t} is available. @${current.tag} will be released when you switch.`;
+      const old = kind === "free" && A.legacySt ? ownerOf(A.legacySt, t) : null;
+      if (old && sameAddr(old.owner, addr)) text = `@${t} is yours from the older memo system. Claim it here to keep it on the contract.`;
+      else if (old) text = `@${t} is free on the contract, but ${short(old.owner)} claimed it with the older memo system. If you claim it here, new payments to @${t} go to you.`;
       msg.replaceChildren(text);
-      if (kind === "taken" || kind === "locked" || kind === "reserved") showSuggestions(t, A.st); else sugg.replaceChildren();
+      if (kind === "taken" || kind === "locked" || kind === "reserved") showSuggestions(t); else sugg.replaceChildren();
       refresh();
     };
     const onTag = () => {
@@ -356,18 +387,17 @@ function guide(mode, s, current) {
 
     const lock = (on) => { running = on; input.disabled = on; agree.disabled = on; for (const b of sugg.querySelectorAll("button")) b.disabled = on; refresh(); };
     const steps2 = () => progress([
-      ["wallet", "Confirm in your wallet", "It sends 0 CELO. You pay only the network fee."],
+      ["wallet", "Confirm in your wallet", "It sends 0 CELO to the LokalTags contract. You pay only the network fee."],
       ["chain", "Celo confirms it", ""],
-      ["index", "The explorer lists your claim", "Up to about a minute."],
-      ["yours", isRename() ? "Your name is updated" : `@${f.tag} is yours`, "Checked against every claim, in order."],
+      ["yours", isRename() ? "Your name is updated" : `@${f.tag} is yours`, "Read back from the contract."],
     ]);
     let plist = null;
     /** A taken (or on-hold) tag: say so plainly, with fresh suggestions, and let them pick again. */
-    const takenNow = (t, st, why) => {
-      kind = ntagAvailability(st, t, addr);
+    const takenNow = (t, k, why) => {
+      kind = k;
       setPill(kind);
       msg.replaceChildren(why);
-      showSuggestions(t, st);
+      showSuggestions(t);
       lock(false);
       input.focus({ preventScroll: true });
     };
@@ -381,12 +411,12 @@ function guide(mode, s, current) {
       after.replaceChildren();
       if (e.race) {
         // someone else's claim landed first: explain, refresh the suggestions and let them pick again
-        takenNow(f.tag, A.st, `@${f.tag} is taken — pick another.`);
+        takenNow(f.tag, e.revert === "TagLocked" ? "locked" : "taken", e.message);
         f.hash = null;
       } else if (e.pending) {
         lock(true);
         const again = el("button", { class: "btn btn-primary", type: "button" }, icon("refresh"), "Check again");
-        again.addEventListener("click", () => { out.replaceChildren(); after.replaceChildren(); run(e.indexing ? "index" : "chain"); });
+        again.addEventListener("click", () => { out.replaceChildren(); after.replaceChildren(); run("chain"); });
         after.append(again);
       }
     };
@@ -400,17 +430,17 @@ function guide(mode, s, current) {
           go3.textContent = `Checking @${t}…`;
           out.replaceChildren();
           after.replaceChildren();
-          // right before the wallet opens: re-read every claim straight from Blockscout (no cache)
-          let st;
-          try { st = await loadFresh(); } catch { throw plainError("Couldn't reach the Celo explorer to re-check the tag, so nothing was sent. Try again in a moment."); }
-          const k = ntagAvailability(st, t, addr);
+          // right before the wallet opens: ask the contract again
+          let r;
+          try { r = await check(t); } catch { throw plainError("Couldn't reach Celo to re-check the tag, so nothing was sent. Try again in a moment."); }
+          const k = r.kind;
           if (k === "taken" || k === "locked" || k === "reserved" || k === "invalid") {
             setBusy(false);
-            takenNow(t, st, k === "taken" ? `@${t} is taken — pick another.` : `${availabilityMessage(t, k, { lock: st.locks.get(t) }).text} Pick another.`);
+            takenNow(t, k, k === "taken" ? `@${t} is taken — pick another.` : `${availabilityMessage(t, k, { lock: r.lock }).text} Pick another.`);
             return;
           }
           if (k === "yours" && !isRename()) throw plainError(`@${t} is already yours, so nothing was sent.`);
-          if (isRename() && ownerOf(st, t)?.name === f.name) throw plainError(`That's already your name on @${t}, so nothing was sent.`);
+          if (isRename() && ((await readTagInfo(t)).name || "") === f.name) throw plainError(`That's already your name on @${t}, so nothing was sent.`);
           if (!f.celoAnyway && (await celoBalance(addr)) === 0n) {
             setBusy(false);
             lock(false);
@@ -424,8 +454,10 @@ function guide(mode, s, current) {
           plist.set("wallet", "active");
           go3.textContent = "Check your wallet…";
           const eth = await walletReady(addr);
-          const data = encodeNtagClaim(f.name ? { t, n: f.name } : { t });
-          const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from: addr, to: AGENT, value: "0x0", data }] });
+          // claim(tag, name) for a new tag (it releases the current one), setName(name) to rename; simulated first
+          const data = isRename() ? setNameData(f.name) : claimData(t, f.name);
+          await mustSimulate(addr, data, { tag: t });
+          const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from: addr, to: LOKAL_TAGS, value: "0x0", data }] });
           if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
           f.hash = hash;
           plist.set("wallet", "done", ["Sent. ", txLink(hash)]);
@@ -433,33 +465,27 @@ function guide(mode, s, current) {
           from = "chain";
         }
         if (from === "chain") {
-          const rc = await confirmStep(plist, "chain", f.hash, "The claim transaction failed on Celo, so nothing changed. Only the network fee was spent.", "Celo confirmed it");
+          const rc = await confirmStep(plist, "chain", f.hash, "The contract refused the claim on Celo (someone may have claimed the tag a moment before you), so nothing changed. Only the network fee was spent.", "Celo confirmed it");
           if (!rc) throw plainError("Celo hasn't confirmed it after three minutes. It may still go through.", { pending: true });
-          from = "index";
         }
-        plist.set("index", "active");
-        const status = await waitIndexed(f.hash);
-        if (status == null) throw plainError("Celo confirmed it, but the explorer hasn't listed it yet. It still counts in the order it was made.", { pending: true, indexing: true });
-        plist.set("index", "done", "Listed.");
-        // re-resolve: the claim counts only if nobody else's landed first
-        if (ntagOf(A.st, addr) === t && (!isRename() || ownerOf(A.st, t)?.name === f.name)) {
-          const entry = ownerOf(A.st, t);
+        plist.set("yours", "active");
+        // read it back from the contract: a confirmed claim is the claimer's (the contract reverts otherwise)
+        let now = null;
+        for (let i = 0; i < 5 && now !== t; i++) { try { now = await reloadTag(addr); } catch { /* RPC hiccup */ } if (now !== t) await sleep(2000); }
+        if (now === t && (!isRename() || (A.entry?.name ?? "") === f.name)) {
           plist.set("yours", "done");
-          rememberNtag(addr, t, entry?.name ?? null);
+          rememberNtag(addr, t, A.entry?.name ?? null);
           setBusy(false);
           renderPayments(s);
           setTimeout(() => { started = true; go("done"); }, 450);
           return;
         }
-        plist.set("yours", "active");
-        if (status === "taken") throw plainError(`Someone else claimed @${t} a moment before you, so it went to them. Your transaction changed nothing; only the network fee was spent.`, { race: true });
-        if (status === "locked") throw plainError(`@${t} is on hold for its previous owner, so your claim changed nothing. Only the network fee was spent.`, { race: true });
-        throw plainError(`The claim was recorded but didn't take effect (${status}). Only the network fee was spent.`);
+        throw plainError("Celo confirmed it, but the contract doesn't show the change yet. Reload in a moment.", { pending: true });
       } catch (e) {
         fail(e);
       }
     }
-    if (mode === "change" && f.tag === current.tag && !f.name) f.tag = ""; // nothing to rename to: start with an empty tag
+    if (mode === "change" && f.tag === current.tag && f.name === (current.name ?? "")) f.tag = ""; // nothing to rename: start with an empty tag
     input.value = f.tag;
     setTimeout(() => { onTag(); if (started) input.focus({ preventScroll: true }); }, 0);
     return [wrap];
@@ -468,7 +494,7 @@ function guide(mode, s, current) {
   // 4. done: the celebration, share, and what to do next
   function doneBody() {
     const t = f.tag;
-    const entry = ownerOf(A.st, t);
+    const entry = A.tag === t ? A.entry : null;
     const url = ntagUrl(t);
     const card = ntagCard({ tag: t, name: entry?.name ?? f.name, address: addr, since: entry?.since ?? Math.floor(Date.now() / 1000), as: "button", label: `Your Lokal tag @${t}. Copy the link to your pay page` });
     card.dataset.copy = url;
@@ -533,66 +559,70 @@ function ownedView(s, tag, entry) {
         stage(card, "Tap the card to copy your link."),
         el("div", { class: "stack" },
           el("div", {}, el("h3", { class: "section-title" }, "People can pay ", el("span", { class: "np-tagname", style: "color:var(--celo)" }, "@" + tag)),
-            el("p", { class: "soft mt-8" }, "Share your link. People pay in dollars, and the agent converts it on Textile FX and pays this wallet in the currency you choose below.")),
+            el("p", { class: "soft mt-8" }, "Share your link. People pay in dollars through the LokalTags contract and choose what you get; the agent converts it on Textile FX and pays this wallet.")),
           receive,
           shareBlock(tag),
           el("div", { class: "nt-limits" }, today, el("p", { class: "micro muted" }, LIMITS_TEXT, ". ", REFUSED_NOTE)),
           el("ul", { class: "kv-list" },
             el("li", {}, el("span", {}, "Display name"), entry.name ? el("span", {}, nameText(entry.name)) : el("span", {}, "None")),
-            el("li", {}, el("span", {}, "You receive"), entry.currency
+            el("li", {}, el("span", {}, "Default currency"), entry.currency
               ? el("span", { class: "cur-inline" }, flagIcon(entry.currency), `${currencyOf(entry.currency).label} (${currencyOf(entry.currency).token})`)
-              : el("span", {}, "Naira (the default)")),
+              : entry.receive === "usdt" ? el("span", { class: "cur-inline" }, flagIcon("usd"), "Dollars (USD₮)") : el("span", {}, "Not set (payers see naira first)")),
             el("li", {}, el("span", {}, "Claimed"), el("span", {}, `${lagosTime(entry.since * 1000)} WAT`)),
-            el("li", {}, el("span", {}, "Claim transaction"), el("a", { class: "mono link", href: celoscanTx(entry.hash), title: entry.hash }, short(entry.hash)))),
+            el("li", {}, el("span", {}, "Registry"), el("a", { class: "mono link", href: celoscanAddr(LOKAL_TAGS), title: LOKAL_TAGS }, "LokalTags ", icon("ext")))),
           el("div", { class: "row" }, change, releaseBtn),
           releaseBox))));
 }
 /**
- * "You receive": the currency payers see pre-selected on your pay page. Saving sends one zero-value transaction from your
- * wallet to the agent, {"t":"<tag>","c":"<code>"} (like a name change): it changes nothing else about the tag. Payers can
- * still choose another currency for their own payment.
+ * "Your default currency" (optional): what your pay page pre-selects, saved on the contract with setReceiveToken(token)
+ * (one transaction from your wallet; it changes nothing else about the tag). It is only a default: the payer chooses what
+ * you get on each payment (the choice travels in payTag's `ref`, see lokal-contracts.js), and the agent uses this default
+ * only when a payment names no currency. Nobody has to set it: without one, payers see naira first.
  */
-const MINIPAY_NOTE = "Using MiniPay? Choose dollars (USD₮); MiniPay doesn't show local tokens yet. Payers pick Dollars on your pay page.";
+const MINIPAY_NOTE = "Using MiniPay? Choose dollars (USD₮); MiniPay doesn't show local tokens yet.";
 function preferredCurrency(s, tag, entry) {
   const addr = s.address;
-  const saved = entry.currency ?? null;
+  const saved = entry.receive === "usdt" ? "usd" : entry.receive ?? null; // picker code: a currency or "usd"
   const status = el("div", { "aria-live": "polite" });
   const save = el("button", { class: "btn btn-primary btn-sm", type: "button", disabled: true }, "Save");
   const picker = currencyPicker({
     label: "The currency you receive", describedBy: "receive-h", value: saved ?? "cngn", remember: false,
+    extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮)" }],
     onChange: () => paint(),
   });
   const est = el("p", { class: "micro muted", "aria-live": "polite" });
+  const labelOf = (code) => (code === "usd" ? "Dollars" : currencyOf(code).label);
+  const pluralOf = (code) => (code === "usd" ? "dollars (USD₮)" : currencyOf(code).plural);
   function paint() {
-    const c = currencyOf(picker.value);
-    const changed = picker.value !== (saved ?? "cngn") || (saved == null && picker.value !== "cngn");
-    save.disabled = A.busy || !changed || !picker.isAvailable(picker.value);
-    save.textContent = changed ? `Save ${c.label}` : "Saved";
-    picker.note(`${saved ? `Payers see ${currencyOf(saved).plural} first on your pay page.` : "Not chosen yet: payers see naira first."} ${MINIPAY_NOTE}`);
-    const r = A.rate?.available?.[c.code] ? A.rate.rates[c.code] : null;
-    est.textContent = r ? `$10 from a payer ≈ ${formatCurrency(10 * r, c.code)} for you today (rounded down; the rate moves).` : " ";
+    const code = picker.value;
+    const changed = code !== (saved ?? "cngn") || (saved == null && code !== "cngn");
+    save.disabled = A.busy || !changed || !picker.isAvailable(code);
+    save.textContent = changed ? `Save ${labelOf(code)}` : "Saved";
+    picker.note(`${saved ? `Payers see ${pluralOf(saved)} first; they can still choose another currency for each payment.` : "Not chosen: payers see naira first, and can choose any currency for each payment."} ${MINIPAY_NOTE}`);
+    const r = code !== "usd" && A.rate?.available?.[code] ? A.rate.rates[code] : null;
+    est.textContent = code === "usd" ? "$10 from a payer = $10 for you." : r ? `$10 from a payer ≈ ${formatCurrency(10 * r, code)} for you today (rounded down; the rate moves).` : " ";
   }
   save.addEventListener("click", async () => {
     if (A.busy) return;
-    const code = picker.value, c = currencyOf(code);
+    const code = picker.value;
+    const want = code === "usd" ? "usdt" : code;
     setBusy(true);
     save.disabled = true;
     save.textContent = "Check your wallet…";
     status.replaceChildren();
     try {
       const eth = await walletReady(addr);
-      const data = encodeNtagClaim({ t: tag, c: code });
-      const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from: addr, to: AGENT, value: "0x0", data }] });
+      const data = setReceiveTokenData(tokenOfCode(want));
+      await mustSimulate(addr, data, { tag });
+      const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from: addr, to: LOKAL_TAGS, value: "0x0", data }] });
       if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
       save.textContent = "Waiting for Celo…";
       status.replaceChildren(el("p", { class: "small soft" }, "Sent. ", el("a", { class: "link", href: celoscanTx(hash) }, "View on Celoscan ", icon("ext"))));
-      const rc = await waitForReceipt(hash, { failMessage: "The transaction failed on Celo, so nothing changed. Only the network fee was spent." });
+      const rc = await waitForReceipt(hash, { failMessage: "The contract refused the change on Celo, so nothing changed. Only the network fee was spent." });
       if (!rc) throw plainError("Celo hasn't confirmed it after a few minutes. It may still go through; check back soon.");
-      save.textContent = "Listing it…";
-      const st = await waitIndexed(hash);
-      if (st == null) throw plainError("Celo confirmed it, but the explorer hasn't listed it yet. It counts anyway; reload in a minute.");
-      if (ownerOf(A.st, tag)?.currency !== code) throw plainError(`The change was recorded but didn't take effect (${st}). Only the network fee was spent.`);
-      A.note = `Saved: you receive ${c.plural} (${c.token}). Payers see it first on your pay page.`;
+      await reloadTag(addr);
+      if (A.entry?.receive !== want) throw plainError("Celo confirmed it, but the contract doesn't show the change yet. Reload in a moment.");
+      A.note = `Saved: payers see ${pluralOf(code)} first on your pay page. They can still choose another currency for each payment.`;
       setBusy(false);
       A.rendered = undefined; // rebuild with the new preference
       render();
@@ -606,7 +636,7 @@ function preferredCurrency(s, tag, entry) {
   else picker.setAvailability(A.rate.available);
   paint();
   return el("div", { class: "nt-receive stack", style: "gap:10px" },
-    el("div", {}, el("h4", { class: "label", id: "receive-h" }, "You receive"), el("p", { class: "micro muted" }, "Pick what you'd like to be paid in. Changing it is one free transaction from your wallet (only the network fee).")),
+    el("div", {}, el("h4", { class: "label", id: "receive-h" }, "Your default currency"), el("p", { class: "micro muted" }, "Optional. What your pay page shows first; payers can still choose any currency. Saved on the LokalTags contract with one transaction (only the network fee).")),
     picker.el, el("div", { class: "row", style: "gap:12px;flex-wrap:wrap" }, save), est, status);
 }
 
@@ -635,15 +665,16 @@ function releaseParts(s, tag) {
   const msg = el("div", { "aria-live": "polite" });
   const actions = el("div", { class: "nt-actions" }, cancel, go);
   const list = progress([
-    ["wallet", "Confirm in your wallet", "It sends 0 CELO. You pay only the network fee."],
+    ["wallet", "Confirm in your wallet", "It sends 0 CELO to the LokalTags contract. You pay only the network fee."],
     ["chain", "Celo confirms it", ""],
-    ["index", "The explorer lists it", "Up to about a minute."],
+    ["gone", "Read back from the contract", ""],
   ]);
   list.hidden = true;
   let hash = null, celoAnyway = false;
   agree.addEventListener("change", () => { go.disabled = !agree.checked; });
   cancel.addEventListener("click", () => { if (!A.busy) { A.view = null; renderTag(s); focusHeading($("#tag-h")); } });
   const released = () => {
+    A.tag = null; A.entry = null;
     rememberNtag(addr, null);
     setBusy(false);
     A.note = `Released @${tag}. For ${RELEASE_LOCK_DAYS} days only you can claim it back. Pick a new tag below whenever you like.`;
@@ -668,7 +699,8 @@ function releaseParts(s, tag) {
         list.hidden = false;
         list.set("wallet", "active");
         const eth = await walletReady(addr);
-        hash = await eth.request({ method: "eth_sendTransaction", params: [{ from: addr, to: AGENT, value: "0x0", data: encodeNtagRelease() }] });
+        await mustSimulate(addr, releaseData(), { tag });
+        hash = await eth.request({ method: "eth_sendTransaction", params: [{ from: addr, to: LOKAL_TAGS, value: "0x0", data: releaseData() }] });
         if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
         list.set("wallet", "done", ["Sent. ", txLink(hash)]);
         from = "chain";
@@ -677,10 +709,11 @@ function releaseParts(s, tag) {
         const rc = await confirmStep(list, "chain", hash, "The release failed on Celo, so you still have the tag. Only the network fee was spent.", "Celo confirmed it");
         if (!rc) throw plainError("Celo hasn't confirmed it after three minutes. It may still go through.", { pending: true });
       }
-      list.set("index", "active");
-      const status = await waitIndexed(hash);
-      if (status == null) throw plainError("Released on Celo. The explorer hasn't listed it yet, so this page may show the tag for a minute more.", { pending: true, indexing: true });
-      list.set("index", "done", "Listed.");
+      list.set("gone", "active");
+      let now = tag;
+      for (let i = 0; i < 5 && now; i++) { try { now = await readTagOf(addr); } catch { /* RPC hiccup */ } if (now) await sleep(2000); }
+      if (now) throw plainError("Released on Celo, but the contract doesn't show it yet. Reload in a moment.", { pending: true });
+      list.set("gone", "done", "Released.");
       released();
     } catch (e) {
       setBusy(false);
@@ -691,7 +724,7 @@ function releaseParts(s, tag) {
         // the release may still land: never offer to send a second one, only to look again
         go.disabled = true; agree.disabled = true; cancel.disabled = false;
         const again = el("button", { class: "btn btn-primary", type: "button" }, icon("refresh"), "Check again");
-        again.addEventListener("click", () => { again.remove(); run(e.indexing ? "index" : "chain"); });
+        again.addEventListener("click", () => { again.remove(); run("chain"); });
         actions.append(again);
       } else {
         go.disabled = !agree.checked; cancel.disabled = false; agree.disabled = false;
@@ -702,7 +735,7 @@ function releaseParts(s, tag) {
   return [
     alertBox("warn", "alert",
       el("p", {}, el("b", {}, `Release @${tag}?`)),
-      el("p", { class: "mt-8" }, `Payments sent to @${tag} after this are refused and not paid. For ${RELEASE_LOCK_DAYS} days only you can claim @${tag} back; after that anyone can.`)),
+      el("p", { class: "mt-8" }, `After this the contract refuses payments to @${tag} before any money moves. For ${RELEASE_LOCK_DAYS} days only you can claim @${tag} back; after that anyone can.`)),
     el("label", { class: "toggle", for: "release-agree" }, agree, `I understand payments to @${tag} stop working.`),
     list, msg, actions,
   ];
@@ -711,18 +744,22 @@ function releaseParts(s, tag) {
 // ---------- the tag section ----------
 const tagSlot = el("div", {});
 function renderTag(s) {
-  if (A.opsErr || !A.st) {
+  if (A.opsErr || !A.loaded) {
     const retry = el("button", { class: "btn btn-secondary btn-sm", type: "button" }, icon("refresh"), "Try again");
-    retry.addEventListener("click", async () => { tagSlot.replaceChildren(tagSkeleton()); await loadState(true); renderTag(s); renderPayments(s); });
+    retry.addEventListener("click", async () => { tagSlot.replaceChildren(tagSkeleton()); await loadState(s.address); renderTag(s); renderPayments(s); });
     tagSlot.replaceChildren(el("section", { class: "card", id: "tag-section" },
       el("div", { class: "card-h" }, el("h2", {}, "Your Lokal tag")),
-      el("div", { class: "card-b" }, alertBox("err", "alert", el("p", {}, "Couldn't reach the Celo explorer to look up Lokal tags. Your tag is safe onchain; this page just can't read it right now."), el("div", { class: "row mt-8" }, retry)))));
+      el("div", { class: "card-b" }, alertBox("err", "alert", el("p", {}, "Couldn't reach Celo to read your Lokal tag from the contract. Your tag is safe onchain; this page just can't read it right now."), el("div", { class: "row mt-8" }, retry)))));
     return;
   }
-  const tag = ntagOf(A.st, s.address);
-  const entry = tag ? ownerOf(A.st, tag) : null;
+  const tag = A.tag;
+  const entry = A.entry;
   if (!tag || A.view === "change") {
-    const note = !tag && A.note ? alertBox("", "info", el("p", {}, A.note)) : null;
+    let note = !tag && A.note ? alertBox("", "info", el("p", {}, A.note)) : null;
+    if (!tag && !note && A.legacy) {
+      note = alertBox("", "info", el("p", {}, el("b", {}, `You hold @${A.legacy.tag} from the older memo system. `),
+        `Tags now live on the LokalTags contract (from block ${LEGACY_CUTOVER_BLOCK.toLocaleString("en-US")}). Claim @${A.legacy.tag} again below to keep it: payments sent the old way still reach you, but new payments go to whoever holds it on the contract.`));
+    }
     A.note = null;
     const flow = guide(tag ? "change" : "new", s, tag ? { tag, name: entry?.name ?? "" } : null);
     tagSlot.replaceChildren(...(note ? [note, flow] : [flow]));
@@ -794,6 +831,7 @@ function renderWallet(s) {
 }
 
 // ---------- payments to your tag ----------
+const lcHash = (h) => String(h ?? "").toLowerCase();
 const paySlot = el("div", {});
 const amountText = (units, token) => `${num2.format(Number(units) / 1e6)} ${token === "USDT" ? "USD₮" : "cNGN"}`;
 const watTime = (ms) => `${lagosTime(ms)} WAT`;
@@ -844,12 +882,13 @@ function payRow(d, tag) {
 let paySeq = 0;
 function renderPayments(s) {
   const my = ++paySeq;
-  const tag = A.st ? ntagOf(A.st, s.address) : null;
-  const entry = tag ? ownerOf(A.st, tag) : null;
+  // the contract tag, else a legacy memo tag (its payments are still paid)
+  const tag = A.tag ?? A.legacy?.tag ?? null;
+  const entry = A.tag ? A.entry : A.legacy?.entry ?? null;
   const body = el("div", { class: "card-b" });
   const head = el("div", { class: "card-h" }, el("h2", { id: "payments-h" }, tag ? el("span", {}, "Payments to ", el("span", { class: "np-tagname", style: "font-size:17px" }, "@" + tag)) : "Payments to your tag"));
   paySlot.replaceChildren(el("section", { class: "card", "aria-labelledby": "payments-h" }, head, body));
-  if (!A.st) { body.replaceChildren(el("p", { class: "small muted" }, "Waiting for the Lokal tag lookup.")); return; }
+  if (!A.loaded) { body.replaceChildren(el("p", { class: "small muted" }, "Waiting for the Lokal tag lookup.")); return; }
   if (!tag) {
     body.replaceChildren(el("div", { class: "nt-empty" }, el("span", { class: "nt-empty-icon" }, icon("receipt")),
       el("p", {}, "Claim a tag above and payments to it show up here, with a receipt for each payout.")));
@@ -864,7 +903,7 @@ function renderPayments(s) {
     if (!A.rate) A.rate = await loadRate().catch(() => null);
     // the chain list (as before) and the agent's own records (exact statuses), side by side
     const [ledger, agent] = await Promise.all([
-      loadTagLedger({ tag, owner: s.address, sinceSec: entry.since, rate: A.rate }).catch((error) => ({ error })),
+      loadTagLedger({ tag, owner: s.address, sinceSec: entry.since, rate: A.rate, currency: A.tag ? entry.currency ?? (entry.receive === "usdt" ? null : "cngn") : null }).catch((error) => ({ error })),
       agentStatus({ tag }),
     ]);
     if (ledger.error && !agent) throw ledger.error;
@@ -874,8 +913,10 @@ function renderPayments(s) {
     // matched by the full "<tx>:<logIndex>" id, so two transfers in one transaction never swap statuses
     const idOf = (d) => `${String(d.hash).toLowerCase()}:${Number(d.logIndex)}`;
     const byId = new Map(events.map((e) => [e.id, e]));
-    const deposits = (ledger.error ? [] : ledger.deposits).map((d) => ({ ...d, agent: byId.get(idOf(d)) ?? null }));
-    const listed = new Set(deposits.map(idOf));
+    // a contract payment is reported under its TagPaid event's id, the chain list has its transfer: match by transaction
+    const byTx = new Map(events.map((e) => [lcHash(e.depositTx), e]));
+    const deposits = (ledger.error ? [] : ledger.deposits).map((d) => ({ ...d, agent: byId.get(idOf(d)) ?? (d.contract ? byTx.get(lcHash(d.hash)) ?? null : null) }));
+    const listed = new Set(deposits.flatMap((d) => [idOf(d), ...(d.agent ? [d.agent.id] : [])]));
     for (const e of events) if (!listed.has(e.id)) deposits.push(rowFromEvent(e));
     deposits.sort((a, b) => b.ts - a.ts);
     return { deposits, partial: Boolean(ledger.error || ledger.partial), fromAgent: Boolean(agent), chainFailed: Boolean(ledger.error) };
@@ -923,13 +964,13 @@ async function render() {
   root.replaceChildren(tagSlot, el("div", { class: "grid-main" }, paySlot, walletSlot));
   renderWallet(s);
   renderPayments(s);
-  await loadState(false);
+  await loadState(s.address);
   if (A.rendered !== key) return;
   A.interacted = !first; // signed in just now on this page: the guide's focus follows the steps
   renderTag(s);
   renderPayments(s);
   if (!first && (focusWasInside || document.activeElement === document.body)) focusHeading($("#claim-h") ?? $("#tag-h"));
-  if (first && prefill && !A.opsErr && !ntagOf(A.st, s.address)) $("#claim-name")?.focus({ preventScroll: false });
+  if (first && prefill && !A.opsErr && !A.tag) $("#claim-name")?.focus({ preventScroll: false });
 }
 
 onSessionChange(() => { render(); });

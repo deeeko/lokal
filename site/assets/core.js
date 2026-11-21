@@ -616,6 +616,15 @@ export function decodeNtagPayment(input) {
 export const decodeNtagMemo = (input) => decodeNtagPayment(input)?.tag ?? null;
 // ---------- port: end ----------
 
+// ---------- the cutover to the LokalTags contract (not ported: the formats above are frozen) ----------
+/**
+ * From this block on, tags are claimed, renamed and released only on LokalTags (site/assets/lokal-contracts.js), and
+ * legacy NT1: ops change nothing. Legacy NTP: payments keep being paid. Same number as src/config.mjs.
+ */
+export const LEGACY_CUTOVER_BLOCK = 83405000;
+/** The legacy ops that still count (mined before the cutover). */
+export const legacyNtagOps = (ops) => (ops ?? []).filter((o) => o && Number(o.block) < LEGACY_CUTOVER_BLOCK);
+
 let ntagCache = null; // { at (ms), ops } or { promise }
 /**
  * Every nTag op ever sent to the agent, oldest first (Blockscout, paged to the end; tags never expire). Cached in memory

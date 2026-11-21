@@ -5,8 +5,9 @@
 // Everything at the top level must stay free of window/document access: api/session.js and the tests import this file.
 import {
   HAS_API, el, icon, short, toast, avatarSeed, loadNtagOps, resolveNtags, ntagOf, ownerOf, timeoutSignal,
-  disconnectWallet, markWalletConnected, walletDisconnected,
+  disconnectWallet, markWalletConnected, walletDisconnected, legacyNtagOps,
 } from "./core.js";
+import { readTagInfo, readTagOf } from "./lokal-contracts.js";
 
 export const SESSION_KEY = "np-session";
 export const SESSION_DAYS = 7;
@@ -239,12 +240,19 @@ export function cachedNtag(address) {
   const c = readNtagCache(address);
   return c ? { tag: c.tag, name: c.name } : undefined;
 }
-/** Looks up an address's current tag from Celo (via loadNtagOps). Resolves { tag, name } ({ tag: null } when none). */
+/**
+ * Looks up an address's current tag: the LokalTags contract first, then a legacy memo claim made before the cutover.
+ * Resolves { tag, name } ({ tag: null } when none).
+ */
 export async function lookupNtag(address, { force = false } = {}) {
   if (!force) { const c = cachedNtag(address); if (c) return c; }
-  const state = resolveNtags(await loadNtagOps({ force }));
-  const tag = ntagOf(state, address);
-  const name = tag ? ownerOf(state, tag)?.name ?? null : null;
+  let tag = await readTagOf(address);
+  let name = tag ? (await readTagInfo(tag)).name || null : null;
+  if (!tag) {
+    const state = resolveNtags(legacyNtagOps(await loadNtagOps({ force })));
+    tag = ntagOf(state, address);
+    name = tag ? ownerOf(state, tag)?.name ?? null : null;
+  }
   writeNtagCache(address, tag, name);
   return { tag, name };
 }

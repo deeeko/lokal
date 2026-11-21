@@ -2,8 +2,12 @@ import {
   AGENT, CAP, TOKENS, $$, el, icon, badge, short, num2, naira, usd, celoscanAddr, celoscanTx, initChrome,
   toast, readContract, loadRate, loadNtagOps, resolveNtags, ownerOf, ntagAvailability, normalizeNtag, ntagError,
   encodeNtagTransfer, ntagUrl, receiptNo, walletDisconnected, markWalletConnected, parseMoneyInput, lagosTime, $,
-  currencyOf, formatCurrency,
+  currencyOf, formatCurrency, celoscanAddr as addrLink, legacyNtagOps,
 } from "../assets/core.js";
+import {
+  LOKAL_TAGS, ZERO_ADDRESS, approveData, checkPayment, currencyRef, payTagData, payTagWithPermitData, permitDomainOk,
+  permitTypedData, readAllowance, readNonce, readPaymentRoom, readTagInfo, simulate, splitSignature, tokenAmountText,
+} from "../assets/lokal-contracts.js";
 import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 import { getSession, explainWalletError, injectedWallet, ensureCelo, CELO_CHAIN } from "../assets/session.js";
 import {
@@ -11,7 +15,7 @@ import {
   nameText, LIMITS, LIMITS_TEXT, CNGN_CAP_USD, REFUSED_NOTE, receivableToday, allowanceResetAt, loadNtagStateFresh,
   loadTagLedger, slowNotice, scrollToNode, focusHeading, noWalletHelp, noCeloAlert, celoBalance,
   agentStatus, depositStatus, allowanceFromStatus, combineAllowance, receivedStale, reasonText, paidText, sourceNote, REFUND_NOTE,
-  DELAYED_NOTE, SLOW_NOTE, payoutText,
+  DELAYED_NOTE, SLOW_NOTE, payoutText, lookupTag,
 } from "../assets/ntag-ui.js";
 
 initChrome();
@@ -22,8 +26,12 @@ for (const a of document.querySelectorAll(".sb-nav a, .nav-links a")) {
 }
 
 // Public nTag page: /@ada on Vercel (rewritten to tag.html?t=ada, but the address bar keeps /@ada), tag.html?t=ada or
-// tag.html#ada. Paying = one ERC-20 transfer from the payer's wallet to the agent with "NTP:<tag>" after the usual
-// calldata. The agent then converts and pays the tag's owner when autopilot runs (site/_spec/NTAGS.md section 1e).
+// tag.html#ada. The tag's holder, name and receive currency are read from the LokalTags contract. Paying is one call to
+// LokalTags: payTagWithPermit for USD₮ (one signature, one transaction) or approve + payTag for cNGN. The contract checks
+// every limit before the money moves straight to the agent, which then pays the holder in the currency they chose.
+// Every refusal is simulated (eth_call) and explained before the wallet opens. A tag claimed with the older memo
+// protocol before the cutover, and not on the contract, is still paid the old way: one ERC-20 transfer to the agent
+// with "NTP:<tag>" after the usual calldata (site/_spec/NTAGS.md section 1e).
 
 const root = $("#tag-root");
 const title = $("#tag-title"), lead = $("#tag-lead");
@@ -89,24 +97,22 @@ async function render() {
   document.title = `@${tag} · Lokal`;
   title.replaceChildren("Pay ", el("em", {}, "@" + tag));
   root.replaceChildren(el("p", { class: "small muted", role: "status" }, el("span", { class: "skel", style: "width:14px;height:14px;border-radius:50%;margin-right:8px" }), `Looking up @${tag} on Celo…`));
-  let state;
-  try { state = resolveNtags(await loadNtagOps()); }
+  let found;
+  try { found = await lookupTag(tag, getSession()?.address); }
   catch {
     if (my !== renderSeq) return;
     const retry = el("button", { class: "btn btn-secondary btn-sm", type: "button" }, icon("refresh"), "Try again");
     retry.addEventListener("click", render);
-    root.replaceChildren(alertBox("err", "alert", el("p", {}, "Couldn't reach the Celo explorer to look up this tag. Nothing was sent."), el("div", { class: "row mt-8" }, retry)));
+    root.replaceChildren(alertBox("err", "alert", el("p", {}, "Couldn't reach Celo to look up this tag. Nothing was sent."), el("div", { class: "row mt-8" }, retry)));
     return;
   }
   if (my !== renderSeq) return;
-  const entry = ownerOf(state, tag);
-  if (!entry) { renderUnclaimed(tag, state); return; }
-  renderProfile(tag, entry);
+  if (!found.entry) { renderUnclaimed(tag, found); return; }
+  renderProfile(tag, found.entry);
 }
 
-function renderUnclaimed(tag, state) {
-  const me = getSession()?.address;
-  const kind = ntagAvailability(state, tag, me);
+function renderUnclaimed(tag, found) {
+  const kind = found.kind;
   title.replaceChildren(el("em", {}, "@" + tag), kind === "reserved" ? " is reserved" : kind === "locked" ? " is on hold" : " is free");
   const card = ntagCard({ tag, kind: "ghost", stamp: kind === "reserved" ? "Reserved" : kind === "locked" ? "On hold" : "Unclaimed" });
   let copy;
@@ -114,7 +120,7 @@ function renderUnclaimed(tag, state) {
     lead.textContent = "Some tags are kept back so nobody can pretend to be the service, a bank or a wallet.";
     copy = [el("p", { class: "soft" }, `Nobody can claim @${tag}, so there's no one to pay here. If someone gave you this tag, ask them for their real one.`)];
   } else if (kind === "locked") {
-    const lock = state.locks.get(tag);
+    const lock = found.lock;
     lead.textContent = "This tag was released recently.";
     copy = [el("p", { class: "soft" }, availabilityMessage(tag, kind, { lock }).text, " There's no one to pay at this tag right now.")];
   } else {
@@ -133,24 +139,27 @@ function renderUnclaimed(tag, state) {
 }
 
 function renderProfile(tag, entry) {
+  const C = entry.source === "contract";
   const pref = entry.currency ? currencyOf(entry.currency) : null;
-  const gets = pref ? `prefers to receive ${pref.plural}` : "gets paid in their own local money";
+  const gets = pref ? `prefers to receive ${pref.plural}` : C && entry.receive === "usdt" ? "prefers to receive dollars" : "gets paid in their own local money";
   if (entry.name) lead.replaceChildren(nameText(entry.name), ` ${gets} on Celo. You send USD₮; the agent converts it on Textile FX and pays their wallet.`);
   else lead.textContent = `@${tag} ${gets}. You send USD₮; the agent converts it on Textile FX and pays this tag's wallet.`;
   const card = ntagCard({ tag, name: entry.name, address: entry.owner, since: entry.since, currency: entry.currency, as: "button", label: `Lokal tag @${tag}. Copy the link to this page` });
   card.dataset.copy = ntagUrl(tag);
   card.dataset.copyLabel = "Link copied";
   const details = el("section", { class: "card", "aria-labelledby": "who-h" },
-    el("div", { class: "card-h" }, el("h2", { id: "who-h" }, "Who you're paying"), badge("Registered onchain", "neutral")),
+    el("div", { class: "card-h" }, el("h2", { id: "who-h" }, "Who you're paying"), badge(C ? "On the LokalTags contract" : "Older memo tag", "neutral")),
     el("div", { class: "card-b" }, el("ul", { class: "kv-list" },
       el("li", {}, el("span", {}, "Lokal tag"), el("span", { class: "np-tagname", style: "font-size:17px;color:var(--celo)" }, "@" + tag)),
       entry.name ? el("li", {}, el("span", {}, "Name"), el("span", { class: "nt-namecell" }, nameText(entry.name), el("small", { class: "micro muted" }, "Name set by the owner"))) : null,
       el("li", {}, el("span", {}, "Wallet"), el("a", { class: "mono link", href: celoscanAddr(entry.owner), title: entry.owner }, short(entry.owner), " ", icon("ext"))),
       el("li", {}, el("span", {}, "Prefers"), pref
         ? el("span", { class: "cur-inline" }, flagIcon(pref.code), `${pref.label} (${pref.token})`)
-        : el("span", { class: "soft" }, "Not set (naira by default)")),
+        : C && entry.receive === "usdt" ? el("span", { class: "cur-inline" }, flagIcon("usd"), "Dollars (USD₮)")
+          : el("span", { class: "soft" }, "Not set (naira by default)")),
       el("li", {}, el("span", {}, "Since"), el("span", {}, dayMonthYear(entry.since))),
-      el("li", {}, el("span", {}, "Claim"), el("a", { class: "link", href: celoscanTx(entry.hash) }, "Transaction ", icon("ext"))))),
+      C ? el("li", {}, el("span", {}, "Registry"), el("a", { class: "link", href: addrLink(LOKAL_TAGS) }, "LokalTags contract ", icon("ext")))
+        : el("li", {}, el("span", {}, "Claim"), el("a", { class: "link", href: celoscanTx(entry.hash) }, "Transaction ", icon("ext"))))),
     el("div", { class: "card-f" }, el("span", { class: "small muted" }, "The tag's owner chose this name; nobody checks it. Make sure it's who you expect."),
       el("button", { class: "btn btn-ghost btn-sm", type: "button", dataset: { copy: ntagUrl(tag), copyLabel: "Link copied" } }, icon("copy"), "Copy link")));
   root.replaceChildren(el("div", { class: "grid-main" }, payCard(tag, entry), el("div", { class: "nt-profile" }, stage(card), details)));
@@ -158,9 +167,14 @@ function renderProfile(tag, entry) {
 
 // ---------- pay ----------
 function payCard(tag, entry) {
+  // C: the tag is on the LokalTags contract and is paid through it. Either way the PAYER chooses what the owner gets on
+  // this payment (the owner's optional default is pre-selected, else naira): you send USD₮ for naira, rupiah or pesos,
+  // or cNGN for dollars. On the contract the choice travels in payTag's `ref` ("cur:<code>"), which the agent reads.
+  const C = entry.source === "contract";
+  const startCode = entry.receive === "usdt" ? "usd" : entry.currency ?? "cngn";
   const P = {
-    corridor: `usdt-${entry.currency ?? "cngn"}`, rate: null, rateFailed: false, account: null, chainOk: null, bal: null, celo: null, busy: false,
-    touched: false, allowance: null, celoAnyway: false, alive: true,
+    corridor: startCode === "usd" ? "cngn-usdt" : `usdt-${startCode}`, rate: null, rateFailed: false, account: null, chainOk: null, bal: null, celo: null, busy: false,
+    touched: false, allowance: null, celoAnyway: false, alive: true, room: null,
   };
   onCleanup(() => { P.alive = false; });
   // isNaira: you send USD₮ and they get local money (any currency); otherwise you send cNGN and they get dollars
@@ -172,13 +186,13 @@ function payCard(tag, entry) {
   const pref = entry.currency ?? null;
 
   const picker = currencyPicker({
-    label: `What does @${tag} receive?`, describedBy: "corridor-l", value: pref ?? "cngn", remember: false,
+    label: `What does @${tag} receive?`, describedBy: "corridor-l", value: startCode, remember: false,
     extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮): you send cNGN" }],
     onChange: (c) => {
       const next = c === "usd" ? "cngn-usdt" : `usdt-${c}`;
       const unitChange = (next === "cngn-usdt") !== (P.corridor === "cngn-usdt");
       P.corridor = next;
-      if (unitChange) { amountIn.value = isNaira() ? "10" : "15000"; P.bal = null; refreshBalances(); }
+      if (unitChange) { amountIn.value = isNaira() ? "10" : "15000"; P.bal = null; P.room = null; refreshBalances(); refreshRoom(); }
       renderForm();
     },
   });
@@ -190,7 +204,8 @@ function payCard(tag, entry) {
   const out = el("output", { for: "pay-amount", "aria-live": "polite" }, el("span", { class: "skel lg" }));
   const sRate = el("span", {}, "—"), sSend = el("span", {}, "—");
   const today = el("p", { class: "small soft", id: "pay-today" }, `Checking how much more @${tag} can receive today…`);
-  const limits = el("div", { class: "nt-limits" }, today,
+  const ctrRoom = el("p", { class: "small soft", id: "pay-contract-room" });
+  const limits = el("div", { class: "nt-limits" }, today, C ? ctrRoom : null,
     el("p", { class: "micro muted" }, LIMITS_TEXT, ". ", REFUSED_NOTE));
 
   // wallet area: built once and updated in place, so a click is never lost to a rebuild (blur re-renders the form)
@@ -218,6 +233,7 @@ function payCard(tag, entry) {
     el("ul", { class: "kv-list" },
       el("li", {}, el("span", {}, "You send"), sSend),
       el("li", {}, el("span", {}, "Rate"), sRate),
+      el("li", {}, el("span", {}, "Through"), el("span", {}, C ? "The LokalTags contract, which checks every limit first" : "A transfer to the agent with a memo")),
       el("li", {}, el("span", {}, "Paid by"), el("span", {}, "The agent, when autopilot next runs"))),
     limits, walletBox, actions, msg);
   const body = el("div", { class: "card-b" }, form);
@@ -238,8 +254,8 @@ function payCard(tag, entry) {
     if (isNaira()) {
       if (cents < USDT_MIN_CENTS || cents > USDT_MAX_CENTS) return { cents, units, error: `Send $1 to $${CAP}${perUsd() ? ` (≈ ${formatCurrency(CAP * perUsd(), code())})` : ""}.` };
       value = cents / 100;
-      if (P.rate && !perUsd()) return { cents, units, error: `${cur().label} isn't available on Textile FX right now, so the agent would refuse it. Pick another currency, or try again later.` };
-      const max = P.rate?.maxUsd?.[code()];
+      if (code() && P.rate && !perUsd()) return { cents, units, error: `${cur().label} isn't available on Textile FX right now, so the agent would refuse it. ${C ? "Try again later." : "Pick another currency, or try again later."}` };
+      const max = code() ? P.rate?.maxUsd?.[code()] : null;
       if (max && value > max) return { cents, units, error: `Textile can convert up to about $${max.toFixed(2)} into ${cur().plural} right now. Send less, or pick another currency.` };
     } else {
       if (cents < NGN_MIN * 100) return { cents, units, error: `Send at least ₦${ngnText(NGN_MIN)}.` };
@@ -249,6 +265,9 @@ function payCard(tag, entry) {
       if (value > CNGN_CAP_USD) return { cents, units, error: `That's worth about ${dollars(value)}. In cNGN, send up to about ₦${ngnText(Math.floor(CNGN_CAP_USD / rr))} so it stays under the agent's $${CAP} limit after price moves.` };
       if (value < 1) return { cents, units, error: "That's worth less than $1. Send a little more." };
     }
+    // the contract's own room today (per payment, per recipient, per payer, overall): it would refuse anything over it
+    const room = C && P.room && !P.room.error ? P.room : null;
+    if (room && units > room.room) return { cents, units, usd: value, limit: true, error: roomError(room) };
     const alw = P.allowance;
     if (alw && !alw.error && value > alw.leftUsd + 0.005) {
       const at = allowanceResetAt(alw, value);
@@ -258,6 +277,38 @@ function payCard(tag, entry) {
     return { cents, units, usd: value };
   }
   const fmtSend = (cents) => (isNaira() ? `${num2.format(cents / 100)} USD₮` : `${num2.format(cents / 100)} cNGN`);
+  /** Why the contract would refuse an amount over its room today, in plain English. */
+  const roomError = (r) => {
+    const t = sellToken().address, amt = (u) => tokenAmountText(u, t);
+    if (r.room === 0n) {
+      if (r.remaining.forRecipient === 0n) return `@${tag} has reached today's limit on the contract. Try again after midnight UTC.`;
+      if (r.remaining.forPayer === 0n) return "You've reached today's limit for paying through the contract. Try again after midnight UTC.";
+      return "The contract has reached today's total for everyone. Try again after midnight UTC.";
+    }
+    if (r.room === r.remaining.forRecipient && r.room < r.max) return `@${tag} can receive ${amt(r.room)} more in ${sellToken().symbol} today on the contract. Send less.`;
+    if (r.room === r.remaining.forPayer && r.room < r.max) return `You can pay ${amt(r.room)} more in ${sellToken().symbol} today on the contract. Send less.`;
+    if (r.room === r.remaining.overall && r.room < r.max) return `The contract can take ${amt(r.room)} more in ${sellToken().symbol} today across everyone. Send less.`;
+    return `The contract takes at most ${amt(r.max)} in one payment. Send less.`;
+  };
+  function renderRoom() {
+    if (!C) return;
+    const r = P.room;
+    const t = sellToken().address, amt = (u) => tokenAmountText(u, t);
+    if (!r) ctrRoom.textContent = "Checking the contract's limits for today…";
+    else if (r.error) ctrRoom.textContent = "Couldn't read the contract's limits right now. It still checks them before any money moves.";
+    else ctrRoom.replaceChildren(el("b", {}, `Contract room today: up to ${amt(r.room)}`),
+      ` (@${tag} can receive ${amt(r.remaining.forRecipient)} more, ${P.account ? `you can pay ${amt(r.remaining.forPayer)} more` : "per payer up to " + amt(r.limits.perPayerDay)}; ${amt(r.min)} minimum).`);
+  }
+  async function refreshRoom() {
+    if (!C) return;
+    const token = sellToken().address, who = P.account;
+    try {
+      const r = await readPaymentRoom(token, entry.owner, who ?? ZERO_ADDRESS);
+      if (!P.alive || token !== sellToken().address || who !== P.account) return;
+      P.room = r;
+    } catch { P.room = { error: true }; }
+    if (P.alive) renderForm();
+  }
   const cngnHint = () => {
     const rr = P.rate?.reverseRate;
     const most = rr ? `about ₦${ngnText(Math.floor(CNGN_CAP_USD / rr))} (about $${CNGN_CAP_USD})` : `about $${CNGN_CAP_USD} in value`;
@@ -297,6 +348,7 @@ function payCard(tag, entry) {
         if (a.cents > 0 && pu) get = el("span", { title: `${cur().name}, rounded down` }, formatCurrency((a.cents / 100) * pu, code()));
       }
       else if (r.reverseRate) { rateText = `1 USD₮ = ${naira(1 / r.reverseRate)}`; if (a.cents > 0) get = usd((a.cents / 100) * r.reverseRate); }
+      else if (isNaira() && !code()) { rateText = "No conversion"; if (a.cents > 0) get = usd(a.cents / 100); }
       else rateText = "Not published yet";
       basis.textContent = r.fromPreview ? "Fees included" : "Before fees";
     } else if (P.rateFailed) rateText = "Rate unavailable";
@@ -304,6 +356,7 @@ function payCard(tag, entry) {
     out.classList.toggle("over", !!a.error && a.cents > 0 && !/^Loading/.test(a.error));
     sRate.textContent = rateText;
     renderToday();
+    renderRoom();
     renderWallet();
   }
 
@@ -377,6 +430,7 @@ function payCard(tag, entry) {
     if (!P.alive) return;
     renderWallet();
     refreshBalances();
+    refreshRoom();
   }
   async function connect() {
     connectBtn.disabled = true;
@@ -415,6 +469,7 @@ function payCard(tag, entry) {
     P.touched = true;
     const a0 = readAmount();
     if (a0.error) { renderForm(); amountIn.focus(); return; }
+    if (C) return submitContract();
     const from = P.account, token = sellToken(), corridor = P.corridor;
     P.busy = true;
     payBtn.disabled = true;
@@ -423,7 +478,13 @@ function payCard(tag, entry) {
     try {
       // the tag could have moved since the page loaded: re-check right before sending, straight from Blockscout
       let now;
-      try { now = ownerOf((await loadNtagStateFresh()).state, tag); } catch { throw plainError(`Couldn't re-check @${tag} on Celo, so nothing was sent. Try again in a moment.`); }
+      // (legacy claims before the cutover only; and a tag someone now holds on the contract is paid there instead)
+      let onContract;
+      try {
+        now = ownerOf(resolveNtags(legacyNtagOps((await loadNtagStateFresh()).ops)), tag);
+        onContract = (await readTagInfo(tag)).owner;
+      } catch { throw plainError(`Couldn't re-check @${tag} on Celo, so nothing was sent. Try again in a moment.`); }
+      if (onContract) throw plainError(`@${tag} is now held on the LokalTags contract, so nothing was sent. Reload the page to pay its holder there.`);
       if (!now || !sameAddr(now.owner, entry.owner)) throw plainError(`@${tag} changed wallets a moment ago, so nothing was sent. Reload the page to see who has it now.`);
       if (sameAddr(from, now.owner)) throw plainError(`This is @${tag}'s own wallet, so nothing was sent. Connect a different wallet.`);
       await loadAllowance({ live: true });
@@ -461,12 +522,99 @@ function payCard(tag, entry) {
     }
   }
 
+  /**
+   * Pays through LokalTags. Before the wallet opens: the tag and its receive currency are re-read from the contract,
+   * the contract's own dry run (validatePayment) explains any refusal, and the exact transaction is simulated from the
+   * payer's wallet. USD₮: one permit signature (EIP-2612) and one payTagWithPermit. cNGN: approve exactly the amount,
+   * then payTag. Both carry the attribution suffix.
+   */
+  async function submitContract() {
+    const from = P.account, token = sellToken(), corridor = P.corridor, payCode = isNaira() ? "usdt" : "cngn";
+    const ref = currencyRef(code() ?? "usdt"); // the payer's choice for this payment: "cur:idrx", ... or "cur:usdt" (dollars)
+    P.busy = true;
+    payBtn.disabled = true;
+    payBtn.textContent = "Checking @" + tag + "…";
+    msg.replaceChildren();
+    const ctx = { tag, token: token.address };
+    try {
+      let info;
+      try { info = await readTagInfo(tag); } catch { throw plainError(`Couldn't re-check @${tag} on Celo, so nothing was sent. Try again in a moment.`); }
+      if (!info.owner || !sameAddr(info.owner, entry.owner)) throw plainError(`@${tag} changed wallets a moment ago, so nothing was sent. Reload the page to see who has it now.`);
+      if (sameAddr(from, info.owner)) throw plainError(`This is @${tag}'s own wallet, so nothing was sent. Connect a different wallet.`);
+      await Promise.all([loadAllowance({ live: true }), refreshRoom()]);
+      const a = readAmount();
+      if (a.error) throw plainError(`${a.error} Nothing was sent.`, { limit: a.limit });
+      if (!P.celoAnyway) {
+        const c = await celoBalance(from);
+        if (c === 0n) {
+          P.busy = false;
+          P.celo = 0n;
+          renderForm();
+          problemBox.querySelector("button")?.focus();
+          return;
+        }
+      }
+      payBtn.textContent = "Check your wallet…";
+      await ensureCelo(eth);
+      P.chainOk = true;
+      const [bal] = await readContract(token.address, "0x70a08231", ["address"], [from], ["uint256"]);
+      if (bal < a.units) throw plainError(`This wallet has ${num2.format(Number(bal) / 1e6)} ${token.symbol}, less than ${fmtSend(a.cents)}. Nothing was sent.`);
+      // the contract's own dry run: every limit, before any signature
+      const chk = await checkPayment({ tag, token: token.address, amount: a.units, payer: from });
+      if (!chk.ok) throw plainError(chk.message, { limit: true });
+      let data;
+      if (payCode === "usdt" && (await permitDomainOk(token.address))) {
+        const nonce = await readNonce(token.address, from);
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60);
+        payBtn.textContent = "Sign in your wallet…";
+        msg.replaceChildren(el("p", { class: "small soft", role: "status" }, `Sign the permit: it lets the LokalTags contract move exactly ${fmtSend(a.cents)} once, within 30 minutes. Signing sends nothing.`));
+        const sig = await eth.request({ method: "eth_signTypedData_v4", params: [from, JSON.stringify(permitTypedData({ owner: from, value: a.units, nonce, deadline }))] });
+        const { v, r, s } = splitSignature(sig);
+        data = payTagWithPermitData({ tag, token: token.address, amount: a.units, ref, deadline, v, r, s });
+      } else {
+        const allowance = await readAllowance(token.address, from, LOKAL_TAGS);
+        if (allowance < a.units) {
+          const approve = approveData(LOKAL_TAGS, a.units);
+          const simA = await simulate({ from, to: token.address, data: approve }, ctx);
+          if (!simA.ok) throw plainError(simA.message);
+          payBtn.textContent = "Approve in your wallet…";
+          msg.replaceChildren(el("p", { class: "small soft", role: "status" }, `Step 1 of 2: approve exactly ${fmtSend(a.cents)} for the LokalTags contract. Then you confirm the payment.`));
+          const ah = await eth.request({ method: "eth_sendTransaction", params: [{ from, to: token.address, value: "0x0", data: approve }] });
+          if (!isHash(ah)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
+          payBtn.textContent = "Waiting for Celo…";
+          msg.replaceChildren(el("p", { class: "small soft", role: "status" }, "Approval sent. Waiting for Celo to confirm it… ", txLink(ah)));
+          const rc = await waitForReceipt(ah, { failMessage: "The approval failed on Celo, so nothing was paid. Only the network fee was spent." });
+          if (!rc) throw plainError("Celo hasn't confirmed the approval yet, so nothing was paid. Try again in a minute.");
+        }
+        data = payTagData({ tag, token: token.address, amount: a.units, ref });
+      }
+      // the exact transaction, simulated from this wallet: a refusal is explained here, before anything is sent
+      const sim = await simulate({ from, to: LOKAL_TAGS, data }, ctx);
+      if (!sim.ok) throw plainError(sim.message);
+      payBtn.textContent = "Confirm in your wallet…";
+      msg.replaceChildren();
+      const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from, to: LOKAL_TAGS, value: "0x0", data }] });
+      if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
+      const pending = { hash, from, corridor, payCode, cents: a.cents, owner: entry.owner, since: entry.since, at: Date.now(), contract: true };
+      try { sessionStorage.setItem(PENDING_KEY(tag), JSON.stringify(pending)); } catch { /* storage blocked: tracking works until the page closes */ }
+      P.busy = false;
+      track(pending, { scroll: true });
+    } catch (e) {
+      P.busy = false;
+      if (!P.alive) return;
+      if (e.limit) renderForm();
+      msg.replaceChildren(alertBox("err", "alert", el("p", {}, errText(e))));
+      renderWallet();
+    }
+  }
+
   // ----- tracking: confirmed on Celo, then the agent's payout to the owner -----
   function track(p, { scroll = false } = {}) {
     let stopped = false, stopSlow = null;
     const stop = () => { stopped = true; stopSlow?.(); };
     onCleanup(stop);
-    const sendText = p.corridor !== "cngn-usdt" ? `${num2.format(p.cents / 100)} USD₮` : `${num2.format(p.cents / 100)} cNGN`;
+    const sendUsdt = p.payCode ? p.payCode === "usdt" : p.corridor !== "cngn-usdt";
+    const sendText = sendUsdt ? `${num2.format(p.cents / 100)} USD₮` : `${num2.format(p.cents / 100)} cNGN`;
     const rows = {};
     const step = (id, t, sub) => {
       const small = el("small", {}, sub ?? "");
@@ -514,7 +662,7 @@ function payCard(tag, entry) {
     (async () => {
       let rc;
       try {
-        rc = await waitForReceipt(p.hash, { tries: 120, failMessage: "The transfer failed on Celo, so nothing was sent to the agent. Only the network fee was spent." });
+        rc = await waitForReceipt(p.hash, { tries: 120, failMessage: p.contract ? "The payment failed on Celo, so nothing reached the agent. Only the network fee was spent." : "The transfer failed on Celo, so nothing was sent to the agent. Only the network fee was spent." });
       } catch (e) {
         stopSlow?.();
         if (stopped) return;
@@ -568,7 +716,7 @@ function payCard(tag, entry) {
             }
             // 2. "received", "failed" or no record: read the chain as before; a payout found there wins
             try {
-              const { deposits } = await loadTagLedger({ tag, owner: p.owner, sinceSec: p.since ?? entry.since, rate: P.rate });
+              const { deposits } = await loadTagLedger({ tag, owner: p.owner, sinceSec: p.since ?? entry.since, rate: P.rate, currency: C ? code() : null });
               if (stopped) return;
               const d = deposits.find((x) => String(x.hash).toLowerCase() === p.hash.toLowerCase());
               if (d?.status === "paid") {
@@ -625,16 +773,18 @@ function payCard(tag, entry) {
     eth.on("chainChanged", onChain);
     onCleanup(() => { eth.removeListener?.("accountsChanged", onAccounts); eth.removeListener?.("chainChanged", onChain); });
   }
-  loadRate().then((r) => { P.rate = r; picker.setAvailability(r.available); }).catch(() => { P.rateFailed = true; })
+  loadRate().then((r) => { P.rate = r; picker?.setAvailability(r.available); }).catch(() => { P.rateFailed = true; })
     .then(() => { if (P.alive) renderForm(); return loadAllowance(); })
     .then(() => { if (P.alive) renderForm(); });
   renderForm();
+  refreshRoom();
   if (eth && !walletDisconnected()) eth.request({ method: "eth_accounts" }).then((accs) => { if (P.alive && accs?.[0] && !P.account) setAccount(accs[0]); }).catch(() => {});
 
   // a payment sent from this tab earlier (page reloaded): keep tracking it
   let pending = null;
   try { pending = JSON.parse(sessionStorage.getItem(PENDING_KEY(tag)) ?? "null"); } catch { pending = null; }
-  if (pending && isHash(pending.hash) && sameAddr(pending.owner, entry.owner) && Date.now() - pending.at < 24 * 3600_000 && /^(usdt-(cngn|idrx|wars|wcop)|cngn-usdt)$/.test(String(pending.corridor))) {
+  if (pending && isHash(pending.hash) && sameAddr(pending.owner, entry.owner) && Date.now() - pending.at < 24 * 3600_000
+    && Boolean(pending.contract) === C && /^(usdt-(cngn|idrx|wars|wcop)|cngn-usdt|forward-(usdt|cngn))$/.test(String(pending.corridor))) {
     setTimeout(() => { if (P.alive) track(pending); }, 0);
   }
   return section;

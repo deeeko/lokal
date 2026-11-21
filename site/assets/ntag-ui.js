@@ -4,8 +4,9 @@
 import {
   el, icon, short, ntagUrl, normalizeNtag, ntagError, ntagAvailability, resolveNtags, ownerOf, loadNtagOps, loadReceipt,
   lagos, AGENT, TOKENS, CAP, EXPLORER_API, getJson, rpc, ntagOpFromItem, decodeNtagPayment, celoscanTx, HAS_API, timeoutSignal,
-  CURRENCIES, currencyOf, formatCurrency, unitsToDecimal,
+  CURRENCIES, currencyOf, formatCurrency, unitsToDecimal, legacyNtagOps,
 } from "./core.js";
+import { LOKAL_TAGS, ZERO_ADDRESS, decodePayTagCall, readAvailability, readTagInfo } from "./lokal-contracts.js";
 import { avatar } from "./session.js";
 import { flagIcon } from "./currency-ui.js";
 
@@ -714,7 +715,7 @@ async function mapLimit(items, n, fn) {
  * Payments to `tag` since the claim (`sinceSec`), each matched to the agent's payout to `owner` (matchTagLedger).
  * Resolves { deposits (newest first), partial }. partial = some deposits couldn't be checked.
  */
-export async function loadTagLedger({ tag, owner, sinceSec, rate, live = false, maxLookups = 60 }) {
+export async function loadTagLedger({ tag, owner, sinceSec, rate, live = false, maxLookups = 60, currency = null }) {
   const sinceMs = sinceSec * 1000;
   const [incoming, toOwner] = await Promise.all([
     transfersTo(AGENT, { sinceMs, pages: 4, live }),
@@ -726,11 +727,19 @@ export async function loadTagLedger({ tag, owner, sinceSec, rate, live = false, 
     const tx = await rpc("eth_getTransactionByHash", [t.hash]);
     if (!tx) return undefined; // not visible yet: look again next time
     const tok = t.token === "USDT" ? TOKENS.USDT.address : t.token === "CNGN" ? TOKENS.cNGN.address : null;
-    const m = tok && sameAddr(tx.to, tok) ? decodeNtagPayment(tx.input) : null;
+    // a payment through LokalTags (payTag / payTagWithPermit) names the tag in its calldata; the older ones in a memo
+    const viaContract = sameAddr(tx.to, LOKAL_TAGS) ? decodePayTagCall(tx.input) : null;
+    const m = viaContract && tok && sameAddr(viaContract.token, tok) && BigInt(viaContract.amount) === BigInt(t.units)
+      ? { tag: viaContract.tag, currency: null, contract: true }
+      : tok && sameAddr(tx.to, tok) ? decodeNtagPayment(tx.input) : null;
     memoCache.set(t.hash, m);
     return m;
   });
-  const deposits = cands.filter((t, i) => memos[i]?.tag === tag).map((t, i) => ({ ...t, payer: t.from, currency: memos[cands.indexOf(t)]?.currency ?? null }));
+  // contract payments pay out in the owner's receive currency (`currency`), memo payments in the memo's
+  const deposits = cands.filter((t, i) => memos[i]?.tag === tag).map((t) => {
+    const m = memos[cands.indexOf(t)];
+    return { ...t, payer: t.from, currency: m?.contract ? currency ?? null : m?.currency ?? null, contract: Boolean(m?.contract) };
+  });
   const payouts = toOwner.items.filter((t) => sameAddr(t.from, AGENT));
   const matched = matchTagLedger({ deposits, payouts, owner, rate });
   const partial = !incoming.complete || incoming.items.length > cands.length || memos.some((m) => m === undefined);
@@ -810,6 +819,26 @@ export async function celoBalance(address) {
   try { return BigInt(await rpc("eth_getBalance", [address, "latest"])); } catch { return null; }
 }
 
+// ---------- who holds a tag: the LokalTags contract first, then the legacy memo claims ----------
+/** A LokalTags tagInfo() answer as the entry pages use: { owner, name, since, currency (local code or null), receive, receiveToken, source }. */
+export function contractEntry(info) {
+  const local = info?.receive && info.receive !== "usdt" ? info.receive : null;
+  return { owner: info.owner, name: info.name || null, since: info.since, currency: local, receive: info.receive ?? null, receiveToken: info.receiveToken ?? null, hash: null, source: "contract" };
+}
+/**
+ * Who holds `tag` and what `me` would get by claiming it. The contract wins: { entry (source "contract" | "legacy"),
+ * kind (the contract's availability for `me`), lock }. A legacy holder (claimed with the memo protocol before the
+ * cutover, and not on the contract) is still shown and paid with the old memo transfer. Throws if Celo can't be read.
+ */
+export async function lookupTag(tag, me = null) {
+  const [info, kind] = await Promise.all([readTagInfo(tag), readAvailability(tag, me || ZERO_ADDRESS)]);
+  if (info.owner) return { entry: contractEntry(info), kind, lock: null };
+  let legacy = null;
+  try { legacy = ownerOf(resolveNtags(legacyNtagOps(await loadNtagOps())), tag); } catch { legacy = null; /* explorer down: the contract's answer stands */ }
+  if (legacy && kind === "free") return { entry: { ...legacy, source: "legacy" }, kind: me && sameAddr(legacy.owner, me) ? "yours" : "taken", lock: null };
+  return { entry: null, kind, lock: info.lockedUntil ? { owner: info.lockedFor, until: info.lockedUntil } : null };
+}
+
 // ---------- find an nTag (landing, tag page) ----------
 /**
  * Live search: type @ada, see who owns it (or that it's free), then "Pay @ada". Returns the element.
@@ -833,17 +862,16 @@ export function ntagFinder(opts = {}) {
     const err = ntagError(t);
     if (err && !/reserved/.test(err)) { out.replaceChildren(el("p", { class: "small muted" }, `${cap(err)}.`)); return; }
     out.replaceChildren(el("p", { class: "small muted", role: "status" }, `Looking up @${t}…`));
-    let state;
-    try { state = resolveNtags(await loadNtagOps()); } catch {
+    let found;
+    try { found = await lookupTag(t, me()); } catch {
       if (my !== seq) return;
       const retry = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, icon("refresh"), "Try again");
       retry.addEventListener("click", run);
-      out.replaceChildren(el("div", { class: "row" }, el("p", { class: "small muted" }, "Couldn't reach the Celo explorer."), retry));
+      out.replaceChildren(el("div", { class: "row" }, el("p", { class: "small muted" }, "Couldn't reach Celo to look it up."), retry));
       return;
     }
     if (my !== seq) return;
-    const entry = ownerOf(state, t);
-    const kind = ntagAvailability(state, t, me());
+    const { entry, kind } = found;
     if (entry) {
       const url = ntagUrl(t);
       best = url;
@@ -856,7 +884,7 @@ export function ntagFinder(opts = {}) {
       out.replaceChildren(hit("none", el("span", { class: "np-avatar" }, icon("lock")), "@" + t, "Reserved. Nobody can claim it.", null));
       return;
     }
-    const m = availabilityMessage(t, kind, { lock: state.locks.get(t) });
+    const m = availabilityMessage(t, kind, { lock: found.lock });
     out.replaceChildren(hit(kind === "free" ? "free" : "none", el("span", { class: "np-avatar" }, icon(kind === "free" ? "check" : "lock")), "@" + t,
       kind === "free" ? "Nobody has this tag yet." : m.text,
       kind === "free" ? el("a", { class: "btn btn-secondary btn-sm", href: `account.html#claim=${t}` }, "Claim it") : null));

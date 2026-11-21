@@ -10,9 +10,9 @@ import { refusal } from "../src/guards.mjs";
 import { encodeNtagTransfer, legacyNtagOps } from "../src/ntags.mjs";
 import { classifyNtagDeposit, watch } from "../src/watch.mjs";
 import {
-  CONTRACT_MIN, POTS_ABI, TAGS_ABI, decodeContractLog, innerTransfer, mergeLogs, routeFor, tokenCode,
+  CONTRACT_MIN, POTS_ABI, TAGS_ABI, currencyOfRef, decodeContractLog, innerTransfer, mergeLogs, routeFor, tokenCode,
 } from "../src/contract-watch.mjs";
-import { decodePotPaid, decodeTagPaid, payoutRoute } from "../site/assets/lokal-contracts.js";
+import { currencyOfRef as siteCurrencyOfRef, currencyRef, decodePotPaid, decodeTagPaid, payoutRoute } from "../site/assets/lokal-contracts.js";
 
 const tagsDeployment = JSON.parse(fs.readFileSync(new URL("../contracts/deployments/LokalTags.json", import.meta.url), "utf8"));
 const potsDeployment = JSON.parse(fs.readFileSync(new URL("../contracts/deployments/LokalPots.json", import.meta.url), "utf8"));
@@ -148,11 +148,35 @@ test("currency route for all five tokens: tags, pots, and the site's payoutRoute
   assert.equal(routeFor(EVE, null, "tag"), null, "unknown token");
   assert.equal(routeFor(USDT, EVE, "tag"), null, "unknown receive token");
   assert.deepEqual([USDT, CNGN, IDRX, WARS, WCOP].map(tokenCode), ["usdt", "cngn", "idrx", "wars", "wcop"]);
-  // every pair, both kinds: the site shows exactly what the agent does
+  // every case, both kinds, with and without a payer's choice: the site shows exactly what the agent does
   const all = [USDT, CNGN, IDRX, WARS, WCOP, EVE];
   for (const paid of all) for (const rt of [null, ZERO, ...all]) for (const kind of ["tag", "pot"]) {
-    assert.deepEqual(payoutRoute(paid, rt, kind), routeFor(paid, rt, kind), `${paid} -> ${rt} (${kind})`);
+    for (const chosen of [null, "usdt", "cngn", "idrx", "wars", "wcop", "eur"]) {
+      assert.deepEqual(payoutRoute(paid, rt, kind, chosen), routeFor(paid, rt, kind, chosen), `${paid} -> ${rt} (${kind}, ${chosen})`);
+    }
   }
+});
+
+test("the payer's choice travels in the ref ('cur:<code>') and wins over the recipient's default, then naira", () => {
+  assert.equal(currencyRef("idrx"), "0x6375723a69647278" + "0".repeat(48));
+  for (const code of ["usdt", "cngn", "idrx", "wars", "wcop"]) {
+    assert.equal(currencyOfRef(currencyRef(code)), code);
+    assert.equal(siteCurrencyOfRef(currencyRef(code)), code);
+  }
+  for (const bad of [h(0), h(1), "0x" + "63".repeat(32), currencyRef("idrx").slice(0, -2) + "01", "0x6375723a657572" + "0".repeat(50), "0x1234"]) {
+    assert.equal(currencyOfRef(bad), null, bad);
+    assert.equal(siteCurrencyOfRef(bad), null, bad);
+  }
+  assert.throws(() => currencyRef("eur"), /unknown currency/);
+  // the choice wins over the default; a pot honours it too
+  assert.deepEqual(routeFor(USDT, IDRX, "tag", "wars"), { mode: "swap", corridor: "usdt-wars", receive: "wars" });
+  assert.deepEqual(routeFor(CNGN, IDRX, "tag", "usdt"), { mode: "swap", corridor: "cngn-usdt", receive: "usdt" });
+  assert.deepEqual(routeFor(USDT, null, "pot", "cngn"), { mode: "swap", corridor: "usdt-cngn", receive: "cngn" });
+  assert.deepEqual(routeFor(USDT, null, "tag", "usdt"), { mode: "forward", receive: "usdt" });
+  assert.equal(routeFor(CNGN, null, "tag", "idrx"), null, "cNGN can only pay out dollars (or cNGN as is)");
+  // no choice: the default, then naira
+  assert.deepEqual(routeFor(USDT, WCOP, "tag", null), { mode: "swap", corridor: "usdt-wcop", receive: "wcop" });
+  assert.deepEqual(routeFor(USDT, null, "tag", null), { mode: "swap", corridor: "usdt-cngn", receive: "cngn" });
 });
 
 test("cutover: legacy ops from the cutover block on are ignored; a memo to a tag held on the contract pays its contract owner", () => {
@@ -194,7 +218,7 @@ function world({ payments = [], deposits = [], regs = [], receive = {}, cursor =
     const amount = p.amount ?? 5_000_000n;
     const raw = p.kind === "pot"
       ? potPaidRaw({ tx, logIndex: 4, block: p.block, potId: p.potId ?? 3n, host: p.recipient ?? HOST, token, amount })
-      : tagPaidRaw({ tx, logIndex: 4, block: p.block, tag: p.tag ?? "ada", recipient: p.recipient ?? ADA, token, amount });
+      : tagPaidRaw({ tx, logIndex: 4, block: p.block, tag: p.tag ?? "ada", recipient: p.recipient ?? ADA, token, amount, ref: p.ref ?? h(0) });
     contractLogs.push(decoded(raw));
     const to = p.inner === false ? EVE : AGENT_ADDRESS;
     const inner = transferRaw({ token, from: PAYER, to, value: amount, logIndex: 3 });
@@ -326,6 +350,22 @@ test("the receive token decides the currency: rupiah via usdt-idrx; a pot with n
   );
   assert.equal(w.mem.contract[evKey(2)].dir, "forward-usdt");
   assert.ok(w.mem.contract[evKey(2)].paidAt);
+});
+
+test("the payer's choice in the ref beats the owner's default; an impossible choice is refused, never paid in another currency", async () => {
+  const w = world({
+    payments: [
+      { n: 1, block: B0 + 10, kind: "tag", amount: 6_000_000n, ref: currencyRef("wars") },
+      { n: 2, block: B0 + 11, kind: "tag", token: CNGN, amount: 14_410_000_000n, ref: currencyRef("usdt") },
+      { n: 3, block: B0 + 12, kind: "tag", token: CNGN, amount: 14_410_000_000n, ref: currencyRef("idrx") },
+    ],
+    receive: { [ADA]: IDRX },
+  });
+  await run(w);
+  assert.deepEqual(w.calls.map((c) => c.corridor), ["usdt-wars", "cngn-usdt"]);
+  assert.equal(w.mem.contract[evKey(1)].chosen, "wars");
+  assert.equal(w.mem.contract[evKey(3)].status, "refused");
+  assert.match(w.mem.contract[evKey(3)].reason, /token not accepted/);
 });
 
 test("the agent's own caps still apply: a refusal is recorded like any other and a rescan never pays it", async () => {

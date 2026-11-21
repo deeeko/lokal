@@ -5,7 +5,8 @@
 // So by the time autopilot sees TagPaid, the money is in the agent wallet and the event names who to pay:
 //   TagPaid(tagHash, tag, recipient, payer, token, amount, ref, dayIndex)   -> pay `recipient` (the tag's holder then)
 //   PotPaid(potId, host, payer, token, amount, ref, totalSoFar, amountUsd6) -> pay the pot's `host`
-// in the currency the recipient asked for on the contract (receiveTokenOf at the payment's block; see routeFor).
+// in the currency the PAYER chose for this payment (the event's `ref`, "cur:<code>"), else the recipient's optional
+// default on the contract (receiveTokenOf at the payment's block), else naira (see routeFor).
 //
 // The same safety path as every other payout: pre-flight (recipient rules, the agent's own caps, a live preview),
 // the deposit recorded BEFORE paying (contract-payments.json, keyed by the event's tx:logIndex, so it is paid exactly
@@ -53,21 +54,41 @@ export function tokenCode(addr) {
   return CURRENCIES.find((c) => lc(c.address) === lc(addr))?.code ?? null;
 }
 
+/** What a payer can choose in the ref: dollars or any local currency. */
+export const REF_CODES = ["usdt", ...CURRENCIES.map((c) => c.code)];
 /**
- * What a contract payment pays out in. The recipient's receive token (set on LokalTags with setReceiveToken) decides;
- * the payer can't choose. With none set: a TAG pays USD₮ payments in naira (DEFAULT_CURRENCY, as since the memo days)
- * and cNGN payments in dollars, and passes any other token through; a POT pays dollars. A payment already in the token
- * the recipient receives is passed through as is.
- * Returns { mode: "swap", corridor, receive } | { mode: "forward", receive } | null (refused: no route).
- * Same rule as payoutRoute in site/assets/lokal-contracts.js (a test checks every pair).
+ * The payer's per-payment currency choice from a TagPaid / PotPaid `ref`: the ASCII text "cur:<code>" left-aligned
+ * and zero-padded to 32 bytes ("cur:idrx" -> rupiah, "cur:usdt" -> dollars). Anything else is the payer's own opaque
+ * reference and chooses nothing: null. Same encoding as currencyRef / currencyOfRef in site/assets/lokal-contracts.js.
  */
-export function routeFor(paidToken, receiveToken, kind = "tag") {
+export function currencyOfRef(ref) {
+  const h = lc(ref).replace(/^0x/, "");
+  if (!/^[0-9a-f]{64}$/.test(h)) return null;
+  const bytes = Buffer.from(h, "hex");
+  const end = bytes.indexOf(0) === -1 ? 32 : bytes.indexOf(0);
+  if (bytes.subarray(end).some((b) => b !== 0)) return null;
+  const text = bytes.subarray(0, end).toString("latin1");
+  if (!text.startsWith("cur:")) return null;
+  const code = text.slice(4);
+  return REF_CODES.includes(code) ? code : null;
+}
+
+/**
+ * What a contract payment pays out in. The PAYER's choice for this payment (`chosen`, from the ref) wins; then the
+ * recipient's optional default (their receive token on LokalTags, set with setReceiveToken); then: a TAG pays USD₮
+ * payments in naira (DEFAULT_CURRENCY, as since the memo days) and cNGN payments in dollars and passes any other token
+ * through; a POT pays dollars. A payment already in the token the recipient gets is passed through as is.
+ * Returns { mode: "swap", corridor, receive } | { mode: "forward", receive } | null (refused: no route).
+ * Same rule as payoutRoute in site/assets/lokal-contracts.js (a test checks every case).
+ */
+export function routeFor(paidToken, receiveToken, kind = "tag", chosen = null) {
   const paid = tokenCode(paidToken);
   if (!paid) return null;
+  if (chosen != null && !REF_CODES.includes(chosen)) return null;
   const isSet = receiveToken != null && lc(receiveToken) !== ZERO;
   const set = isSet ? tokenCode(receiveToken) : null;
-  if (isSet && !set) return null;
-  const want = set ?? (kind === "pot" ? "usdt" : paid === "usdt" ? DEFAULT_CURRENCY : paid === "cngn" ? "usdt" : paid);
+  if (chosen == null && isSet && !set) return null;
+  const want = chosen ?? set ?? (kind === "pot" ? "usdt" : paid === "usdt" ? DEFAULT_CURRENCY : paid === "cngn" ? "usdt" : paid);
   if (paid === want) return { mode: "forward", receive: want };
   if (paid === "usdt" && CORRIDORS[corridorFor(want)]) return { mode: "swap", corridor: corridorFor(want), receive: want };
   if (paid === "cngn" && want === "usdt") return { mode: "swap", corridor: "cngn-usdt", receive: "usdt" };
@@ -302,14 +323,15 @@ export function makeContractWatch({
     const tag = ev.kind === "tag" ? ev.tag : (await io.readTagOfAt(pub, ev.recipient, ev.block)).value || null;
     const rt = await io.readReceiveToken(pub, ev.recipient, ev.block);
     const receiveToken = rt.value && lc(rt.value) !== ZERO ? getAddress(rt.value) : null;
-    const route = routeFor(ev.token, receiveToken, ev.kind);
+    const chosen = currencyOfRef(ev.ref); // the payer's choice for this payment wins over the recipient's default
+    const route = routeFor(ev.token, receiveToken, ev.kind, chosen);
     const name = ev.kind === "tag" ? `@${tag}` : `pot #${ev.potId}${tag ? ` (@${tag})` : ""}`;
     const rec = (from) => ({
-      ...base, tag, name, from, owner: from, receiveToken, ...(rt.latest ? { receiveTokenReadAt: "latest" } : {}),
+      ...base, tag, name, from, owner: from, receiveToken, ...(chosen ? { chosen } : {}), ...(rt.latest ? { receiveTokenReadAt: "latest" } : {}),
       dir: route ? (route.mode === "swap" ? route.corridor : `forward-${sym.toLowerCase()}`) : null, ...(route ? { receive: route.receive } : {}),
     });
     if (!route) {
-      const wants = receiveToken ? tokenByAddress(receiveToken)?.symbol ?? receiveToken : "the default";
+      const wants = chosen ? (chosen === "usdt" ? "USDT" : chosen.toUpperCase()) : receiveToken ? tokenByAddress(receiveToken)?.symbol ?? receiveToken : "the default";
       return refuse(ev, `token not accepted: ${sym} can't be paid out as ${wants} (no corridor)`, rec(ev.recipient), where);
     }
     let args;
