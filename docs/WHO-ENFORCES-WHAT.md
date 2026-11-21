@@ -13,9 +13,11 @@ the independent audit's attack scenarios in `tests/Attack.spec.ts`) and by `npm 
 and asserts every outcome.
 
 > **Status.** `LokalTags` ([`0xFF2f8ADC0c97B6E40b201848d378C11325bC7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187)) and `LokalPots` ([`0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF`](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF)) are live on Celo
-> mainnet and source-verified. Until the site and the agent switch to them (see the README), tags are still claimed with
-> `NT1:` transactions and paid with `NTP:` transfer memos, and every rule below marked "contract" is enforced by the
-> agent and the site instead, after the money has arrived.
+> mainnet and source-verified. **The site, the `lokal` command and autopilot have switched to them** (built and
+> tested, not yet used on mainnet): tags are claimed, renamed and released on LokalTags, payments go through `payTag` /
+> `payTagWithPermit`, and autopilot pays the `TagPaid` / `PotPaid` events. From the cutover block (83,405,000) legacy
+> `NT1:` claims are ignored; `NTP:` memo payments to tags claimed the old way before it are still paid, under the
+> agent's offchain rules. The payer's currency choice travels in the payment's `ref` (`cur:<code>`).
 
 ## Enforced by LokalTags (onchain, before any money moves)
 
@@ -88,7 +90,15 @@ contracts, such a payment never happens: the payer's wallet shows the revert rea
 payments are ordinary contract calls, wallets no longer show "data sent to a plain address" or "unusual trailing
 calldata" warnings.
 
-## The contract's caps are final (agent change, next phase)
+## The contract's caps are the outer bound (as built)
+
+**Decision, as built (21 Nov 2026):** the agent's own caps **still apply** to contract payments. Since refunds shipped,
+a contract payment the agent refuses is no longer stuck: it is recorded as refused and refundable to the payer the
+event names (`refund --deposit <inner Transfer>`, or `--auto-refund`). So the contract is the outer bound and the agent
+may be stricter (per payout, per wallet per 24 hours, the rolling daily total, slippage). The earlier plan below is
+kept for the record.
+
+### Earlier plan (superseded)
 
 For deposits that arrive through `LokalTags` or `LokalPots` (a `TagPaid` or `PotPaid` event), **the agent must treat
 the contract's caps as final**. It must not apply any extra offchain daily cap (per wallet, per payer, or its rolling
@@ -187,4 +197,5 @@ These are by design or low impact. Each has a test that pins today's behaviour.
 - Exchange rates. Limits are per token, in that token's units; pot rates are admin-set numbers.
 - Whether the agent actually paid out. That is in the agent's receipts and the payout transactions from its wallet.
 - Anything about the old `NT1:` / `NTP:` history. Tags claimed under the old protocol need to be claimed again on the
-  contract; there is no admin import, on purpose.
+  contract; there is no admin import, on purpose. Until then the agent keeps paying `NTP:` memo payments to them, and
+  when a name is held in both places the contract's holder wins (see "Lokal tag rules" in the README).

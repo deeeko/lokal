@@ -17,10 +17,10 @@ safety path. All four are built and tested; none has had a real mainnet payout y
 > - **Live:** the LokalTags and LokalPots contracts are deployed and verified on mainnet (see
 >   [The contract has the final say](#the-contract-has-the-final-say)). No real user payout yet.
 > - **Built, not yet used on mainnet:** payouts in naira, rupiah and pesos (plus naira → dollars), the currency
->   picker, Lokal tags, payment links, Get paid, autopilot, the `lokal` command, receipts and reviews, and the
+>   picker, Lokal tags, **paying and claiming through the contracts** (site, `lokal` command and autopilot), payment
+>   links, Get paid, autopilot, refunds, the `lokal` command, receipts and reviews, and the
 >   [cash-out guide](https://lokalpay.vercel.app/cash-out.html).
-> - **Planned:** paying through the contracts from the site, Pots on the site, the "Who am I paying?" card, Pay with
->   CELO for payers, MiniPay mode.
+> - **Planned:** Pots on the site, the "Who am I paying?" card, Pay with CELO for payers, MiniPay mode.
 
 **[Live app](https://lokalpay.vercel.app)** ·
 **[Agent on Celoscan](https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e)** ·
@@ -118,9 +118,14 @@ USD₮. The payer picks the currency; all four are built, not yet used on mainne
   agent (by hand or on autopilot) in cNGN, plus the reverse corridor that pays USD₮. The flow is built and tested against
   live Textile quotes; the first real mainnet payout to a user is still pending and will be linked here with its
   transactions. No payout in IDRX, wARS or wCOP has been made yet.
-- **How the currency is chosen.** On the site and in the `lokal` command the payer picks it ("They receive"). A Lokal
-  tag payment carries it in its memo, `NTP:<tag>:<code>` (`idrx`, `wars`, `wcop`; plain `NTP:<tag>` still means
-  naira, so existing payers keep working), and a tag owner can set a preferred currency that pay pages pre-select.
+- **How the currency is chosen.** The **payer** picks it on every payment ("What does @ada receive?"), on the site and
+  in the `lokal` command; nobody has to choose a currency to sign up. The default is the recipient's optional
+  preference, else naira. A payment through LokalTags carries the choice in `payTag`'s `bytes32 ref`: the ASCII text
+  `cur:<code>` (`cngn`, `idrx`, `wars`, `wcop`, or `usdt` for dollars), left-aligned and zero-padded, so rupiah is
+  `0x6375723a69647278` followed by 24 zero bytes. The agent reads it from the `TagPaid` event; a ref that isn't a
+  currency (any other payer reference) chooses nothing, and the agent falls back to the recipient's default
+  (`receiveTokenOf`, set on Account with `setReceiveToken`), then naira for USD₮ and dollars for cNGN. A legacy memo
+  payment carries it as `NTP:<tag>:<code>` (plain `NTP:<tag>` still means naira, so existing payers keep working).
   Payment links and Get paid fix the currency in the link. Every amount uses the token's own decimals (IDRX 2, cNGN 6,
   wARS and wCOP 18) and is shown rounded down. If a currency has no Textile quote when the payment is handled, the
   payment is refused (`currency_unavailable`) and never paid in another currency.
@@ -157,31 +162,44 @@ A Lokal tag is a handle like `@ada` tied to one Celo wallet. People pay the tag;
    On Vercel the signature is checked by `POST /api/session` (see [Safety](#safety-and-limits-enforced-in-code)).
 2. **Your name.** The setup guide (Sign in → Your name → Claim your Lokal tag → Done) asks for an optional display name
    (1–40 characters).
-3. **Claim your @tag.** Type a tag; availability is checked live as you type (free, yours, taken, reserved, locked or
-   invalid, with the exact rule broken), with suggestions when it is taken and a live preview of your tag card. You
-   confirm that tags and names are **public and permanent**, then send one zero-value transaction from your wallet to
-   the agent. Its input is `hex("NT1:" + JSON)` plus the attribution tag, for example `{"t":"ada","n":"Ada Obi"}`.
-   The page waits for the explorer to index it and confirms the tag is yours (or explains if someone claimed it a
-   moment earlier).
+3. **Claim your @tag.** Type a tag; the **LokalTags contract** answers as you type (`availability`: free, yours,
+   taken, reserved, locked or invalid, with the exact rule broken), with suggestions when it is taken and a live
+   preview of your tag card. You confirm that tags and names are **public and permanent**, the page simulates the call
+   (`eth_call`) so any refusal is explained before your wallet opens, then your wallet sends one call to LokalTags:
+   `claim("ada", "Ada Obi")` plus the attribution suffix. The page reads the tag back from the contract over RPC, so
+   there is no waiting for an explorer: if someone claimed it a moment earlier, the contract refuses yours and the
+   page says so.
 4. **Share** `https://lokalpay.vercel.app/@ada` (on the GitHub Pages mirror: `tag.html#ada`), with a QR code and a
    WhatsApp button. The account page also shows your wallet balances (USD₮, the local stablecoin, CELO; today cNGN) and the payments to your tag
-   with receipt links. You can change your tag or release it (`{"t":""}`) from the same page.
+   with receipt links (paid, refused, or **Refunded · RF-XXXX-XXXX**). From the same page you can rename the tag
+   (`setName`, or clear the name), set an optional **default currency** (`setReceiveToken`: what your pay page
+   pre-selects; payers can still choose), switch to another tag (`claim` releases the old one) or release it
+   (`release`). Each is one contract call from your own wallet, simulated first.
 
-**Paying a tag** (`tag.html`, or `/@ada` on Vercel): the public tag page shows the owner's name, short address and
-"since" date. The payer picks what the owner receives: **naira, rupiah, Argentine peso or Colombian peso** (send
-USD₮), or **dollars** (send cNGN). The owner's preferred currency, if set, is pre-selected. They type an amount
-(a live estimate is shown, plus how much more the owner can receive today), connect a wallet and confirm. The page
-checks the balance and that the payer is not the owner, then sends **one** ordinary ERC-20 transfer to the token
-contract:
+**Paying a tag** (`tag.html`, or `/@ada` on Vercel): the public tag page reads the holder, name, "since" date and
+default currency from LokalTags over RPC. The payer picks what the owner receives on this payment: **naira, rupiah,
+Argentine peso or Colombian peso** (send USD₮), or **dollars** (send cNGN); the owner's default, if set, is
+pre-selected. They type an amount and see a live estimate, how much more the owner can receive from the agent today,
+and the **contract's room today** (`remainingToday`: per recipient, per payer and overall, capped at the per-payment
+maximum). Before the wallet opens the page re-reads the tag, runs the contract's own dry run
+(`validatePayment`) and simulates the exact call from the payer's wallet, so a refusal (`OverPaymentLimit`,
+`OverRecipientDailyLimit`, `OverPayerDailyLimit`, `SelfPayment`, `TagNotFound`, `Paused`, ...) is shown in plain
+English and nothing is sent. Then:
 
 ```
-transfer(agent, amount)  +  hex("NTP:" + tag)  +  attribution suffix
+USD₮:  sign one EIP-2612 permit (exactly the amount, 30 minutes)  ->  payTagWithPermit(tag, USD₮, amount, ref, agent, deadline, v, r, s)
+cNGN:  approve(LokalTags, exactly the amount)                     ->  payTag(tag, cNGN, amount, ref, agent)
+       ref = "cur:<code>" (what the owner receives), agent = the payout wallet the payer pins; + attribution suffix
 ```
 
-The extra bytes after the standard 68 bytes of calldata are the **NTP memo**. Token contracts ignore them; the agent
-reads them to know who the payment is for. After sending, the page tracks the payment live: confirmed on Celo, then
-the agent's payout to the owner, ending in **"Paid · NP-XXXX-XXXX"** with a receipt link. Tracking survives a page
-reload.
+The contract checks every limit and moves the tokens from the payer straight to the agent in the same transaction;
+wallets see a normal contract call instead of the memo transfer that triggered MetaMask's red warnings. After sending,
+the page tracks the payment live: confirmed on Celo, then the agent's payout to the owner, ending in **"Paid ·
+NP-XXXX-XXXX"** with a receipt link (or, if the agent refuses it, "Not paid: <reason>. Your money is safe with the
+agent and can be sent back to the wallet you paid from", and later **"Refunded · RF-XXXX-XXXX"**). Tracking survives a
+page reload. A tag claimed with the older memo protocol before the cutover (and not held on the contract) is still
+paid the old way: one ERC-20 transfer to the agent with `hex("NTP:" + tag)` after the standard 68 bytes, plus the
+attribution suffix (see [Lokal tag rules](#lokal-tag-rules)).
 
 ### Payment links ("Get paid")
 
@@ -564,6 +582,33 @@ Rules that hold for all three:
 Operator requests add a random 0.01–0.99 to the amount so it is unique among open requests (and still within the
 per-payment cap), and avoid the amounts of active "Get paid" links.
 
+### Payments through the contracts (`TagPaid`, `PotPaid`)
+
+Inside one `payTag` / `payTagWithPermit` / `payPot` the contract checks every limit, moves the tokens from the payer
+straight to its payout wallet (the agent) with **one `transferFrom`**, and only then emits the event. So when autopilot
+sees `TagPaid(tagHash, tag, recipient, payer, token, amount, ref, dayIndex)` or `PotPaid(potId, host, payer, token,
+amount, ref, ...)`, the money is already in the agent wallet and the event names who to pay (`src/contract-watch.mjs`):
+
+1. **Discovery.** Plain `eth_getLogs` on LokalTags and LokalPots over the same block range, cursor and indexed head as
+   the deposits (no Blockscout needed), handled in chain order with them.
+2. **The money arrived.** The transaction's receipt must hold the inner Transfer of exactly `amount` of `token` from
+   the payer to this agent, just before the event. That Transfer *is* the payment: it is removed from the deposit path,
+   so it can never be matched to a payment request or "Get paid" link by amount, or logged as unmatched. If the money
+   went to another payout wallet, the event is recorded as refused and nothing is paid.
+3. **What they get.** The payer's choice in `ref` (`cur:<code>`), else the recipient's default (`receiveTokenOf` at
+   the payment's block), else naira for USD₮ and dollars for cNGN; a pot with no choice pays dollars. USD₮ converts on
+   `usdt-<code>`, cNGN on `cngn-usdt`; a payment already in the token they get is passed on as is (`src/forward.mjs`:
+   same recipient rules and caps, exact amount, attribution tag, logged to `receipts.jsonl`). Any other pair (cNGN to
+   rupiah, say) is refused, never paid in another currency.
+4. **The same safety path.** Pre-flight (recipient rules, the agent's own caps, a live preview), the payment recorded
+   in `contract-payments.json` **before** paying, exactly once per event (`tx:logIndex` of the event), then `pay()`:
+   firm quote, exact approval, measured payout, attribution tag. The contract's limits are an outer bound: the agent's
+   own caps still apply, and a refusal is recorded like any other (a rescan never pays it).
+5. **Refunds.** A refused contract payment is a refundable deposit, keyed by its inner Transfer
+   (`refund --deposit <tx>:<logIndex of the Transfer>`), so it goes back to the payer the event names, never to the
+   contract. `--auto-refund` does it right away; a deposit with a refund record is never paid. It all runs inside
+   `watch --execute`, under the same agent lock.
+
 ---
 
 ### Status server (exact payout status on the site)
@@ -723,7 +768,7 @@ and the agent converts it on Textile FX and pays the recipient. A new payout wal
 takes effect; the admin (a separate wallet from the agent) can pause everything with one switch.
 
 [![contracts](https://github.com/deeeko/lokal/actions/workflows/contracts.yml/badge.svg)](https://github.com/deeeko/lokal/actions/workflows/contracts.yml)
-Solidity 0.8.30 · OpenZeppelin 5.6.1 · Hardhat + TypeScript · 127 tests, including the independent audit's attack
+Solidity 0.8.30 · OpenZeppelin 5.6.1 · Hardhat + TypeScript · 130 tests (3 of them send the site's own calldata), including the independent audit's attack
 scenarios and a parity test that checks the contract against the site's live rules on thousands of random names.
 
 **One command, the whole story.** `cd contracts && npm ci && npm run demo` deploys both contracts on a local chain and
@@ -768,7 +813,7 @@ the site enforces it.
 
 | | |
 |---|---|
-| Status | **Live on Celo mainnet since 21 Nov 2026.** Deployed by the agent with the ERC-8021 tag ([LokalTags tx](https://celoscan.io/tx/0x4d4aa9adba3417e9a7017a4c2e45b4cafe2380702e75f6f9350af7ac58af858e), [LokalPots tx](https://celoscan.io/tx/0x8e56d2a9e391a54589ab9e72d683d8307355c5f8b8fb2dd697bab62b65c3ebd9)). The site and the agent switch to the contracts next; until then tags still work through `NT1:` / `NTP:` transactions and the agent enforces these limits. |
+| Status | **Live on Celo mainnet since 21 Nov 2026.** Deployed by the agent with the ERC-8021 tag ([LokalTags tx](https://celoscan.io/tx/0x4d4aa9adba3417e9a7017a4c2e45b4cafe2380702e75f6f9350af7ac58af858e), [LokalPots tx](https://celoscan.io/tx/0x8e56d2a9e391a54589ab9e72d683d8307355c5f8b8fb2dd697bab62b65c3ebd9)). **Site and CLI switched** (built, not yet used on mainnet): Account claims, renames, sets the default currency and releases on LokalTags; tag pages and `lokal send` pay with `payTagWithPermit` / `payTag`; autopilot pays `TagPaid` and `PotPaid`. New claims go to the contract only from block 83,405,000; older `NTP:` memo payments keep being paid (see [Lokal tag rules](#lokal-tag-rules)). |
 | LokalTags | [`0xFF2f8ADC0c97B6E40b201848d378C11325bC7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) · [Blockscout](https://celo.blockscout.com/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187?tab=contract) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) |
 | LokalPots | [`0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF`](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) · [Blockscout](https://celo.blockscout.com/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF?tab=contract) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) |
 | ABIs and addresses | [`contracts/deployments/`](contracts/deployments/) (`LokalTags.json`, `LokalPots.json`, constructor arguments, deploy record) |
@@ -825,16 +870,35 @@ Autopilot never uses it.
 
 | Rule | Detail |
 |---|---|
-| Format | 3–20 characters: lowercase letters, numbers and `_`, starting with a letter (`^[a-z][a-z0-9_]{2,19}$`), no `__`, not ending in `_`. The onchain JSON must already be lowercase; the site and CLI normalise input (trim, strip one `@`, lowercase). |
-| Display name | optional, 1–40 characters, no control characters, no invisible or text-direction characters (zero-width spaces and joiners, bidi marks, overrides and isolates) |
+| Where | on the **LokalTags contract** ([`0xFF2f…7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187)): `claim`, `setName`, `setReceiveToken`, `release`, read with `tagInfo` / `tagOf` / `availability`. The contract enforces every rule below. |
+| Format | 3–20 characters: lowercase letters, numbers and `_`, starting with a letter (`^[a-z][a-z0-9_]{2,19}$`), no `__`, not ending in `_`. The site and CLI normalise input (trim, strip one `@`, lowercase). |
+| Display name | optional, 1–40 characters, no control characters, no invisible or text-direction characters (zero-width spaces and joiners, bidi marks, overrides and isolates); `setName("")` removes it |
+| Default currency | optional (`setReceiveToken`): what the pay page pre-selects and what the agent pays when a payment names no currency. Payers choose per payment (`ref` = `cur:<code>`). |
 | Reserved (63) | agent, admin, administrator, root, system, support, help, official, team, staff, mod, moderator, security, celo, minipay, valora, opera, textile, naira, nairapayout, payout, payouts, ntag, ntags, lokal, lokalpay, cngn, usdt, usdc, tether, cusd, ceur, wallet, bank, cbn, null, undefined, anonymous, everyone, me, you, test, demo, api, www, app, pay, send, receive, and the lookalikes lokal_support, lokalsupport, lokal_help, lokal_team, lokal_official, lokalofficial, support_team, help_desk, helpdesk, admin1, celo_team, celoteam, minipay_support, textile_fx |
 | One tag per wallet | claiming another tag releases the old one |
 | Release lock | a released tag stays locked for its previous owner's reclaim only, for **30 days** |
-| Ordering | claims are applied in (block, position) order; the first valid claim wins; later claims for a held tag are "taken" |
-| Ignored | failed transactions, non-zero value, extra or non-string fields, claims sent by the agent itself |
+| Ordering | the contract applies claims in transaction order; a claim for a held tag reverts (`TagTaken`) and changes nothing |
 | Public | tags, names and claim history are onchain, public and permanent |
 
-**Same code on both sides.** The resolver block between the `port` markers in `site/assets/core.js` is copied
+**The cutover from the memo protocol (block 83,405,000, about 22 Nov 2026 00:00 UTC).** Before the contracts, tags
+were claimed with zero-value `NT1:` transactions to the agent and paid with `NTP:` memo transfers. On 21 Nov 2026 the
+agent's full history had **1** legacy claim (`@deekamix`, block 83,355,505) and **0** `NTP:` memo payments (read from
+Blockscout's public API with the agent's own discovery code; no contract claim or payment yet either). From the
+cutover block:
+
+- **New claims go to the contract only.** An `NT1:` claim, rename or release mined in that block or later changes
+  nothing (the site, the CLI and autopilot all ignore it); only legacy ops before it count.
+- **Legacy memo payments keep being paid.** An `NTP:` payment to a tag held only the legacy way still pays its legacy
+  holder, exactly as before, so nobody's money gets stuck. The site and CLI still offer that old transfer for such a
+  tag, labelled as an older memo tag; its holder can claim the same name on the contract from Account.
+- **A name held in both places: the contract owner wins.** New payments go through the contract to its holder, an
+  `NTP:` memo payment from the cutover on pays the contract's holder at that block, and the site shows the contract's
+  holder.
+- **Frozen formats.** `NT1:`, `NTP:`, `NP1:`, `NP-` receipts and the sign-in text are unchanged.
+
+The cutover block is `LEGACY_CUTOVER_BLOCK` in `src/config.mjs` and `site/assets/core.js` (a test keeps them equal).
+
+**Legacy claims: same code on both sides.** The resolver block between the `port` markers in `site/assets/core.js` is copied
 byte-for-byte into `src/ntags.mjs`, and `test/ntags.test.mjs` checks the copies are identical and give identical results
 on a shared fixture set. The site and the agent therefore always agree on who owns a tag at any moment. For a deposit,
 the agent resolves the tag strictly **before** the deposit (`resolveNtagsBefore(ops, block, position)`).
@@ -1027,7 +1091,7 @@ control (no funds moved) is sent only if Textile asks for it.
 ### Tests
 
 ```powershell
-npm test                          # 258 tests, all passing
+npm test                          # 288 tests, all passing
 node scripts/check-site.mjs       # static site check
 ```
 
@@ -1056,12 +1120,39 @@ node scripts/check-site.mjs       # static site check
 | `test/alerts.test.mjs` | 12 | alerts: channels, muting, outbox, failing and hanging channels, no secrets; low-gas throttling, the stop line, heartbeats, status-down warning, the watchdog |
 | `test/status-refund-heartbeat.test.mjs` | 7 | "refunded" events, every merge pair, RF- numbers, the heartbeat end to end (store, throttle, replay, `?agent=1`), reporter signing and health |
 | `test/doctor.test.mjs` | 2 | `doctor` with fakes: all PASS, and every WARN / FAIL |
+| `test/contract-watch.test.mjs` | 17 | payments through the contracts: `TagPaid` / `PotPaid` decoding (agent and site agree), the inner Transfer never handled as a deposit, the currency route for all five tokens and the payer's `cur:<code>` ref, paid / refused / exactly once / pre-flight stop / payout error / dry run, the cutover, refunds to the payer |
+| `test/contracts-site.test.mjs` | 8 | the site's contract module: every selector, topic and error id against the verified ABI, calldata builders with the attribution suffix, the USD₮ permit, reverts in plain English, reads with a mocked RPC |
+| `test/refunded-site.test.mjs` | 3 | "Refunded · RF-XXXX-XXXX" on the site: rank, final status, the refused note |
+| `test/ntag-cli-contract.test.mjs` | 2 | the `lokal` CLI on LokalTags: reading a tag, a refusal explained before signing |
 
 ---
 
 ## Progress log
 
 Newest first.
+
+### 2026-11-21: tags and payments through the contracts
+
+The site, the `lokal` command and autopilot now use the live LokalTags and LokalPots contracts (built and tested, not
+yet used on mainnet):
+
+- **Account** claims, renames, sets the optional default currency and releases a tag with `claim`, `setName`,
+  `setReceiveToken` and `release`, each simulated first and read back from the contract over RPC (no explorer wait).
+- **Tag pages** read holders from the contract and pay with one `payTagWithPermit` signature for USD₮ or approve +
+  `payTag` for cNGN, after showing the contract's room today and explaining any refusal (`OverRecipientDailyLimit`,
+  `SelfPayment`, `Paused`, ...) before the wallet opens. Wallets see a contract call, not a memo transfer.
+- **The payer still chooses the currency** on every payment: it travels in `payTag`'s `ref` as `cur:<code>`, and the
+  agent falls back to the recipient's default, then naira.
+- **Autopilot** reads `TagPaid` and `PotPaid` with `eth_getLogs`, pays through the same safety path exactly once per
+  event, drops the payment's inner Transfer from the deposit path (a test proves it is never matched to a link), and
+  makes refused contract payments refundable to the payer.
+- **`lokal claim / send / whois / release`** use the contracts, with the same prompts, encrypted wallet and `--dry-run`.
+- **Cutover**: legacy claims from block 83,405,000 on are ignored; legacy memo payments keep being paid; the contract
+  owner wins a name held in both places. Counted on mainnet first: 1 legacy claim, 0 memo payments.
+- **Refunds on the site**: "Refunded · RF-XXXX-XXXX" with the refund transaction, on pay, tag and account pages.
+- Tests: 288 root tests (new: contract events, the payer's currency in the ref, revert decoding, the attribution
+  suffix, refunds of contract payments, refunded statuses) and 130 contract tests, including a Hardhat test that sends
+  the site's own calldata to the real contracts.
 
 ### 2026-11-21: refunds, autopilot lock and alerts
 
@@ -1250,7 +1341,7 @@ their own wallet in seconds.
 
 **Done**
 
-- [x] Agent on Celo mainnet, 197 tests passing
+- [x] Agent on Celo mainnet, 288 tests passing (plus 130 contract tests)
 - [x] Live Textile price previews for all three corridors
 - [x] ERC-8004 identity registered (agentId 10079)
 - [x] Payment links, Get paid, autopilot, two stablecoin corridors plus CELO, receipts and onchain reviews
@@ -1261,6 +1352,7 @@ their own wallet in seconds.
 - [x] Renamed to Lokal, at lokalpay.vercel.app (naira-payout.vercel.app keeps working)
 - [x] Live Textile FX quotes checked for rupiah (IDRX) and pesos (wARS, wCOP), see [Currencies](#currencies)
 - [x] LokalTags and LokalPots contracts deployed on Celo mainnet and source-verified; admin held by a separate wallet
+- [x] Site, `lokal` command and autopilot switched to the contracts (built and tested, not yet used on mainnet)
 
 **Still to do** (added here only once they have happened)
 
@@ -1271,8 +1363,7 @@ The operator steps for these are in [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 **Next**
 
-- **Pay through the contracts.** Switch the site and the `lokal` command to the live LokalTags and LokalPots contracts,
-  so limits are checked before money moves and wallets see a normal contract call.
+- **Pots on the site.** LokalPots is live and autopilot already pays `PotPaid`; the pages to open and pay a pot come next.
 - **Dollar subscriptions paid in local money.** Local cards are often declined or capped for dollar subscriptions (X
   Premium, ChatGPT, Canva, app stores). The naira → dollar corridor already converts cNGN to USD₮ on Textile FX; pairing
   it with a stablecoin-funded virtual card or gift-card partner lets people pay those subscriptions in naira, and in
