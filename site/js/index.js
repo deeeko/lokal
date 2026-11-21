@@ -1,4 +1,5 @@
-import { AGENT, AGENT_ID, CAP, $, el, badge, icon, naira, short, lagosTime, lagosClock, celoscanTx, celoscanAddr, loadRate, loadIdentity, loadTxPage, receiptNo, isTagged, txKind, txLabel, initChrome, parseMoneyInput, ageText, $$ } from "../assets/core.js";
+import { AGENT, AGENT_ID, CAP, $, el, badge, icon, short, lagosTime, lagosClock, celoscanTx, celoscanAddr, loadRate, loadIdentity, loadTxPage, receiptNo, isTagged, txKind, txLabel, initChrome, parseMoneyInput, ageText, $$, currencyOf, formatCurrency } from "../assets/core.js";
+import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 
 initChrome();
 
@@ -8,12 +9,18 @@ const fail = (valueId, subId, reason) => {
   fill($(subId), reason);
 };
 
-// ---------- exchange rate + quick quote ----------
-let rate = null;
+// ---------- exchange rate + quick quote (in the currency they receive) ----------
+let rate = null; // loadRate(): every currency's rate
 const input = $("#qq-amount");
 const out = $("#qq-out");
 const hint = $("#qq-hint");
-const HINT = `Up to $${CAP} per payment.`;
+const picker = currencyPicker({
+  label: "What they receive", describedBy: "qq-cur-label",
+  onChange: () => { renderRate(); renderQuote(); },
+});
+$("#qq-currency").replaceChildren(picker.el);
+const cur = () => currencyOf(picker.value);
+const perUsd = () => (rate && rate.available[picker.value] ? rate.rates[picker.value] : null);
 
 /** core.js parseMoneyInput reads "1,5" as 1.50 and "1,250" as 1250 (never 15 from "1,5"). */
 function parseAmount(raw) {
@@ -22,11 +29,19 @@ function parseAmount(raw) {
   return p.error ? { invalid: true, error: p.error } : { value: p.cents / 100 };
 }
 
+/** "Up to $25 per payment ≈ Rp 459,847." (or Textile's own limit for a thin market, when it is lower) */
+function limitText() {
+  const r = perUsd();
+  if (!r) return `Up to $${CAP} per payment.`;
+  const max = rate.maxUsd[picker.value];
+  if (max && max < CAP) return `Right now up to about $${max.toFixed(2)} ≈ ${formatCurrency(max * r, picker.value)} (Textile's limit for ${cur().plural}).`;
+  return `Up to $${CAP} per payment ≈ ${formatCurrency(CAP * r, picker.value)}.`;
+}
+
 function renderQuote() {
   out.classList.remove("over");
   hint.classList.remove("err");
   input.removeAttribute("aria-invalid");
-  hint.textContent = HINT;
   const a = parseAmount(input.value);
   if (a.invalid) {
     hint.classList.add("err");
@@ -35,26 +50,51 @@ function renderQuote() {
     fill(out, "—");
     return;
   }
+  hint.textContent = limitText();
   if (rate == null) return; // still loading or failed: leave the output as set by the loader
+  const r = perUsd();
+  if (!r) {
+    fill(out, "—");
+    hint.classList.add("err");
+    hint.textContent = `${cur().label} isn't available on Textile FX right now. Pick another currency, or try again in a few minutes.`;
+    return;
+  }
   if (a.empty || a.value === 0) { fill(out, "—"); return; }
-  fill(out, "≈ " + naira(a.value * rate));
-  if (a.value > CAP) {
+  fill(out, el("span", { title: `${cur().name}, rounded down` }, "≈ " + formatCurrency(a.value * r, picker.value)));
+  const max = rate.maxUsd[picker.value];
+  if (a.value > CAP || (max && a.value > max)) {
     out.classList.add("over");
     hint.classList.add("err");
     input.setAttribute("aria-invalid", "true");
-    hint.textContent = `Above the $${CAP} limit. The agent refuses payments over $${CAP}.`;
+    hint.textContent = a.value > CAP
+      ? `Above the $${CAP} limit (≈ ${formatCurrency(CAP * r, picker.value)}). The agent refuses payments over $${CAP}.`
+      : `Textile can convert up to about $${max.toFixed(2)} into ${cur().plural} right now. Send less, or pick another currency.`;
   }
 }
 input.addEventListener("input", renderQuote);
 
-loadRate().then((r) => {
-  rate = r.rate;
-  fill($("#st-rate"), el("span", { class: "small soft" }, "1 USD₮ = "), naira(r.rate));
+function renderRate() {
+  if (!rate) return;
+  const r = perUsd();
+  const c = cur();
+  const flag = el("span", { class: "cur-inline" }, flagIcon(c.code), c.label);
+  if (!r) {
+    fill($("#st-rate"), "—");
+    fill($("#st-rate-sub"), flag, " · not available right now");
+    return;
+  }
+  fill($("#st-rate"), el("span", { class: "small soft" }, "1 USD₮ = "), formatCurrency(r, c.code, c.code === "cngn" ? 2 : c.places));
   // a stale rate (an old rate.json on a host without the live API) shows its age instead of a clock time
-  const basis = r.fromPreview ? "Fees included" : "Market bid, before fees";
-  if (r.stale) fill($("#st-rate-sub"), badge(`Stale · updated ${ageText(r.ageMin)}`, "warn"), " ", basis);
-  else fill($("#st-rate-sub"), r.fromPreview ? `${basis} · updated ${lagosClock(r.fetchedAt)} WAT` : basis);
+  const basis = rate.fromPreview ? "Fees included" : "Market bid, before fees";
+  if (rate.stale) fill($("#st-rate-sub"), flag, " · ", badge(`Stale · updated ${ageText(rate.ageMin)}`, "warn"));
+  else fill($("#st-rate-sub"), flag, " · ", rate.fromPreview ? `${basis} · ${lagosClock(rate.fetchedAt)} WAT` : basis);
+}
+
+loadRate().then((r) => {
+  rate = r;
+  picker.setAvailability(r.available);
   fill($("#qq-basis"), r.fromPreview ? "Fees included" : "Before fees");
+  renderRate();
   renderQuote();
 }).catch(() => {
   fail("#st-rate", "#st-rate-sub", "Rate unavailable right now. Reload to retry.");
@@ -63,6 +103,7 @@ loadRate().then((r) => {
   hint.textContent = "No rate available, so no estimate. Reload, or try the full quote page.";
   fill($("#qq-basis"), "Unavailable");
 });
+renderQuote();
 
 // ---------- identity ----------
 loadIdentity().then((id) => {
@@ -105,7 +146,7 @@ loadTxPage().then(({ items, next }) => {
   fill($("#st-tx"), String(count));
   fill($("#st-tx-sub"), `${tagged} carry the tag`);
   fill($("#st-pay"), String(payouts));
-  fill($("#st-pay-sub"), payouts === 0 ? "No payout yet" : `cNGN transfers to a recipient`);
+  fill($("#st-pay-sub"), payouts === 0 ? "No payout yet" : "Local money sent to recipients");
 
   activity.removeAttribute("aria-busy");
   if (!items.length) {

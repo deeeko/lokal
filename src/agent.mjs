@@ -1,14 +1,17 @@
 #!/usr/bin/env node
-// Lokal agent CLI entry point. Corridors: usdt-cngn (default, pay in naira), cngn-usdt (pay in dollars) and, for pay/quote only,
-// celo-cngn (pay in naira from CELO: two swaps, CELO -> USDT -> cNGN; amount in CELO).
+// Lokal agent CLI entry point. Corridors: usdt-cngn (default, pay in naira), usdt-idrx (rupiah), usdt-wars (Argentine
+// pesos), usdt-wcop (Colombian pesos), cngn-usdt (pay in dollars) and, for pay/quote only, celo-cngn (pay in naira from
+// CELO: two swaps, CELO -> USDT -> cNGN; amount in CELO). --to-currency NAME picks the usdt-<currency> corridor by name:
+// naira | rupiah | argentina-peso | colombia-peso (or the codes cngn | idrx | wars | wcop, or NGN | IDR | ARS | COP).
 //   node src/agent.mjs keygen                                   create the agent wallet (key never printed)
 //   node src/agent.mjs status                                   balances, limits, today's total
-//   node src/agent.mjs quote --amount 10 [--corridor ID]        free indicative price, no wallet needed
+//   node src/agent.mjs quote --amount 10 [--corridor ID | --to-currency rupiah]   free indicative price, no wallet needed
+//   node src/agent.mjs quote --all [--amount 5]                 every currency at once (what $5 becomes in each)
 //   node src/agent.mjs quote --corridor celo-cngn --amount 20   CELO -> USDT -> cNGN estimate (two previews)
-//   node src/agent.mjs pay --to ada --amount 10 [--corridor ID] DRY RUN (add --execute for real money)
+//   node src/agent.mjs pay --to ada --amount 10 [--corridor ID | --to-currency rupiah]   DRY RUN (add --execute for real money)
 //   node src/agent.mjs pay --to ada --amount 20 --corridor celo-cngn   pay in naira from 20 CELO (DRY RUN unless --execute)
 //   node src/agent.mjs ask "send $10 to ada"                    same, from plain language
-//   node src/agent.mjs request --to ada --amount 5 [--corridor ID] [--note TEXT] [--hours 48]
+//   node src/agent.mjs request --to ada --amount 5 [--corridor ID | --to-currency rupiah] [--note TEXT] [--hours 48]
 //                                                               create a payment link with a unique amount
 //   node src/agent.mjs requests                                 list payment requests
 //   node src/agent.mjs watch [--execute] [--interval 15]        autopilot: pay matched deposits (DRY RUN by default)
@@ -19,9 +22,11 @@
 //   node src/agent.mjs retry --ntag TX:LOGINDEX --force-refused [--execute]   pay an nTag deposit autopilot refused (caps apply)
 //   node src/agent.mjs ntag <tag|address>                       look up an nTag: owner, name, since, claim tx, status
 //   node src/agent.mjs ntags                                    list every nTag that is held right now
-//   node src/agent.mjs pay @ada 10 [--corridor ID] [--execute]  pay an nTag's owner from the agent's own funds (caps apply)
+//   node src/agent.mjs pay @ada 10 [--to-currency X] [--execute]  pay a tag's owner from the agent's own funds (caps apply;
+//                                                               default currency: the tag's preferred one, else naira)
 //   node src/agent.mjs pay --ntag ada --amount 10 [...]         same (PowerShell reads a bare @ada as splatting: quote it)
-//   node src/agent.mjs ntag-data @ada 10 [--token usdt|cngn]    the to/data to pay a tag from YOUR OWN wallet (no key used)
+//   node src/agent.mjs ntag-data @ada 10 [--token usdt|cngn] [--to-currency X]   the to/data to pay a tag from YOUR OWN
+//                                                               wallet (no key used; the memo names the currency)
 //   node src/agent.mjs register --repo <url>                   ERC-8004 identity (DRY RUN unless --execute)
 //   node src/agent.mjs verify <txHash>                          show the attribution tag on a transaction
 //   node src/agent.mjs status-sync [--backfill]                 send queued reports to the site's status server
@@ -33,7 +38,10 @@ import {
   MIN_CELO_RESERVE, SITE_URL, STATUS_OUTBOX_FILE, STATUS_URL, TOKENS,
 } from "./config.mjs";
 import { keygen, loadAccount, makeClients } from "./chain.mjs";
-import { assertRecipient, dailyUsedUnits, getCorridor, getPayCorridor, parseAmount, resolveContact } from "./guards.mjs";
+import {
+  assertRecipient, dailyUsedUnits, getCorridor, getPayCorridor, parseAmount, parseCurrency, payoutCorridor, resolveContact,
+} from "./guards.mjs";
+import { CURRENCIES, corridorFor, currencyOf, currencyOfCorridor, formatCurrencyUnits } from "./currencies.mjs";
 import { celoQuote, describeQuote } from "./celo.mjs";
 import { parseIntent } from "./intent.mjs";
 import { BLOCKED_RECIPIENTS, confirm, loadContacts, pay, preflight, readReceipts } from "./pay.mjs";
@@ -44,7 +52,7 @@ import {
 import { preview } from "./textile.mjs";
 import { register } from "./register8004.mjs";
 import {
-  decodeNtagMemo, discoverNtagOps, encodeNtagTransfer, loadNtagPayments, normalizeNtag, ntagAvailability, ntagError, ntagOf,
+  decodeNtagPayment, discoverNtagOps, encodeNtagTransfer, loadNtagPayments, normalizeNtag, ntagAvailability, ntagError, ntagOf,
   ownerOf, refusedRetryBlocker, resolveNtags, saveNtagPayments, verifyNtagOpOnchain,
 } from "./ntags.mjs";
 import { NTAG_MIN, NTAG_MIN_USD, ntagUsdFloor, watch } from "./watch.mjs";
@@ -53,8 +61,17 @@ import { directEvent, eventsFromRecords, isDirectReceipt, makeStatusReporter, re
 const [cmd, ...rest] = process.argv.slice(2);
 const flag = (n) => { const i = rest.indexOf(`--${n}`); return i >= 0 ? rest[i + 1] : undefined; };
 const has = (n) => rest.includes(`--${n}`);
-const corridorFlag = () => getCorridor(flag("corridor") ?? DEFAULT_CORRIDOR); // payment-link corridors only
-const payCorridorFlag = () => getPayCorridor(flag("corridor") ?? DEFAULT_CORRIDOR); // + celo-cngn (pay / quote)
+/** --to-currency NAME (naira, rupiah, argentina-peso, colombia-peso, or a code) -> its usdt-<currency> corridor id, or undefined. */
+const currencyCorridor = () => {
+  const v = flag("to-currency");
+  if (v == null) return undefined;
+  if (flag("corridor") != null) throw new Error("Use --corridor or --to-currency, not both.");
+  return payoutCorridor(v);
+};
+const corridorFlag = (fallback = DEFAULT_CORRIDOR) => getCorridor(currencyCorridor() ?? flag("corridor") ?? fallback); // payment-link corridors only
+const payCorridorFlag = () => getPayCorridor(currencyCorridor() ?? flag("corridor") ?? DEFAULT_CORRIDOR); // + celo-cngn (pay / quote)
+/** "rupiah (IDRX)" for a usdt-<currency> corridor, "dollars (USDT)" for cngn-usdt. */
+const receiveWord = (c) => { const cur = currencyOfCorridor(c.id); return cur ? `${cur.plural} (${cur.token})` : "dollars (USDT)"; };
 const agentAddress = () => loadAccount({ required: false })?.address ?? AGENT_ADDRESS;
 /** Positional arguments (everything that is not a --flag or a flag's value). */
 const positional = () => {
@@ -140,15 +157,14 @@ async function main() {
     case "status": {
       const account = loadAccount();
       const { pub } = makeClients(account);
-      const [celo, usdt, cngn, dec] = await Promise.all([
+      const toks = Object.values(TOKENS);
+      const [celo, ...bals] = await Promise.all([
         pub.getBalance({ address: account.address }),
-        pub.readContract({ address: TOKENS.USDT.address, abi: erc20Abi, functionName: "balanceOf", args: [account.address] }),
-        pub.readContract({ address: TOKENS.CNGN.address, abi: erc20Abi, functionName: "balanceOf", args: [account.address] }),
-        pub.readContract({ address: TOKENS.CNGN.address, abi: erc20Abi, functionName: "decimals" }),
+        ...toks.map((t) => pub.readContract({ address: t.address, abi: erc20Abi, functionName: "balanceOf", args: [account.address] })),
       ]);
       const used = formatUnits(dailyUsedUnits(readReceipts()), 6);
       const open = loadRequests().filter((r) => requestStatus(r) === "open").length;
-      console.log(`Agent: ${account.address}\nCELO: ${formatUnits(celo, 18)}  USDT: ${formatUnits(usdt, 6)}  cNGN: ${formatUnits(cngn, dec)}`);
+      console.log(`Agent: ${account.address}\nCELO: ${formatUnits(celo, 18)}  ${toks.map((t, i) => `${t.symbol}: ${formatUnits(bals[i], t.decimals)}`).join("  ")}`);
       console.log(`Tag: ${ATTRIBUTION_CODE}  Per-payout cap: ${MAX_USD} USD  Daily cap: ${MAX_DAILY_USD} USD (used in last 24 h: ${used} USD)`);
       console.log(`CELO gas reserve kept by celo-cngn payouts: ${MIN_CELO_RESERVE} CELO (MIN_CELO_RESERVE)`);
       console.log(`Per-wallet cap for "Get paid" payouts: ${MAX_WALLET_DAILY_USD} USD per rolling 24 h (MAX_WALLET_DAILY_USD)`);
@@ -156,6 +172,24 @@ async function main() {
       break;
     }
     case "quote": {
+      if (has("all")) {
+        // What one USD₮ amount becomes in every currency (free previews, no wallet).
+        const amount = parseAmount(flag("amount") ?? "5");
+        const units = parseUnits(amount, TOKENS.USDT.decimals);
+        console.log(`What ${amount} USDT becomes (indicative Textile FX previews, fee included):`);
+        for (const cur of CURRENCIES) {
+          const c = getCorridor(corridorFor(cur.code));
+          let line;
+          try {
+            const pv = await preview(c.sellToken.address, c.buyToken.address, units.toString());
+            line = pv.status === "preview"
+              ? `${formatCurrencyUnits(pv.buyAmount, cur.code).padEnd(16)} = ${formatUnits(BigInt(pv.buyAmount), c.buyToken.decimals)} ${c.buyToken.symbol} (${c.buyToken.decimals} decimals)`
+              : `not available right now (${[pv.status, pv.reason].filter(Boolean).join(": ")})`;
+          } catch (e) { line = `could not check (${e.message})`; }
+          console.log(`  ${cur.flag} ${cur.label.padEnd(10)} [${c.id}]  ${line}`);
+        }
+        break;
+      }
       const c = payCorridorFlag();
       if (c.id === "celo-cngn") {
         const q = await celoQuote(flag("amount") ?? "20");
@@ -169,9 +203,11 @@ async function main() {
         break;
       }
       const amount = parseAmount(flag("amount") ?? (c.sell === "USDT" ? "10" : "14400"));
-      const pv = await preview(c.sellToken.address, c.buyToken.address, parseUnits(amount, 6).toString());
+      const pv = await preview(c.sellToken.address, c.buyToken.address, parseUnits(amount, c.sellToken.decimals).toString());
       if (pv.status === "preview") {
-        console.log(`[${c.id}] ${amount} ${c.sellToken.symbol} -> ~${formatUnits(BigInt(pv.buyAmount), 6)} ${c.buyToken.symbol} (indicative, ${c.blurb})`);
+        console.log(`[${c.id}] ${amount} ${c.sellToken.symbol} -> ~${formatUnits(BigInt(pv.buyAmount), c.buyToken.decimals)} ${c.buyToken.symbol} (indicative, ${c.blurb})`);
+      } else if (c.currency) {
+        console.log(`[${c.id}] ${currencyOf(c.currency).label} isn't available on Textile FX right now (${[pv.status, pv.reason].filter(Boolean).join(": ")}). A payout now would be refused (currency_unavailable).`);
       }
       console.log(JSON.stringify(pv, null, 2));
       break;
@@ -182,15 +218,17 @@ async function main() {
       if (String(to ?? "").trim().startsWith("@")) {
         // Owner payout to an nTag: the agent's own funds go to the tag owner's wallet. Same recipient rules and caps
         // (incl. per-wallet) as "Get paid" payouts; dry run unless --execute. (PowerShell: quote '@ada' or use --ntag ada.)
-        const usage = "pay @tag <amount> | pay --ntag TAG --amount N [--corridor usdt-cngn|cngn-usdt] [--execute] [--yes]";
+        const usage = "pay @tag <amount> | pay --ntag TAG --amount N [--to-currency naira|rupiah|argentina-peso|colombia-peso | --corridor ID] [--execute] [--yes]";
         const tag = tagArg(to, usage);
         const amount = flag("amount") ?? (flag("to") != null || flag("ntag") != null ? p0 : p1);
         if (!amount) throw new Error(`Usage: ${usage}`);
-        const c = corridorFlag(); // celo-cngn is for contacts only
         const agent = agentAddress();
         const { entry, op } = await resolveOwner(tag);
+        // celo-cngn is for contacts only. No --to-currency / --corridor: the tag's preferred currency, else naira.
+        const c = corridorFlag(corridorFor(entry.currency ?? "cngn"));
         const { from } = await verifyNtagOpOnchain(readClient(), op, agent);
         console.log(`@${tag} belongs to ${from}${entry.name ? ` (${entry.name})` : ""}; claim ${op.hash} checks out onchain.`);
+        console.log(`@${tag} receives ${receiveWord(c)}${entry.currency && flag("to-currency") == null && flag("corridor") == null ? " (their preferred currency)" : ""}.`);
         const res = await pay({ to: `@${tag}`, amount, corridor: c.id, recipientAddress: from, payer: agent, execute: has("execute"), yes: has("yes"), ntag: tag });
         await reportAfterPayout(directEventsFor(res));
         break;
@@ -214,7 +252,7 @@ async function main() {
     case "request": {
       const c = corridorFlag();
       const name = flag("to");
-      if (!name || !flag("amount")) throw new Error("Usage: request --to NAME --amount N [--corridor ID] [--note TEXT] [--hours 48]");
+      if (!name || !flag("amount")) throw new Error("Usage: request --to NAME --amount N [--corridor ID | --to-currency rupiah] [--note TEXT] [--hours 48]");
       const { contacts, own } = loadContacts();
       const recipient = assertRecipient(resolveContact(name, contacts), {
         agent: loadAccount({ required: false })?.address ?? AGENT_ADDRESS,
@@ -228,7 +266,8 @@ async function main() {
         const now = Math.floor(Date.now() / 1000);
         const regs = await discoverRegistrations({ agent: agentAddress(), sinceSec: now - (MAX_REG_HOURS + 24) * 3600 });
         const st = registrationStatuses(regs, now);
-        reserved = regs.filter((r) => st.get(r.hash) === "active" && r.req.d === c.id).map((r) => r.req.a);
+        // every link the payer pays in the same token counts (all usdt-<currency> links are paid in USD₮)
+        reserved = regs.filter((r) => st.get(r.hash) === "active" && getCorridor(r.req.d).sell === c.sell).map((r) => r.req.a);
       } catch (e) {
         console.warn(`Could not check "Get paid" registrations (${e.message}). If one uses the same amount, a matching deposit is held back, not paid.`);
       }
@@ -248,7 +287,7 @@ async function main() {
       }
       existing.push({ ...req, recipient });
       saveRequests(existing);
-      console.log(`Request ${req.id} for ${req.name} (${c.blurb}), expires ${new Date(req.exp).toISOString()}.`);
+      console.log(`Request ${req.id} for ${req.name} (${c.blurb}: they receive ${receiveWord(c)}), expires ${new Date(req.exp).toISOString()}.`);
       console.log(`The payer must send EXACTLY ${req.amount} ${c.sellToken.symbol} on Celo to ${loadAccount({ required: false })?.address ?? AGENT_ADDRESS}.`);
       console.log(`Link: ${requestLink(req)}`);
       console.log(`Run "node src/agent.mjs watch --execute" to pay it automatically when the deposit arrives.`);
@@ -391,6 +430,8 @@ async function main() {
       const entry = ownerOf(state, tag);
       if (!entry) break;
       console.log(`  owner: ${entry.owner}${entry.name ? `  name: ${entry.name}` : ""}`);
+      const pref = currencyOf(entry.currency ?? "cngn");
+      console.log(`  prefers: ${pref.flag} ${pref.label} (${pref.token})${entry.currency ? "" : ", the default"}`);
       console.log(`  since: ${iso(entry.since)}`);
       console.log(`  claim: https://celoscan.io/tx/${entry.hash}`);
       try {
@@ -411,7 +452,7 @@ async function main() {
       if (!tags.size) { console.log("No Lokal tags yet. Claim one at site/account.html."); break; }
       const list = [...tags].sort((a, b) => a[1].since - b[1].since);
       for (const [tag, e] of list) {
-        console.log(`@${tag.padEnd(20)}  ${e.owner}  since ${iso(e.since).slice(0, 10)}${e.name ? `  ${e.name}` : ""}`);
+        console.log(`@${tag.padEnd(20)}  ${e.owner}  since ${iso(e.since).slice(0, 10)}  ${(e.currency ?? "cngn").padEnd(4)}${e.name ? `  ${e.name}` : ""}`);
       }
       console.log(`${list.length} Lokal tag(s).`);
       break;
@@ -419,7 +460,7 @@ async function main() {
     case "ntag-data": {
       // What a payer sends from THEIR OWN wallet to pay a tag: an ERC-20 transfer to the agent with the tag memo appended.
       // Prints calldata only; never loads a key and never sends anything.
-      const usage = "ntag-data @tag <amount> [--token usdt|cngn]";
+      const usage = "ntag-data @tag <amount> [--token usdt|cngn] [--to-currency naira|rupiah|argentina-peso|colombia-peso]";
       const [p0, p1] = positional();
       const tag = tagArg(p0, usage);
       const amountIn = flag("amount") ?? p1;
@@ -427,16 +468,20 @@ async function main() {
       const tok = String(flag("token") ?? "usdt").trim().toLowerCase();
       if (tok !== "usdt" && tok !== "cngn") throw new Error("--token must be usdt or cngn.");
       const token = tok === "cngn" ? TOKENS.CNGN : TOKENS.USDT;
-      const corridor = tok === "cngn" ? "cngn-usdt" : "usdt-cngn";
+      if (tok === "cngn" && flag("to-currency") != null) throw new Error("--to-currency is for USDT payments (a cNGN payment pays out in dollars).");
+      const currency = flag("to-currency") != null ? parseCurrency(flag("to-currency")) : null;
+      const corridor0 = tok === "cngn" ? "cngn-usdt" : corridorFor(currency ?? "cngn"); // limits only: same for every usdt-*
       const amount = parseAmount(amountIn);
       const units = parseUnits(amount, 6);
-      if (units < parseUnits(NTAG_MIN[corridor], 6)) {
+      if (units < parseUnits(NTAG_MIN[corridor0], 6)) {
         throw new Error(tok === "usdt"
-          ? `The smallest Lokal tag payment is ${NTAG_MIN[corridor]} USDT; smaller deposits are not paid.`
-          : `The smallest Lokal tag payment is about ${NTAG_MIN_USD} USD of cNGN (and never under ${NTAG_MIN[corridor]} cNGN); smaller deposits are not paid.`);
+          ? `The smallest Lokal tag payment is ${NTAG_MIN[corridor0]} USDT; smaller deposits are not paid.`
+          : `The smallest Lokal tag payment is about ${NTAG_MIN_USD} USD of cNGN (and never under ${NTAG_MIN[corridor0]} cNGN); smaller deposits are not paid.`);
       }
       if (tok === "usdt" && units > parseUnits(MAX_USD, 6)) throw new Error(`The largest Lokal tag payment is ${MAX_USD} USDT (per-payout cap); larger deposits are not paid automatically.`);
       const { entry } = await resolveOwner(tag);
+      const code = tok === "cngn" ? null : currency ?? entry.currency ?? "cngn"; // default: the tag's preference, else naira
+      const corridor = tok === "cngn" ? "cngn-usdt" : corridorFor(code);
       await ntagUsdFloor(corridor, units); // cNGN: refuse amounts worth under the minimum at today's price
       if (tok === "cngn") {
         // Stay 3% under the per-payout cap: autopilot values cNGN with a fresh quote when it pays, and a deposit that
@@ -449,14 +494,15 @@ async function main() {
         }
       }
       const agent = agentAddress();
-      const data = encodeNtagTransfer(agent, units, tag);
-      if (decodeNtagMemo(data) !== tag) throw new Error("Internal check failed: the memo does not decode. Nothing to send.");
-      console.log(`Pay @${tag} (${entry.owner}${entry.name ? `, ${entry.name}` : ""}): ${amount} ${token.symbol}, ${corridor === "usdt-cngn" ? "they get naira (cNGN)" : "they get dollars (USDT)"}.`);
+      const data = encodeNtagTransfer(agent, units, tag, code ?? undefined);
+      const back = decodeNtagPayment(data);
+      if (back?.tag !== tag || (back.currency ?? "cngn") !== (code ?? "cngn")) throw new Error("Internal check failed: the memo does not decode. Nothing to send.");
+      console.log(`Pay @${tag} (${entry.owner}${entry.name ? `, ${entry.name}` : ""}): ${amount} ${token.symbol}, they get ${receiveWord(getCorridor(corridor))}.`);
       console.log(`Send this from your own wallet on Celo mainnet (chain id 42220):`);
       console.log(`  to:    ${token.address}   (the ${token.symbol} token contract)`);
       console.log(`  value: 0`);
       console.log(`  data:  ${data}`);
-      console.log(`The data is a normal transfer of ${amount} ${token.symbol} to the agent ${agent}, with "@${tag}" appended.`);
+      console.log(`The data is a normal transfer of ${amount} ${token.symbol} to the agent ${agent}, with "NTP:${tag}${code && code !== "cngn" ? ":" + code : ""}" appended.`);
       console.log(`The agent pays @${tag} when autopilot runs. Limits: ${MAX_USD} USD per payment, ${MAX_WALLET_DAILY_USD} USD per person per day, ${MAX_DAILY_USD} USD per day overall.`);
       console.log("Nothing was sent. This command never asks for a key.");
       break;
@@ -506,7 +552,8 @@ async function main() {
     }
     default:
       console.log("Lokal agent. Commands: keygen | status | quote | pay | ask | request | requests | registrations | ntag | ntags | ntag-data | watch | retry | status-sync | register | verify  (see README)");
-      console.log("  Lokal tags: ntag <@tag|address> · ntags · pay @tag <amount> [--corridor ID] [--execute] · ntag-data @tag <amount> [--token usdt|cngn] · retry --ntag TX:LOGINDEX [--force-refused]");
+      console.log("  Lokal tags: ntag <@tag|address> · ntags · pay @tag <amount> [--to-currency X] [--execute] · ntag-data @tag <amount> [--token usdt|cngn] [--to-currency X] · retry --ntag TX:LOGINDEX [--force-refused]");
+      console.log("  Currencies (--to-currency): naira (cngn) · rupiah (idrx) · argentina-peso (wars) · colombia-peso (wcop). quote --all shows them side by side.");
       console.log("  In PowerShell quote the tag ('@ada') or leave out the @ (ntag ada, pay --ntag ada --amount 5).");
       console.log("  Status server: autopilot (watch --execute) reports each deposit's status (paid, refused, received) and the day's");
       console.log("    totals to the site's /api/status, so pay pages show exact facts instead of estimates from Celo. Set up once:");

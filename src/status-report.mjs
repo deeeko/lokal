@@ -14,7 +14,7 @@
 // the status and a reason code.
 import fs from "node:fs";
 import { formatUnits, parseUnits } from "viem";
-import { AGENT_ADDRESS, STATUS_OUTBOX_FILE, STATUS_SECRET_FILE, STATUS_URL } from "./config.mjs";
+import { AGENT_ADDRESS, CORRIDORS, STATUS_OUTBOX_FILE, STATUS_SECRET_FILE, STATUS_URL, TOKENS } from "./config.mjs";
 import { receiptNo as receiptNoOf } from "./requests.mjs";
 import { MAX_BODY, MAX_EVENTS, RANK, STATUS_VERSION, signReport, validateEvent } from "../lib/status.mjs";
 
@@ -28,15 +28,20 @@ const BACKOFF_MIN_MS = 5_000;
 const BACKOFF_MAX_MS = 10 * 60_000;
 const BATCH_BYTES = MAX_BODY - 2048;
 
-const SELL = { "usdt-cngn": "USDT", "cngn-usdt": "cNGN" };
-const BUY = { "usdt-cngn": "cNGN", "cngn-usdt": "USDT" };
+/** Corridor id -> the token symbol sold / paid out, as the status server names them (USDT, cNGN, IDRX, wARS, wCOP). */
+const SELL = Object.fromEntries(Object.values(CORRIDORS).map((c) => [c.id, TOKENS[c.sell].symbol]));
+const BUY = Object.fromEntries(Object.values(CORRIDORS).map((c) => [c.id, TOKENS[c.buy].symbol]));
 const lc = (s) => String(s ?? "").toLowerCase();
 const num = (v) => (v == null || v === "" ? undefined : Number(v));
 const rankOf = (s) => (Object.prototype.hasOwnProperty.call(RANK, s) ? RANK[s] : -1);
-/** "USDT" | "cNGN" | "CELO" from a symbol as autopilot and pay() write it (CNGN, cngn, USD₮ ...), or undefined. */
+/**
+ * "USDT" | "cNGN" | "IDRX" | "wARS" | "wCOP" | "CELO" from a symbol as autopilot and pay() write it (CNGN, cngn,
+ * USD₮, WARS ...), or undefined.
+ */
 export function tokenSymbol(t) {
   const s = lc(t).replace("₮", "t");
-  return s === "usdt" ? "USDT" : s === "cngn" ? "cNGN" : s === "celo" ? "CELO" : undefined;
+  if (s === "celo") return "CELO";
+  return Object.values(TOKENS).find((x) => lc(x.symbol) === s)?.symbol;
 }
 const addUnits = (a, b) => formatUnits(parseUnits(String(a), 6) + parseUnits(String(b), 6), 6);
 const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && !(typeof v === "number" && !Number.isFinite(v))));
@@ -44,6 +49,7 @@ const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !=
 /** A refusal message (guards, pay, watch) -> the reason code the site explains in plain words. */
 export function reasonCode(message) {
   const m = String(message ?? "");
+  if (/currency_unavailable/.test(m)) return "currency_unavailable";
   if (/self-payment/i.test(m)) return "self_payment";
   if (/per-wallet cap/i.test(m)) return "over_wallet_cap";
   if (/per-payout cap/i.test(m)) return "over_payment_cap";
@@ -62,7 +68,7 @@ function paidFields(res, corridor) {
   const payoutTx = res?.hashes?.payout;
   return clean({
     payoutTx, receiptNo: res?.receiptNo ?? (payoutTx ? receiptNoOf(payoutTx) : undefined),
-    paidAmount: typeof res?.paid === "string" ? res.paid : res?.paid?.amount, paidToken: BUY[corridor],
+    paidAmount: typeof res?.paid === "string" ? res.paid : res?.paid?.amount, paidToken: tokenSymbol(res?.paidToken) ?? BUY[corridor],
   });
 }
 

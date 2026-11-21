@@ -94,7 +94,7 @@
   <header class="page-head container">
     <span class="eyebrow">Send</span>
     <h1 class="page-title">Send <em>money</em></h1>
-    <p class="lead">See exactly what they receive at Textile FX's live rate. Pay from your own wallet to a Lokal tag or a payment link, and the agent pays them on Celo.</p>
+    <p class="lead">Send money home to Lagos, Jakarta, Buenos Aires or Bogotá. Choose what they receive, see exactly how much at Textile FX's live rate, and pay from your own wallet to a Lokal tag or a payment link.</p>
     <nav class="subnav" aria-label="Send pages"><a href="quote.html" aria-current="page">Quote</a><a href="pay.html">Pay a link</a></nav>
   </header>
 
@@ -110,15 +110,16 @@
 
     <div class="grid-main mt-24">
       <section class="card" aria-labelledby="amount-h">
-        <div class="card-h" style="flex-wrap:wrap">
+        <div class="card-h">
           <h2 id="amount-h">Amount</h2>
-          <div class="segmented" role="group" aria-label="Recipient gets" id="corridor">
-            <button type="button" data-corridor="usdt-cngn" aria-pressed="true" aria-label="Pay in naira">Naira</button>
-            <button type="button" data-corridor="cngn-usdt" aria-pressed="false" aria-label="Pay in dollars">Dollars</button>
-            <button type="button" data-corridor="celo-cngn" aria-pressed="false" aria-label="Pay in naira from CELO">From CELO</button>
-          </div>
+          <span class="badge neutral" id="basis">Estimate</span>
         </div>
         <div class="card-b">
+          <div class="field">
+            <span class="label" id="currency-label">They receive</span>
+            <div id="currency-slot"></div>
+            <label class="toggle" id="celo-toggle-row"><input type="checkbox" id="celo-toggle"> <span>Operator: pay out from the agent's own CELO (naira only)</span></label>
+          </div>
           <div class="field">
             <label class="label" for="amount" id="amount-label">You send</label>
             <div class="money">
@@ -141,7 +142,7 @@
             <label class="label" for="receive" id="receive-label">Recipient gets (approx.)</label>
             <output id="receive" for="amount" aria-live="polite" class="num"><span class="skel lg"></span></output>
           </div>
-          <p class="hint mt-8" id="corridor-hint" aria-live="polite">You send USD₮. The recipient gets cNGN.</p>
+          <p class="hint mt-8" id="corridor-hint" aria-live="polite">You send USD₮. The recipient gets naira (cNGN).</p>
 
           <ul class="kv-list mt-16" aria-live="polite">
             <li><span>Exchange rate</span><span id="kv-rate" class="num"><span class="skel"></span></span></li>
@@ -153,7 +154,7 @@
             <li><span>Delivered as</span><span id="kv-delivered">cNGN on Celo, redeemable for naira</span></li>
             <li><span>Payment limit</span><span id="kv-cap" class="num"><span class="skel"></span></span></li>
             <li id="kv-min-row" hidden><span>Minimum</span><span id="kv-min" class="num">—</span></li>
-            <li><span>Market bid / ask</span><span id="kv-market" class="num"><span class="skel"></span></span></li>
+            <li id="kv-market-row"><span>Market bid / ask</span><span id="kv-market" class="num"><span class="skel"></span></span></li>
           </ul>
           <div id="rate-error" aria-live="polite"></div>
         </div>
@@ -164,7 +165,7 @@
           <div class="card-h"><h2 id="ways-h">Ways to send</h2></div>
           <div class="card-b">
             <ul class="checks" style="grid-template-columns:minmax(0,1fr)">
-              <li><svg class="i"><use href="#i-user"/></svg><span><b>To a Lokal tag.</b> Type their tag above. You pay USD₮ or cNGN from your own wallet, and the agent pays the wallet behind the tag.</span></li>
+              <li><svg class="i"><use href="#i-user"/></svg><span><b>To a Lokal tag.</b> Type their tag above. You pay USD₮ from your own wallet and they receive naira, rupiah or pesos (or pay cNGN and they get dollars).</span></li>
               <li><svg class="i"><use href="#i-link"/></svg><span><b>To a payment link.</b> Open the link you were sent. It shows the exact amount, and you can pay it from your wallet. <a class="link" href="pay.html">About payment links</a></span></li>
               <li><svg class="i"><use href="#i-wallet"/></svg><span><b>Being paid instead?</b> <a class="link" href="get-paid.html">Create a link</a> or <a class="link" href="account.html">claim a Lokal tag</a> for your own wallet.</span></li>
             </ul>
@@ -240,11 +241,11 @@
     <div class="cols">
       <div>
         <div class="foot-brand"><img src="logo.svg?v=lokal2" alt="" width="28" height="28">Lokal</div>
-        <p class="small soft" style="max-width:40ch">An agent that converts between USD₮ and cNGN on Textile FX and pays recipients on Celo.</p>
+        <p class="small soft" style="max-width:40ch">An agent that turns USD₮ into naira, rupiah or pesos on Textile FX and pays recipients on Celo.</p>
       </div>
       <div>
         <h4>Product</h4>
-        <ul><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Transactions</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
+        <ul><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Transactions</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="cash-out.html">Cash out</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
       </div>
       <div>
         <h4>Resources</h4>

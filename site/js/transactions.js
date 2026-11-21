@@ -1,6 +1,7 @@
 import {
   AGENT, TOKENS, EXPLORER_API, loadTxPage, receiptNo, celoscanTx, celoscanAddr, lagosTime, short, isTagged, txKind, txLabel, txStatus,
   el, badge, icon, toast, download, $, $$, initChrome, getJson, num2, naira, decodeNtagOp, decodeNtagMemo, decodeRegistration, CORRIDORS,
+  CURRENCIES, formatCurrency, decodeNtagPayment, currencyOf,
 } from "../assets/core.js";
 import { getSession, onSessionChange } from "../assets/session.js";
 
@@ -70,7 +71,11 @@ function row(tx) {
 }
 
 const sameAddr = (a, b) => String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
-const fmtToken = (sym, v) => (sym === "cNGN" ? naira(v) + " cNGN" : num2.format(v) + " " + sym);
+/** "₦14,400.00 cNGN", "Rp 91,967 IDRX", "ARS 8,848.74 wARS", "10.00 USD₮" (local money rounded down). */
+const fmtToken = (sym, v) => {
+  const c = CURRENCIES.find((x) => x.token === sym);
+  return c ? `${formatCurrency(v, c.code, c.code === "cngn" ? 2 : c.places)} ${sym}` : num2.format(v) + " " + sym;
+};
 
 function mineRow(r) {
   const valid = HASH_RE.test(r.hash);
@@ -173,7 +178,7 @@ function renderStats() {
   set("#s-tagged-sub", n ? `${Math.round((tagged / n) * 100)}% carry the ERC-8021 tag` : "ERC-8021 attribution in calldata");
   set("#s-payouts", String(payouts));
   if (!allLoaded) set("#s-payouts-sub", "in loaded transactions");
-  else set("#s-payouts-sub", payouts === 0 ? "No payout yet" : "cNGN transfers to the recipient");
+  else set("#s-payouts-sub", payouts === 0 ? "No payout yet" : "Local money sent to recipients");
   const newest = state.rows.find((t) => t.timestamp);
   set("#s-last", newest ? lagosTime(newest.timestamp) : "—");
 
@@ -264,7 +269,8 @@ async function pages(url, max = 3) {
   }
   return { items, more: true };
 }
-const tokenName = (t) => (sameAddr(t?.address_hash ?? t?.address, TOKENS.USDT.address) ? "USD₮" : sameAddr(t?.address_hash ?? t?.address, TOKENS.cNGN.address) ? "cNGN" : null);
+/** "USD₮" | "cNGN" | "IDRX" | "wARS" | "wCOP" for a token the agent uses, else null. */
+const tokenName = (t) => Object.values(TOKENS).find((x) => sameAddr(t?.address_hash ?? t?.address, x.address))?.symbol ?? null;
 
 /**
  * The wallet's payments with the agent: its token transfers to the agent (link and nTag payments), its nTag and
@@ -292,9 +298,11 @@ async function loadMine(force = false) {
       const v = Number(t.total?.value ?? 0) / 10 ** Number(t.total?.decimals ?? 6);
       if (sameAddr(t.from?.hash, s.address) && sameAddr(t.to?.hash, AGENT)) {
         const tx = own.get(hash.toLowerCase());
-        const tag = tx ? decodeNtagMemo(tx.raw_input) : null;
+        const memo = tx ? decodeNtagPayment(tx.raw_input) : null;
+        const tag = memo?.tag ?? null;
+        const gets = tag && sym === "USD₮" ? ` (they get ${currencyOf(memo.currency ?? "cngn").plural})` : "";
         rows.push({ hash, time: t.timestamp, kind: "sent", status: ["Success", "ok"], tagged: tx ? isTagged(tx) : null,
-          label: tag ? `You paid @${tag} ${fmtToken(sym, v)}` : `You sent ${fmtToken(sym, v)} to the agent`,
+          label: tag ? `You paid @${tag} ${fmtToken(sym, v)}${gets}` : `You sent ${fmtToken(sym, v)} to the agent`,
           sub: tag ? "Lokal tag payment" : "Payment link or direct payment" });
       } else if (sameAddr(t.from?.hash, AGENT) && sameAddr(t.to?.hash, s.address)) {
         rows.push({ hash, time: t.timestamp, kind: "payout", status: ["Success", "ok"], tagged: null,

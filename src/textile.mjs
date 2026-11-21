@@ -27,7 +27,7 @@ const KNOWN = new Set([...Object.values(TOKENS), CELO_TOKEN].map((t) => t.addres
 /** RFQ body for any supported pair. `sell` and `buy` are token addresses; amounts are base units. */
 export function rfqBody(sell, buy, sellAmount, taker) {
   if (!KNOWN.has(String(sell).toLowerCase()) || !KNOWN.has(String(buy).toLowerCase()) || String(sell).toLowerCase() === String(buy).toLowerCase()) {
-    throw new Error("rfqBody: sell and buy must be two different supported tokens (USDT, cNGN, CELO)");
+    throw new Error(`rfqBody: sell and buy must be two different supported tokens (${[...Object.values(TOKENS), CELO_TOKEN].map((t) => t.symbol).join(", ")})`);
   }
   if (!/^\d+$/.test(String(sellAmount)) || BigInt(sellAmount) === 0n) throw new Error("rfqBody: sellAmount must be positive base units");
   return {
@@ -76,7 +76,7 @@ export async function firmQuote(account, sell, buy, sellAmount) {
   }
   if (r.status !== 200) throw new Error(`Firm quote failed (${r.status}): ${JSON.stringify(r.json).slice(0, 300)}`);
   const d = r.json.data;
-  if (d.status === "no_quote") throw new Error(`No quote available (${d.reason}). Try a different size or later.`);
+  if (d.status === "no_quote") throw Object.assign(new Error(`No quote available (${d.reason}). Try a different size or later.`), { noQuote: true, reason: d.reason });
   return d; // { rfqId, claimToken, quote, transactions: { approval, swap } }
 }
 

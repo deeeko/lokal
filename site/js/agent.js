@@ -123,9 +123,9 @@ function stars(value) {
   return wrap;
 }
 
-/** Addresses (lowercase) that ever sent USD₮ or cNGN to the agent, from Blockscout. Reads up to 5 pages. */
+/** Addresses (lowercase) that ever sent one of the agent's tokens (USD₮, cNGN, ...) to the agent, from Blockscout. Reads up to 5 pages. */
 async function loadPayers() {
-  const tokens = new Set([TOKENS.USDT.address, TOKENS.cNGN.address].map((a) => a.toLowerCase()));
+  const tokens = new Set(Object.values(TOKENS).map((t) => t.address.toLowerCase()));
   const payers = new Set();
   let next = null;
   for (let page = 0; page < 5; page++) {

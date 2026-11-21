@@ -2,7 +2,9 @@ import {
   AGENT, CAP, CORRIDORS, TOKENS, $, $$, el, icon, badge, naira, num2, short, lagosTime, celoscanTx, celoscanAddr,
   rpc, loadRate, loadReceipt, loadRegistrations, registrationStatuses, encodeRegistration, initChrome, parseMoneyInput,
   disconnectWallet, walletDisconnected, markWalletConnected, DISCONNECT_NOTE_FULL, DISCONNECT_NOTE_PARTIAL, toast,
+  currencyOf, formatCurrency,
 } from "../assets/core.js";
+import { currencyPicker } from "../assets/currency-ui.js";
 import { ensureCelo as ensureCeloOn, explainWalletError, CELO_CHAIN } from "../assets/session.js";
 import { isDesktop, noWalletHelp } from "../assets/ntag-ui.js";
 
@@ -35,7 +37,11 @@ const actions = $("#actions"), sendMsg = $("#send-msg"), walletBox = $("#wallet-
 const sameAddr = (a, b) => String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const setText = (node, text) => node.replaceChildren(text);
-const isNaira = () => state.corridor === "usdt-cngn"; // recipient gets naira, payer sends USD₮
+// isNaira: the payer sends USD₮ and the recipient gets local money (naira, rupiah or pesos); otherwise cNGN in, dollars out
+const isNaira = () => state.corridor !== "cngn-usdt";
+const code = () => (isNaira() ? state.corridor.slice(5) : null);
+const cur = () => currencyOf(code());
+const perUsd = () => (state.rate && code() && state.rate.available[code()] ? state.rate.rates[code()] : null);
 const sellSym = () => TOKENS[CORRIDORS[state.corridor].sell].symbol;
 const buySym = () => TOKENS[CORRIDORS[state.corridor].buy].symbol;
 const centsStr = (c) => (c / 100).toFixed(2);
@@ -60,6 +66,8 @@ function amountRuleError(cents) {
   if (!(cents > 0)) return "Enter an amount above zero.";
   if (isNaira()) {
     if (cents < USDT_MIN_CENTS || cents > USDT_MAX_CENTS) return `Enter ${NAIRA_RANGE}.`;
+    const max = state.rate?.maxUsd?.[code()];
+    if (max && cents / 100 > max) return `Textile can convert up to about $${max.toFixed(2)} into ${cur().plural} right now. Enter less, or choose another currency.`;
     return null;
   }
   const rr = state.rate?.reverseRate;
@@ -84,16 +92,16 @@ function readHours() {
 }
 
 // ---------- the same-amount rule ----------
-/** "d:amount" keys held by an active registration right now. */
+/** "<sell token>:amount" keys held by an active registration right now (every usdt-* link is paid in USD₮). */
 function takenKeys() {
   if (!state.regs) return new Set();
   const now = Math.floor(Date.now() / 1000);
   const st = registrationStatuses(state.regs, now);
   const keys = new Set();
-  for (const r of state.regs) if (st.get(r.hash) === "active") keys.add(r.req.d + ":" + Number(r.req.a).toFixed(2));
+  for (const r of state.regs) if (st.get(r.hash) === "active" && CORRIDORS[r.req.d]) keys.add(CORRIDORS[r.req.d].sell + ":" + Number(r.req.a).toFixed(2));
   return keys;
 }
-const isTaken = (cents, taken = takenKeys()) => taken.has(state.corridor + ":" + centsStr(cents));
+const isTaken = (cents, taken = takenKeys()) => taken.has(CORRIDORS[state.corridor].sell + ":" + centsStr(cents));
 /** Nearest amount (± cents) that is free and within the limits, or null. */
 function nearestFree(cents) {
   const taken = takenKeys();
@@ -129,8 +137,11 @@ async function refreshRegs() {
 
 // ---------- rendering ----------
 function renderCorridor() {
-  for (const b of $$("#corridor button")) b.setAttribute("aria-pressed", String(b.dataset.corridor === state.corridor));
-  setText($("#corridor-hint"), isNaira() ? "The payer sends USD₮. You get cNGN (naira)." : "The payer sends cNGN. You get USD₮ (dollars).");
+  const off = isNaira() && state.rate && !perUsd();
+  $("#corridor-hint").classList.toggle("err", Boolean(off));
+  setText($("#corridor-hint"), off
+    ? `${cur().label} isn't available on Textile FX right now. A payment would be refused until it is, so choose another currency or try later.`
+    : isNaira() ? `The payer sends USD₮. You get ${cur().plural} (${cur().token}). Using MiniPay? Choose dollars (USD₮); MiniPay doesn't show local tokens yet.` : "The payer sends cNGN. You get USD₮ (dollars), which MiniPay shows.");
   setText($("#amount-token"), sellSym());
 }
 
@@ -140,7 +151,7 @@ function renderAmountHint() {
   const show = a.error && (state.touched.has("amount") || amountIn.value.trim());
   hint.classList.toggle("err", !!show);
   if (show) setText(hint, a.error);
-  else setText(hint, isNaira() ? `${NAIRA_RANGE[0].toUpperCase()}${NAIRA_RANGE.slice(1)}.` : `Up to $${CAP} in value, up to 2 decimals.`);
+  else setText(hint, isNaira() ? `${NAIRA_RANGE[0].toUpperCase()}${NAIRA_RANGE.slice(1)}${perUsd() ? ` (≈ ${formatCurrency(24.99 * perUsd(), code())})` : ""}.` : `Up to $${CAP} in value, up to 2 decimals.`);
   amountIn.setAttribute("aria-invalid", String(!!show));
 }
 
@@ -193,8 +204,9 @@ function renderEstimate() {
   const r = state.rate;
   let get = null, rateText = "—";
   if (isNaira()) {
-    rateText = `1 USD₮ = ${naira(r.rate)}`;
-    if (a.cents > 0) get = naira((a.cents / 100) * r.rate);
+    const pu = perUsd();
+    rateText = pu ? `1 USD₮ = ${formatCurrency(pu, code(), code() === "cngn" ? 2 : cur().places)}` : `${cur().label}: not available right now`;
+    if (a.cents > 0 && pu) get = formatCurrency((a.cents / 100) * pu, code());
   } else if (r.reverseRate) {
     rateText = `1 USD₮ = ${naira(1 / r.reverseRate)}`;
     if (a.cents > 0) get = `${num2.format((a.cents / 100) * r.reverseRate)} USD₮`;
@@ -447,7 +459,7 @@ function showDone(hash, reg, from) {
   $("#form-card").hidden = true;
   $("#sum-card").hidden = true;
   $("#done-card").hidden = false;
-  setText($("#done-lead"), `Share this link with the person paying you. They send exactly ${send} on Celo, and the agent pays your wallet in ${isNaira() ? "naira (cNGN)" : "dollars (USD₮)"}.`);
+  setText($("#done-lead"), `Share this link with the person paying you. They send exactly ${send} on Celo, and the agent pays your wallet in ${isNaira() ? `${cur().plural} (${cur().token})` : "dollars (USD₮)"}.`);
   setText($("#link-text"), url);
   $("#link-copy").dataset.copy = url;
   $("#link-copy-icon").dataset.copy = url;
@@ -503,15 +515,20 @@ function resetForm() {
 }
 
 // ---------- wire up ----------
-for (const b of $$("#corridor button")) {
-  b.addEventListener("click", () => {
-    if (state.corridor === b.dataset.corridor) return;
-    state.corridor = b.dataset.corridor;
-    amountIn.value = isNaira() ? "10" : "14400";
+const picker = currencyPicker({
+  label: "What you receive", describedBy: "corridor-label",
+  extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮): the payer sends cNGN" }],
+  onChange: (c) => {
+    const next = c === "usd" ? "cngn-usdt" : `usdt-${c}`;
+    const unitChange = (next === "cngn-usdt") !== (state.corridor === "cngn-usdt");
+    state.corridor = next;
+    if (unitChange) amountIn.value = isNaira() ? "10" : "14400";
     renderCorridor();
     update();
-  });
-}
+  },
+});
+$("#currency-slot").replaceChildren(picker.el);
+state.corridor = picker.value === "usd" ? "cngn-usdt" : `usdt-${picker.value}`;
 amountIn.addEventListener("input", () => { state.userTyped = true; update(); });
 amountIn.addEventListener("blur", () => { state.touched.add("amount"); update(); });
 nameIn.addEventListener("input", renderTextHints);
@@ -536,7 +553,7 @@ renderWallet();
 renderActions();
 update();
 
-loadRate().then((r) => { state.rate = r; update(); }).catch(() => {
+loadRate().then((r) => { state.rate = r; picker.setAvailability(r.available); renderCorridor(); update(); }).catch(() => {
   state.rateFailed = true;
   setText($("#s-rate-note"), "Couldn't load the live rate. Your link still works: the agent uses the live rate when it converts.");
   update();

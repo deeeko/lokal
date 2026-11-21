@@ -3,9 +3,11 @@
 // The top level stays free of window/document access so the pure helpers can be tested in Node.
 import {
   el, icon, short, ntagUrl, normalizeNtag, ntagError, ntagAvailability, resolveNtags, ownerOf, loadNtagOps, loadReceipt,
-  lagos, AGENT, TOKENS, CAP, EXPLORER_API, getJson, rpc, ntagOpFromItem, decodeNtagMemo, celoscanTx, HAS_API, timeoutSignal,
+  lagos, AGENT, TOKENS, CAP, EXPLORER_API, getJson, rpc, ntagOpFromItem, decodeNtagPayment, celoscanTx, HAS_API, timeoutSignal,
+  CURRENCIES, currencyOf, formatCurrency, unitsToDecimal,
 } from "./core.js";
 import { avatar } from "./session.js";
+import { flagIcon } from "./currency-ui.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 export const sameAddr = (a, b) => String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
@@ -106,14 +108,23 @@ export function greeting(date = new Date()) {
 
 /** The WhatsApp share link for a tag. */
 export function whatsappUrl(tag, url = ntagUrl(tag)) {
-  return "https://wa.me/?text=" + encodeURIComponent(`You can pay me in dollars or naira on Celo with my Lokal tag @${tag}: ${url}`);
+  return "https://wa.me/?text=" + encodeURIComponent(`Pay me in dollars on Celo and I receive my own local money. My Lokal tag is @${tag}: ${url}`);
 }
 
 // ---------- payments to a tag: values, eligibility, matching deposits to payouts (pure, tested) ----------
 const lc = (s) => String(s ?? "").toLowerCase();
-/** "USDT" | "CNGN" | null for a token address. */
-export const tokenKey = (addr) => (lc(addr) === lc(TOKENS.USDT.address) ? "USDT" : lc(addr) === lc(TOKENS.cNGN.address) ? "CNGN" : null);
-const buyOf = (token) => (token === "USDT" ? "CNGN" : "USDT");
+/** "USDT" | "CNGN" | "IDRX" | "WARS" | "WCOP" | null for a token address. */
+export const tokenKey = (addr) => {
+  if (lc(addr) === lc(TOKENS.USDT.address)) return "USDT";
+  const c = CURRENCIES.find((x) => lc(x.address) === lc(addr));
+  return c ? c.token.toUpperCase() : null;
+};
+/** The currency of a local token key ("IDRX" -> the rupiah entry), or null. */
+const curOfKey = (key) => CURRENCIES.find((c) => c.token.toUpperCase() === key) ?? null;
+/** The payout token for a deposit: USD₮ pays the currency the memo asked for (naira by default), cNGN pays USD₮. */
+const buyOf = (token, currency = "cngn") => (token === "USDT" ? (currencyOf(currency ?? "cngn") ?? currencyOf("cngn")).token.toUpperCase() : "USDT");
+/** Local money per 1 USD₮ for a currency code from loadRate() (naira also from the older `rate` field). */
+const perUsdOf = (rate, code) => Number(rate?.rates?.[code]) || (code === "cngn" ? Number(rate?.rate) : 0);
 const byChain = (a, b) => a.block - b.block || a.logIndex - b.logIndex;
 /** Strictly later in the chain than d (block, then log index). */
 const isAfter = (p, d) => p.block > d.block || (p.block === d.block && p.logIndex > d.logIndex);
@@ -124,16 +135,24 @@ export function depositUsd(token, units, rate) {
   const rr = Number(rate?.reverseRate);
   return rr > 0 ? (Number(units) / 1e6) * rr : null;
 }
-/** USD value of an agent payout (cNGN at the naira rate), or null without a rate. */
+/** USD value of an agent payout (any local currency at its rate, by its own decimals), or null without a rate. */
 export function payoutUsd(token, units, rate) {
   if (token === "USDT") return Number(units) / 1e6;
-  const r = Number(rate?.rate);
-  return r > 0 ? Number(units) / 1e6 / r : null;
+  const c = curOfKey(token);
+  const r = c ? perUsdOf(rate, c.code) : 0;
+  return r > 0 ? Number(units) / 10 ** c.decimals / r : null;
 }
 /** Units of the payout token a deposit should bring at today's rate (an estimate), or null without a rate. */
-export function expectedPayoutUnits(token, units, rate) {
-  const r = token === "USDT" ? Number(rate?.rate) : Number(rate?.reverseRate);
-  return r > 0 ? BigInt(Math.floor(Number(units) * r)) : null;
+export function expectedPayoutUnits(token, units, rate, currency = "cngn") {
+  if (token !== "USDT") {
+    const rr = Number(rate?.reverseRate);
+    return rr > 0 ? BigInt(Math.floor(Number(units) * rr)) : null;
+  }
+  const c = currencyOf(currency ?? "cngn") ?? currencyOf("cngn");
+  const r = perUsdOf(rate, c.code);
+  if (!(r > 0)) return null;
+  const micro = BigInt(Math.floor(Number(units) * r)); // 6-decimal units of the local money
+  return c.decimals >= 6 ? micro * 10n ** BigInt(c.decimals - 6) : micro / 10n ** BigInt(6 - c.decimals);
 }
 /**
  * Why the agent would not pay a deposit to a tag automatically, or null: { kind: "self" | "min" | "over", text }.
@@ -171,11 +190,11 @@ const within = (units, expected, bps) => {
 export function matchTagLedger({ deposits = [], payouts = [], owner, rate, marginBps = PAYOUT_MARGIN_BPS, dayLimitUsd = LIMITS.perPersonDay }) {
   const ds = [...deposits].sort(byChain);
   const ps = [...payouts].sort(byChain);
-  const fits = (p, d) => d.expected != null && p.token === buyOf(d.token) && within(p.units, d.expected, marginBps);
+  const fits = (p, d) => d.expected != null && p.token === buyOf(d.token, d.currency) && within(p.units, d.expected, marginBps);
   const used = new Set();
   const out = [];
   for (const d0 of ds) {
-    const d = { ...d0, usd: depositUsd(d0.token, d0.units, rate), expected: expectedPayoutUnits(d0.token, d0.units, rate), payout: null };
+    const d = { ...d0, usd: depositUsd(d0.token, d0.units, rate), expected: expectedPayoutUnits(d0.token, d0.units, rate, d0.currency), payout: null };
     const why = depositIneligible({ token: d.token, units: d.units, payer: d.payer, owner }, rate);
     if (why) { out.push({ ...d, status: "ineligible", reason: why }); continue; }
     if (d.usd != null) {
@@ -196,7 +215,7 @@ export function matchTagLedger({ deposits = [], payouts = [], owner, rate, margi
       // ambiguous when another deposit the agent should pay is still unmatched and this payout would fit it too
       if (out.some((o) => o !== d && o.status === "none" && isAfter(d.payout, o) && fits(d.payout, o))) d.status = "maybe";
     } else if (d.status === "none") {
-      const later = ps.find((x) => !used.has(x) && isAfter(x, d) && x.token === buyOf(d.token));
+      const later = ps.find((x) => !used.has(x) && isAfter(x, d) && x.token === buyOf(d.token, d.currency));
       if (later) { d.status = "maybe"; d.payout = later; d.unmatched = true; }
     }
   }
@@ -209,7 +228,7 @@ export function allowanceFrom(transfers, { owner, rate, now = Date.now(), cap = 
   for (const t of transfers) {
     if (!sameAddr(t.from, AGENT) || (owner && !sameAddr(t.to, owner)) || !t.token || t.ts <= now - DAY_MS) continue;
     const v = payoutUsd(t.token, t.units, rate);
-    if (v == null) throw new Error("no naira rate to value the naira payouts");
+    if (v == null) throw new Error("no rate to value the local-money payouts");
     used += v;
     payouts.push({ ts: t.ts, usd: v });
   }
@@ -251,6 +270,7 @@ const REASON_TEXT = {
   below_minimum: "The payment was below the minimum",
   over_payment_cap: `The payment was over the $${CAP} limit for one payment`,
   over_wallet_cap: `It would have taken this person over $${LIMITS.perPersonDay} in 24 hours`,
+  currency_unavailable: "The currency it asked for wasn't available on Textile FX when it arrived (it is never paid in another one)",
   self_payment: "It was sent from the same wallet it pays",
   recipient_blocked: "The agent can't pay this wallet",
   claim_invalid: "The Lokal tag's claim didn't check out on Celo",
@@ -372,11 +392,19 @@ export function combineAllowance(server, chain) {
   if (finite(server.globalLeftUsd)) out.globalLeftUsd = server.globalLeftUsd;
   return out;
 }
-/** What a paid event says the recipient got, e.g. "₦14,400.00 in cNGN" or "10.00 USD₮", or null. */
+/** What a paid event says the recipient got, e.g. "₦14,400.00 in cNGN", "Rp 91,967 in IDRX" or "10.00 USD₮", or null. */
 export function paidText(ev) {
   const n = Number(ev?.paidAmount);
   if (!ev?.paidAmount || !Number.isFinite(n)) return null;
-  return ev.paidToken === "cNGN" ? `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} in cNGN` : `${n.toFixed(2)} USD₮`;
+  const c = CURRENCIES.find((x) => x.token === ev.paidToken);
+  if (c) return `${formatCurrency(n, c.code)} in ${c.token}`;
+  return `${n.toFixed(2)} USD₮`;
+}
+/** A payout's base units of a token key ("IDRX") as "Rp 91,967 in IDRX" (rounded down), or "10.00 USD₮". */
+export function payoutText(token, units) {
+  const c = curOfKey(token);
+  if (!c) return `${(Number(units) / 1e6).toFixed(2)} USD₮`;
+  return `${formatCurrency(Number(unitsToDecimal(units, c.decimals, c.places)), c.code)} in ${c.token}`;
 }
 /** Deposit amount (decimal string) -> 6-decimal base units, or 0n. */
 export function units6Of(amount) {
@@ -404,8 +432,9 @@ export function ringMark(cls = "ntag-ring") {
 
 // ---------- the nTag card ----------
 /**
- * Builds the card. props: { tag, name, address, since (sec), kind: "live" | "preview" | "ghost", stamp (text),
- * as: "div" | "button" | "a", href, label (accessible name) }. Returns the element; call card.update(props) to change it.
+ * Builds the card. props: { tag, name, address, since (sec), currency (the owner's preferred currency code, optional),
+ * kind: "live" | "preview" | "ghost", stamp (text), as: "div" | "button" | "a", href, label (accessible name) }.
+ * Returns the element; call card.update(props) to change it.
  */
 export function ntagCard(props = {}) {
   const as = props.as ?? "div";
@@ -413,12 +442,13 @@ export function ntagCard(props = {}) {
   const name = el("span", { class: "ntag-name" });
   const addr = el("span", { class: "ntag-addr" });
   const since = el("span", { class: "ntag-since" });
+  const net = el("span", { class: "ntag-net" }, "Celo");
   const stampText = el("span", {});
   const stampCheck = icon("check");
   const stamp = el("span", { class: "ntag-stamp", "aria-hidden": "true" }, stampCheck, stampText);
   const front = el("div", { class: "ntag-face ntag-front" },
     el("span", { class: "ntag-guilloche" }),
-    el("div", { class: "ntag-top" }, el("span", { class: "ntag-brand" }, ringMark(), "Lokal tag"), el("span", { class: "ntag-net" }, "Celo")),
+    el("div", { class: "ntag-top" }, el("span", { class: "ntag-brand" }, ringMark(), "Lokal tag"), net),
     el("div", { class: "ntag-main" }, handle, name),
     el("div", { class: "ntag-bottom" }, addr, since),
     el("span", { class: "ntag-sheen" }), el("span", { class: "ntag-glare" }));
@@ -446,10 +476,13 @@ export function ntagCard(props = {}) {
     name.textContent = nm || (kind === "preview" ? "Display name (optional)" : kind === "ghost" ? "Not claimed yet" : "");
     addr.textContent = props.address ? short(props.address) : "0x····…····";
     since.textContent = props.since ? `Since ${monthYear(props.since)}` : kind === "preview" ? "Preview" : "";
+    const pc = props.currency ? currencyOf(props.currency) : null; // what the owner receives, on the card
+    net.replaceChildren(...(pc ? [flagIcon(pc.code), " ", pc.label] : ["Celo"]));
+    net.classList.toggle("has-cur", Boolean(pc));
     stampText.textContent = props.stamp ?? "";
     stampCheck.style.display = kind === "ghost" ? "none" : ""; // "Unclaimed", "Reserved", "On hold": no tick
     card.classList.toggle("is-stamped", Boolean(props.stamp));
-    if (as !== "div") card.setAttribute("aria-label", props.label ?? `Lokal tag @${shown}${nm ? ", " + nm : ""}`);
+    if (as !== "div") card.setAttribute("aria-label", props.label ?? `Lokal tag @${shown}${nm ? ", " + nm : ""}${pc ? `, receives ${pc.plural}` : ""}`);
     return card;
   };
   card.update();
@@ -631,7 +664,7 @@ export async function loadNtagStateFresh(maxPages = 200) {
   throw new Error("partial Lokal tag list");
 }
 
-/** Blockscout token-transfer item -> { hash, logIndex, block, ts (ms), from, to, token "USDT"|"CNGN"|null, units }, or null. */
+/** Blockscout token-transfer item -> { hash, logIndex, block, ts (ms), from, to, token (tokenKey) | null, units }, or null. */
 export function transferItem(it) {
   const hash = it?.transaction_hash ?? it?.tx_hash;
   if (!hash || !it?.from?.hash || !it?.to?.hash) return null;
@@ -692,12 +725,12 @@ export async function loadTagLedger({ tag, owner, sinceSec, rate, live = false, 
     if (memoCache.has(t.hash)) return memoCache.get(t.hash);
     const tx = await rpc("eth_getTransactionByHash", [t.hash]);
     if (!tx) return undefined; // not visible yet: look again next time
-    const tok = t.token === "USDT" ? TOKENS.USDT.address : TOKENS.cNGN.address;
-    const m = sameAddr(tx.to, tok) ? decodeNtagMemo(tx.input) : null;
+    const tok = t.token === "USDT" ? TOKENS.USDT.address : t.token === "CNGN" ? TOKENS.cNGN.address : null;
+    const m = tok && sameAddr(tx.to, tok) ? decodeNtagPayment(tx.input) : null;
     memoCache.set(t.hash, m);
     return m;
   });
-  const deposits = cands.filter((t, i) => memos[i] === tag).map((t) => ({ ...t, payer: t.from }));
+  const deposits = cands.filter((t, i) => memos[i]?.tag === tag).map((t, i) => ({ ...t, payer: t.from, currency: memos[cands.indexOf(t)]?.currency ?? null }));
   const payouts = toOwner.items.filter((t) => sameAddr(t.from, AGENT));
   const matched = matchTagLedger({ deposits, payouts, owner, rate });
   const partial = !incoming.complete || incoming.items.length > cands.length || memos.some((m) => m === undefined);

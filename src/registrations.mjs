@@ -1,6 +1,7 @@
 // "Get paid": a recipient registers their own payment request onchain, from their own wallet (site/get-paid.html).
 // A registration is a zero-value tx FROM the recipient TO the agent whose input is hex(utf8("NP1:" + JSON)) + tag.
-// JSON { a: "5.03", d: "usdt-cngn"|"cngn-usdt", e: <expiry unix seconds>, n: <name 1-40>, m?: <note <=80> }.
+// JSON { a: "5.03", d: "usdt-cngn"|"usdt-idrx"|"usdt-wars"|"usdt-wcop"|"cngn-usdt", e: <expiry unix seconds>, n: <name 1-40>,
+// m?: <note <=80> }. d = the corridor: usdt-<currency> is what the recipient receives (naira, rupiah, pesos), USD₮ in.
 // The recipient is the tx sender (proven by its signature). Request id = the registration tx hash.
 //
 // registrationError / decodeRegistration / registrationStatuses are ports of site/assets/core.js and MUST stay
@@ -23,9 +24,10 @@ const hexBytes = (h) => new Uint8Array((h.match(/../g) ?? []).map((b) => parseIn
 /** Validate the JSON body. `blockTimeSec` = registration block time (for the expiry window). Returns an error string or null. */
 export function registrationError(r, blockTimeSec) {
   if (!r || typeof r !== "object") return "not a registration";
-  if (!CORRIDORS[r.d]) return "unknown corridor";
+  const corridor = typeof r.d === "string" && Object.prototype.hasOwnProperty.call(CORRIDORS, r.d) ? CORRIDORS[r.d] : null;
+  if (!corridor) return "unknown corridor";
   if (typeof r.a !== "string" || !/^\d+(\.\d{1,2})?$/.test(r.a) || Number(r.a) <= 0) return "invalid amount";
-  if (r.d === "usdt-cngn" && (Number(r.a) < 1 || Number(r.a) > 24.99)) return "amount must be $1 to $24.99";
+  if (corridor.sell === "USDT" && (Number(r.a) < 1 || Number(r.a) > 24.99)) return "amount must be $1 to $24.99";
   if (typeof r.n !== "string" || !r.n.trim() || r.n.length > 40) return "invalid name";
   if (r.m != null && (typeof r.m !== "string" || r.m.length > 80)) return "invalid note";
   if (!Number.isInteger(r.e)) return "invalid expiry";
@@ -45,7 +47,7 @@ export function decodeRegistration(input) {
 }
 
 /**
- * The same-amount rule: among VALID, UNEXPIRED registrations with the same corridor and the same exact amount, the
+ * The same-amount rule: among VALID, UNEXPIRED registrations paid in the same token (USD₮ for every usdt-* link) with the same exact amount, the
  * earliest (block, then position) is active; later ones are "amount in use" and are never paid.
  * Items: { hash, from, block, position, time (sec), req }. Returns Map hash -> "active" | "in-use" | "expired" | "invalid".
  */
@@ -60,7 +62,8 @@ export function registrationStatuses(regs, nowSec) {
   live.sort((x, y) => x.block - y.block || x.position - y.position);
   const taken = new Set();
   for (const r of live) {
-    const key = r.req.d + ":" + Number(r.req.a).toFixed(2);
+    // keyed by the token the payer sends: every usdt-<currency> link is paid in USD₮, so a USD₮ amount can only be in use once
+    const key = CORRIDORS[r.req.d].sell + ":" + Number(r.req.a).toFixed(2);
     out.set(r.hash, taken.has(key) ? "in-use" : "active");
     taken.add(key);
   }

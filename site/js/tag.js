@@ -2,14 +2,16 @@ import {
   AGENT, CAP, TOKENS, $$, el, icon, badge, short, num2, naira, usd, celoscanAddr, celoscanTx, initChrome,
   toast, readContract, loadRate, loadNtagOps, resolveNtags, ownerOf, ntagAvailability, normalizeNtag, ntagError,
   encodeNtagTransfer, ntagUrl, receiptNo, walletDisconnected, markWalletConnected, parseMoneyInput, lagosTime, $,
+  currencyOf, formatCurrency,
 } from "../assets/core.js";
+import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 import { getSession, explainWalletError, injectedWallet, ensureCelo, CELO_CHAIN } from "../assets/session.js";
 import {
   ntagCard, stage, alertBox, availabilityMessage, ntagFinder, waitForReceipt, plainError, sameAddr, sleep, dayMonthYear,
   nameText, LIMITS, LIMITS_TEXT, CNGN_CAP_USD, REFUSED_NOTE, receivableToday, allowanceResetAt, loadNtagStateFresh,
   loadTagLedger, slowNotice, scrollToNode, focusHeading, noWalletHelp, noCeloAlert, celoBalance,
   agentStatus, depositStatus, allowanceFromStatus, combineAllowance, receivedStale, reasonText, paidText, sourceNote, REFUND_NOTE,
-  DELAYED_NOTE, SLOW_NOTE,
+  DELAYED_NOTE, SLOW_NOTE, payoutText,
 } from "../assets/ntag-ui.js";
 
 initChrome();
@@ -72,7 +74,7 @@ async function render() {
   if (!tag) {
     document.title = "Pay by Lokal tag · Lokal";
     title.replaceChildren("Find a ", el("em", {}, "Lokal tag"));
-    lead.textContent = "A Lokal tag is a short name tied to a Celo wallet. Pay the tag and the agent pays that wallet in naira or dollars.";
+    lead.textContent = "A Lokal tag is a short name tied to a Celo wallet. Pay the tag in dollars and the agent pays that wallet in naira, rupiah or pesos.";
     root.replaceChildren(finderCard(null));
     return;
   }
@@ -131,9 +133,11 @@ function renderUnclaimed(tag, state) {
 }
 
 function renderProfile(tag, entry) {
-  if (entry.name) lead.replaceChildren(nameText(entry.name), " gets paid in naira or dollars on Celo. You send USD₮ or cNGN; the agent converts it and pays their wallet.");
-  else lead.textContent = "You send USD₮ or cNGN; the agent converts it and pays this tag's wallet in naira or dollars.";
-  const card = ntagCard({ tag, name: entry.name, address: entry.owner, since: entry.since, as: "button", label: `Lokal tag @${tag}. Copy the link to this page` });
+  const pref = entry.currency ? currencyOf(entry.currency) : null;
+  const gets = pref ? `prefers to receive ${pref.plural}` : "gets paid in their own local money";
+  if (entry.name) lead.replaceChildren(nameText(entry.name), ` ${gets} on Celo. You send USD₮; the agent converts it on Textile FX and pays their wallet.`);
+  else lead.textContent = `@${tag} ${gets}. You send USD₮; the agent converts it on Textile FX and pays this tag's wallet.`;
+  const card = ntagCard({ tag, name: entry.name, address: entry.owner, since: entry.since, currency: entry.currency, as: "button", label: `Lokal tag @${tag}. Copy the link to this page` });
   card.dataset.copy = ntagUrl(tag);
   card.dataset.copyLabel = "Link copied";
   const details = el("section", { class: "card", "aria-labelledby": "who-h" },
@@ -142,6 +146,9 @@ function renderProfile(tag, entry) {
       el("li", {}, el("span", {}, "Lokal tag"), el("span", { class: "np-tagname", style: "font-size:17px;color:var(--celo)" }, "@" + tag)),
       entry.name ? el("li", {}, el("span", {}, "Name"), el("span", { class: "nt-namecell" }, nameText(entry.name), el("small", { class: "micro muted" }, "Name set by the owner"))) : null,
       el("li", {}, el("span", {}, "Wallet"), el("a", { class: "mono link", href: celoscanAddr(entry.owner), title: entry.owner }, short(entry.owner), " ", icon("ext"))),
+      el("li", {}, el("span", {}, "Prefers"), pref
+        ? el("span", { class: "cur-inline" }, flagIcon(pref.code), `${pref.label} (${pref.token})`)
+        : el("span", { class: "soft" }, "Not set (naira by default)")),
       el("li", {}, el("span", {}, "Since"), el("span", {}, dayMonthYear(entry.since))),
       el("li", {}, el("span", {}, "Claim"), el("a", { class: "link", href: celoscanTx(entry.hash) }, "Transaction ", icon("ext"))))),
     el("div", { class: "card-f" }, el("span", { class: "small muted" }, "The tag's owner chose this name; nobody checks it. Make sure it's who you expect."),
@@ -152,16 +159,30 @@ function renderProfile(tag, entry) {
 // ---------- pay ----------
 function payCard(tag, entry) {
   const P = {
-    corridor: "usdt-cngn", rate: null, rateFailed: false, account: null, chainOk: null, bal: null, celo: null, busy: false,
+    corridor: `usdt-${entry.currency ?? "cngn"}`, rate: null, rateFailed: false, account: null, chainOk: null, bal: null, celo: null, busy: false,
     touched: false, allowance: null, celoAnyway: false, alive: true,
   };
   onCleanup(() => { P.alive = false; });
-  const isNaira = () => P.corridor === "usdt-cngn"; // they get naira, you send USD₮
+  // isNaira: you send USD₮ and they get local money (any currency); otherwise you send cNGN and they get dollars
+  const isNaira = () => P.corridor !== "cngn-usdt";
+  const code = () => (isNaira() ? P.corridor.slice(5) : null); // the currency they receive, or null (dollars)
+  const cur = () => currencyOf(code());
+  const perUsd = () => (P.rate && code() && P.rate.available[code()] ? P.rate.rates[code()] : null);
   const sellToken = () => (isNaira() ? TOKENS.USDT : TOKENS.cNGN);
+  const pref = entry.currency ?? null;
 
-  const seg = el("div", { class: "segmented", role: "group", "aria-label": "What they get", id: "corridor" },
-    el("button", { type: "button", dataset: { corridor: "usdt-cngn" }, "aria-pressed": "true" }, "They get naira"),
-    el("button", { type: "button", dataset: { corridor: "cngn-usdt" }, "aria-pressed": "false" }, "They get dollars"));
+  const picker = currencyPicker({
+    label: `What does @${tag} receive?`, describedBy: "corridor-l", value: pref ?? "cngn", remember: false,
+    extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮): you send cNGN" }],
+    onChange: (c) => {
+      const next = c === "usd" ? "cngn-usdt" : `usdt-${c}`;
+      const unitChange = (next === "cngn-usdt") !== (P.corridor === "cngn-usdt");
+      P.corridor = next;
+      if (unitChange) { amountIn.value = isNaira() ? "10" : "15000"; P.bal = null; refreshBalances(); }
+      renderForm();
+    },
+  });
+  const seg = picker.el;
   const segHint = el("p", { class: "hint" });
   const amountIn = el("input", { id: "pay-amount", type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false", size: "4", value: "10", "aria-describedby": "pay-amount-hint pay-today" });
   const tokenEl = el("span", { class: "token" }, "USD₮");
@@ -215,8 +236,11 @@ function payCard(tag, entry) {
     const units = BigInt(cents) * 10_000n;
     let value;
     if (isNaira()) {
-      if (cents < USDT_MIN_CENTS || cents > USDT_MAX_CENTS) return { cents, units, error: `Send $1 to $${CAP}.` };
+      if (cents < USDT_MIN_CENTS || cents > USDT_MAX_CENTS) return { cents, units, error: `Send $1 to $${CAP}${perUsd() ? ` (≈ ${formatCurrency(CAP * perUsd(), code())})` : ""}.` };
       value = cents / 100;
+      if (P.rate && !perUsd()) return { cents, units, error: `${cur().label} isn't available on Textile FX right now, so the agent would refuse it. Pick another currency, or try again later.` };
+      const max = P.rate?.maxUsd?.[code()];
+      if (max && value > max) return { cents, units, error: `Textile can convert up to about $${max.toFixed(2)} into ${cur().plural} right now. Send less, or pick another currency.` };
     } else {
       if (cents < NGN_MIN * 100) return { cents, units, error: `Send at least ₦${ngnText(NGN_MIN)}.` };
       const rr = P.rate?.reverseRate;
@@ -253,19 +277,25 @@ function payCard(tag, entry) {
     }
   }
   function renderForm() {
-    for (const b of $$("button", seg)) b.setAttribute("aria-pressed", String(b.dataset.corridor === P.corridor));
-    segHint.textContent = isNaira() ? `You send USD₮. @${tag} gets cNGN (naira).` : `You send cNGN. @${tag} gets USD₮ (dollars).`;
+    const chose = isNaira() ? cur() : null;
+    const prefC = pref ? currencyOf(pref) : null;
+    picker.note(prefC ? (chose && chose.code === pref ? `@${tag} prefers ${prefC.plural}.` : `@${tag} prefers ${prefC.plural}; you chose ${chose ? chose.plural : "dollars"}.`) : "");
+    segHint.textContent = isNaira() ? `You send USD₮. @${tag} gets ${chose.plural} (${chose.token}).` : `You send cNGN. @${tag} gets USD₮ (dollars).`;
     tokenEl.textContent = sellToken().symbol;
     const a = readAmount();
     const show = a.error && (P.touched || a.limit || amountIn.value.trim()) && !/^Loading/.test(a.error);
     amountHint.classList.toggle("err", !!show);
-    amountHint.textContent = show ? a.error : isNaira() ? `$1 to $${CAP}, up to 2 decimals.` : cngnHint();
+    amountHint.textContent = show ? a.error : isNaira() ? `$1 to $${CAP}${perUsd() ? ` (up to ≈ ${formatCurrency(CAP * perUsd(), code())})` : ""}, up to 2 decimals.` : cngnHint();
     amountIn.setAttribute("aria-invalid", String(!!show));
     sSend.textContent = a.cents > 0 && !a.error ? fmtSend(a.cents) : "—";
     const r = P.rate;
     let get = null, rateText = "—";
     if (r) {
-      if (isNaira()) { rateText = `1 USD₮ = ${naira(r.rate)}`; if (a.cents > 0) get = naira((a.cents / 100) * r.rate); }
+      if (isNaira()) {
+        const pu = perUsd();
+        rateText = pu ? `1 USD₮ = ${formatCurrency(pu, code(), code() === "cngn" ? 2 : cur().places)}` : `${cur().label}: not available right now`;
+        if (a.cents > 0 && pu) get = el("span", { title: `${cur().name}, rounded down` }, formatCurrency((a.cents / 100) * pu, code()));
+      }
       else if (r.reverseRate) { rateText = `1 USD₮ = ${naira(1 / r.reverseRate)}`; if (a.cents > 0) get = usd((a.cents / 100) * r.reverseRate); }
       else rateText = "Not published yet";
       basis.textContent = r.fromPreview ? "Fees included" : "Before fees";
@@ -414,7 +444,8 @@ function payCard(tag, entry) {
       P.chainOk = true;
       const [bal] = await readContract(token.address, "0x70a08231", ["address"], [from], ["uint256"]);
       if (bal < a.units) throw plainError(`This wallet has ${num2.format(Number(bal) / 1e6)} ${token.symbol}, less than ${fmtSend(a.cents)}. Nothing was sent.`);
-      const data = encodeNtagTransfer(AGENT, a.units, tag);
+      // the memo names the currency they receive ("NTP:budi:idrx"); naira keeps the original "NTP:budi"
+      const data = encodeNtagTransfer(AGENT, a.units, tag, isNaira() ? code() : undefined);
       const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from, to: token.address, value: "0x0", data }] });
       if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
       const pending = { hash, from, corridor, cents: a.cents, owner: entry.owner, since: entry.since, at: Date.now() };
@@ -435,8 +466,7 @@ function payCard(tag, entry) {
     let stopped = false, stopSlow = null;
     const stop = () => { stopped = true; stopSlow?.(); };
     onCleanup(stop);
-    const buy = p.corridor === "usdt-cngn" ? TOKENS.cNGN : TOKENS.USDT;
-    const sendText = p.corridor === "usdt-cngn" ? `${num2.format(p.cents / 100)} USD₮` : `${num2.format(p.cents / 100)} cNGN`;
+    const sendText = p.corridor !== "cngn-usdt" ? `${num2.format(p.cents / 100)} USD₮` : `${num2.format(p.cents / 100)} cNGN`;
     const rows = {};
     const step = (id, t, sub) => {
       const small = el("small", {}, sub ?? "");
@@ -543,8 +573,7 @@ function payCard(tag, entry) {
               const d = deposits.find((x) => String(x.hash).toLowerCase() === p.hash.toLowerCase());
               if (d?.status === "paid") {
                 setSource(false);
-                const got = Number(d.payout.units) / 1e6;
-                showPaid(receiptNo(d.payout.hash), buy === TOKENS.cNGN ? naira(got) + " in cNGN" : num2.format(got) + " USD₮");
+                showPaid(receiptNo(d.payout.hash), payoutText(d.payout.token, d.payout.units));
                 return;
               }
               // the chain's guesses about refusals only count when the agent has no record of this deposit
@@ -587,16 +616,6 @@ function payCard(tag, entry) {
   }
 
   // ----- wire up -----
-  for (const b of $$("button", seg)) {
-    b.addEventListener("click", () => {
-      if (P.corridor === b.dataset.corridor) return;
-      P.corridor = b.dataset.corridor;
-      amountIn.value = isNaira() ? "10" : "15000";
-      P.bal = null;
-      renderForm();
-      refreshBalances();
-    });
-  }
   amountIn.addEventListener("input", renderForm);
   amountIn.addEventListener("blur", () => { P.touched = true; renderForm(); });
   if (eth?.on) {
@@ -606,7 +625,7 @@ function payCard(tag, entry) {
     eth.on("chainChanged", onChain);
     onCleanup(() => { eth.removeListener?.("accountsChanged", onAccounts); eth.removeListener?.("chainChanged", onChain); });
   }
-  loadRate().then((r) => { P.rate = r; }).catch(() => { P.rateFailed = true; })
+  loadRate().then((r) => { P.rate = r; picker.setAvailability(r.available); }).catch(() => { P.rateFailed = true; })
     .then(() => { if (P.alive) renderForm(); return loadAllowance(); })
     .then(() => { if (P.alive) renderForm(); });
   renderForm();
@@ -615,7 +634,7 @@ function payCard(tag, entry) {
   // a payment sent from this tab earlier (page reloaded): keep tracking it
   let pending = null;
   try { pending = JSON.parse(sessionStorage.getItem(PENDING_KEY(tag)) ?? "null"); } catch { pending = null; }
-  if (pending && isHash(pending.hash) && sameAddr(pending.owner, entry.owner) && Date.now() - pending.at < 24 * 3600_000 && (pending.corridor === "usdt-cngn" || pending.corridor === "cngn-usdt")) {
+  if (pending && isHash(pending.hash) && sameAddr(pending.owner, entry.owner) && Date.now() - pending.at < 24 * 3600_000 && /^(usdt-(cngn|idrx|wars|wcop)|cngn-usdt)$/.test(String(pending.corridor))) {
     setTimeout(() => { if (P.alive) track(pending); }, 0);
   }
   return section;

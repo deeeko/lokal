@@ -4,8 +4,9 @@
 //
 //   node src/ntag.mjs <command>      npm run lokal -- <command>      lokal <command>   (after `npm link`; `ntag` works too)
 //
-// Paying @ada is an ordinary USD₮ (or cNGN) transfer to the agent with "NTP:ada" appended to the calldata (see
-// site/_spec/NTAGS.md). The agent then pays @ada's wallet in naira (or dollars). This tool uses YOUR wallet only:
+// Paying @ada is an ordinary USD₮ (or cNGN) transfer to the agent with "NTP:ada" (or "NTP:ada:idrx", naming the currency
+// they receive) appended to the calldata (see site/_spec/NTAGS.md). The agent then pays @ada's wallet in naira, rupiah or
+// pesos (or dollars, for cNGN). This tool uses YOUR wallet only:
 // it never touches the agent's key, never prints a key, and asks you to type the tag before any money moves.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -21,11 +22,12 @@ import {
   AGENT_ADDRESS, EXPLORER_API, KEY_FILE, MAX_DAILY_USD, MAX_SLIPPAGE_BPS, MAX_USD, MAX_WALLET_DAILY_USD, SITE_URL, TOKENS,
 } from "./config.mjs";
 import {
-  decodeNtagMemo, decodeNtagOp, encodeNtagClaim, encodeNtagRelease, encodeNtagTransfer, loadNtagOpsCache, ntagAvailability,
+  decodeNtagPayment, decodeNtagOp, encodeNtagClaim, encodeNtagRelease, encodeNtagTransfer, loadNtagOpsCache, ntagAvailability,
   ntagError, ntagNameError, ntagOf, normalizeNtag, ownerOf, refreshNtagOpsCache, resolveNtags, resolveNtagsBefore,
   verifyNtagOpOnchain, RELEASE_LOCK_DAYS,
 } from "./ntags.mjs";
 import { receiptNo, receiptNoLink } from "./requests.mjs";
+import { CURRENCIES, currencyOf, findCurrency, formatCurrency, formatCurrencyUnits } from "./currencies.mjs";
 
 // The deployed agent. Hard-coded as well as read from config, so an env override can never make this tool pay elsewhere
 // without also being refused as "the agent's key".
@@ -95,11 +97,11 @@ let c = palette(false);
 // ---------- argument parsing ----------
 
 const BOOL_FLAGS = { "--yes": "yes", "-y": "yes", "--dry-run": "dryRun", "--wait": "wait", "--dollars": "dollars", "--naira": "naira", "--help": "help", "-h": "help" };
-const VALUE_FLAGS = { "--name": "name" };
+const VALUE_FLAGS = { "--name": "name", "--to": "to" };
 
 /** argv (without node + script) -> { cmd, args: [...positionals after cmd], flags }. Throws UsageError on unknown flags. */
 export function parseArgs(argv) {
-  const flags = { yes: false, dryRun: false, wait: false, dollars: false, naira: false, help: false, name: undefined };
+  const flags = { yes: false, dryRun: false, wait: false, dollars: false, naira: false, help: false, name: undefined, to: undefined };
   const pos = [];
   for (let i = 0; i < argv.length; i++) {
     const a = String(argv[i]);
@@ -122,11 +124,22 @@ export function parseArgs(argv) {
     pos.push(a);
   }
   if (flags.dollars && flags.naira) throw new UsageError("Pick one: --dollars or --naira (the default).");
+  if (flags.to != null && flags.dollars) throw new UsageError("Pick one: --dollars (pay in cNGN, they get dollars) or --to <currency>.");
+  if (flags.to != null && flags.naira && parseCurrencyArg(flags.to) !== "cngn") throw new UsageError("Pick one: --naira or --to <currency>.");
   const [cmd = "help", ...args] = pos;
   return { cmd: cmd.toLowerCase(), args, flags };
 }
 
 // ---------- tags and amounts ----------
+
+/** What they receive, from "--to": naira | rupiah | argentina-peso | colombia-peso (or cngn, idrx, ars, cop ...). */
+export function parseCurrencyArg(input) {
+  const c = findCurrency(input);
+  if (!c) throw new UsageError(`"${input}" is not a currency Lokal pays in. Use --to naira, rupiah, argentina-peso or colombia-peso.`);
+  return c.code;
+}
+/** "🇮🇩 Rupiah (IDRX)" */
+export const currencyText = (code) => { const c = currencyOf(code ?? "cngn"); return `${c.flag} ${c.label} (${c.token})`; };
 
 /** "@Ada" -> "ada". Throws UsageError with the exact rule broken. */
 export function parseTag(input) {
@@ -183,10 +196,14 @@ export function checkAmount(units, token, { reverseRate } = {}) {
   return { units, usdUnits };
 }
 
-/** The exact transaction a payment sends: the TOKEN contract, transfer(agent, units) + "NTP:" memo + attribution suffix, value 0. */
-export function buildTransfer({ token, units, tag, agent = AGENT }) {
+/**
+ * The exact transaction a payment sends: the TOKEN contract, transfer(agent, units) + "NTP:" memo + attribution suffix,
+ * value 0. `currency` (USD₮ payments): what the owner receives; naira (the default) keeps the plain "NTP:<tag>" memo.
+ */
+export function buildTransfer({ token, units, tag, currency, agent = AGENT }) {
   const t = token === "CNGN" ? CNGN : USDT;
-  return { to: t.address, data: encodeNtagTransfer(agent, BigInt(units), tag), value: 0n };
+  if (token === "CNGN" && currency != null && currency !== "cngn") throw new UsageError("A cNGN payment pays out in dollars; it can't choose a currency.");
+  return { to: t.address, data: encodeNtagTransfer(agent, BigInt(units), tag, token === "CNGN" ? undefined : currency ?? undefined), value: 0n };
 }
 
 /** First 68 bytes of an ERC-20 transfer: { to, units } or null. Trailing bytes (memo, suffix) are ignored. */
@@ -209,7 +226,12 @@ export const celoscanTx = (h) => `https://celoscan.io/tx/${h}`;
 export const celoscanAddr = (a) => `https://celoscan.io/address/${a}`;
 export const fmtUsd = (units) => `$${fmtGroup(formatUnits(BigInt(units), 6), 2)}`;
 export const fmtNgn = (units) => `₦${fmtGroup(formatUnits(BigInt(units), 6), 2)}`;
-export const fmtToken = (units, token) => (token === "CNGN" ? `${fmtNgn(units)} cNGN` : `${fmtUsd(units)} USD₮`);
+/** An amount of a token by its TOKENS key ("USDT", "CNGN", "IDRX", "WARS", "WCOP"), rounded down: "Rp 91,967 IDRX". */
+export const fmtToken = (units, token) => {
+  if (token === "USDT") return `${fmtUsd(units)} USD₮`;
+  const cur = CURRENCIES.find((x) => x.token.toUpperCase() === token);
+  return cur ? `${formatCurrencyUnits(units, cur.code)} ${cur.token}` : `${units} ${token}`;
+};
 export const fmtCelo = (wei, dp = 4) => `${Number(formatUnits(BigInt(wei), CELO_DECIMALS)).toFixed(dp)} CELO`;
 const isoDay = (sec) => new Date(Number(sec) * 1000).toISOString().slice(0, 10);
 const visible = (s) => String(s).replace(/\x1b\[[0-9;]*m/g, "");
@@ -237,6 +259,7 @@ export function formatSummary(s, opts = {}) {
     ["You send", fmtToken(s.units, s.token)],
     ["They get", s.receiveText ?? "≈ unavailable right now"],
   ];
+  if (s.preferText) rows.push(["Prefers", s.preferText]);
   if (s.rateText) rows.push(["Rate", s.rateText]);
   rows.push(["Network fee", s.feeWei != null ? `≈ ${fmtCelo(s.feeWei, 5)}` : "≈ unknown"]);
   if (s.fromAddress) rows.push(["From", shortAddr(s.fromAddress)]);
@@ -253,13 +276,29 @@ export function todayText(tag, allowance) {
   return `@${tag} can receive about ${fmtUsd(allowance.leftUnits)} more today (${lim})`;
 }
 
-/** What they get, from rate.json-style data. Returns { text, rateText } with text "≈ ₦14,443.66" etc. */
-export function estimateReceive(token, units, rate) {
+/** Local money per 1 USD₮ for `code` from rate.json / api/rate data (rates.<code>; naira also from the older fields). */
+export function rateFor(rate, code = "cngn") {
+  const r = Number(rate?.rates?.[code]);
+  if (r > 0 && rate?.available?.[code] !== false) return r;
+  if (code !== "cngn") return null;
+  return Number(rate?.effectiveRate) || Number(rate?.ticker?.bid) || null;
+}
+
+/**
+ * What they get, from rate.json-style data. Returns { text, rateText } with text "≈ ₦14,443.66 in naira (cNGN)",
+ * "≈ Rp 183,938 in rupiah (IDRX)" etc. `currency`: what a USD₮ payment pays out in (default naira). Rounded down.
+ */
+export function estimateReceive(token, units, rate, currency = "cngn") {
   if (token === "USDT") {
-    const r = Number(rate?.effectiveRate) || Number(rate?.ticker?.bid);
+    const cur = currencyOf(currency) ?? currencyOf("cngn");
+    const r = rateFor(rate, cur.code);
     if (!(r > 0)) return { text: null, rateText: null };
-    const ngn = BigInt(Math.floor(Number(units) * r)); // units are 6-dp; result in 6-dp naira units (estimate only)
-    return { text: `≈ ${fmtNgn(ngn)} in naira (cNGN)`, rateText: `$1 ≈ ₦${fmtGroup(r, 2)}${rate?.stale ? " (may be out of date)" : ""}` };
+    const got = (Number(units) / 1e6) * r; // estimate only; the agent pays what the swap really delivers
+    const word = cur.plural;
+    return {
+      text: `≈ ${cur.code === "cngn" ? fmtNgn(BigInt(Math.floor(Number(units) * r))) : formatCurrency(got, cur.code)} in ${word} (${cur.token})`,
+      rateText: `$1 ≈ ${formatCurrency(r, cur.code, cur.code === "cngn" ? 2 : cur.places)}${rate?.stale ? " (may be out of date)" : ""}`,
+    };
   }
   const rr = Number(rate?.reverseRate);
   if (!(rr > 0)) return { text: null, rateText: null };
@@ -703,10 +742,13 @@ const isAfter = (p, d) => p.block > d.block || (p.block === d.block && p.logInde
 const sameLog = (a, b) => lc(a.hash) === lc(b.hash) && Number(a.logIndex) === Number(b.logIndex);
 
 /** Units of the payout token a deposit should bring the owner at today's rate (an estimate), or null without a rate. */
-export function expectedPayoutUnits(token, units, rate) {
+export function expectedPayoutUnits(token, units, rate, currency = "cngn") {
   if (token === "USDT") {
-    const r = Number(rate?.effectiveRate) || Number(rate?.ticker?.bid);
-    return r > 0 ? BigInt(Math.floor(Number(units) * r)) : null;
+    const cur = currencyOf(currency) ?? currencyOf("cngn");
+    const r = rateFor(rate, cur.code);
+    if (!(r > 0)) return null;
+    const micro = BigInt(Math.floor(Number(units) * r)); // 6-dp units of the local money
+    return cur.decimals >= 6 ? micro * 10n ** BigInt(cur.decimals - 6) : micro / 10n ** BigInt(6 - cur.decimals);
   }
   const rr = Number(rate?.reverseRate);
   return rr > 0 ? cngnUsdUnits(units, rr) : null;
@@ -785,27 +827,28 @@ const MAX_MEMO_LOOKUPS = 40;
  * one of them could belong to, then matches them in order (matchNtagPayout). Returns { status: "paid" | "maybe" |
  * "none" | "ineligible", payout?, reason? }. Anything it can't see completely turns "paid" into "maybe".
  */
-async function checkNtagPayout(pub, { tag, owner, token, dep, claimBlock, rate }) {
+async function checkNtagPayout(pub, { tag, owner, token, dep, claimBlock, rate, currency = "cngn" }) {
   const why = depositIneligible({ token, units: dep.units, payer: dep.payer, owner }, rate);
   if (why) return { status: "ineligible", reason: why };
   const sell = token === "CNGN" ? CNGN : USDT;
-  const buy = token === "CNGN" ? USDT : CNGN;
+  const buy = token === "CNGN" ? USDT : TOKENS[currencyOf(currency ?? "cngn").token.toUpperCase()];
   const out = await transfersToAddress(owner, { token: buy.address, sinceBlock: claimBlock, pages: 10 });
   const payouts = out.items.filter((t) => lc(t.from) === lc(AGENT) && lc(t.to) === lc(owner) && lc(t.token) === lc(buy.address) && t.block > claimBlock);
   if (!payouts.some((p) => isAfter(p, dep))) return { status: "none" };
-  const target = { ...dep, expected: expectedPayoutUnits(token, dep.units, rate) };
+  const target = { ...dep, expected: expectedPayoutUnits(token, dep.units, rate, currency) };
   if (target.expected == null) return matchNtagPayout({ target, payouts }); // no rate: never "paid"
   // Other deposits to the agent since the claim whose value could explain one of these payouts: check their memo.
   const ins = await transfersToAddress(AGENT, { token: sell.address, sinceBlock: claimBlock, pages: 10 });
   const fitsSome = (t, expected) => expected != null && payouts.some((p) => isAfter(p, t) && matchNtagPayout({ target: { ...t, expected }, payouts: [p] }).status === "paid");
   const near = ins.items
     .filter((t) => lc(t.to) === lc(AGENT) && lc(t.token) === lc(sell.address) && t.block > claimBlock && !sameLog(t, dep))
-    .map((t) => ({ ...t, expected: expectedPayoutUnits(token, t.units, rate) }))
+    .map((t) => ({ ...t, expected: expectedPayoutUnits(token, t.units, rate, currency) }))
     .filter((t) => fitsSome(t, t.expected));
   const others = [];
   for (const t of near.slice(0, MAX_MEMO_LOOKUPS)) {
     const tx = await pub.getTransaction({ hash: t.hash });
-    if (decodeNtagMemo(tx.input) !== tag || lc(tx.from) !== lc(t.from) || lc(tx.to) !== lc(sell.address)) continue;
+    const m = decodeNtagPayment(tx.input);
+    if (m?.tag !== tag || (m.currency ?? "cngn") !== (token === "CNGN" ? "cngn" : currency ?? "cngn") || lc(tx.from) !== lc(t.from) || lc(tx.to) !== lc(sell.address)) continue;
     if (depositIneligible({ token, units: t.units, payer: t.from, owner }, rate)) continue;
     others.push(t);
   }
@@ -829,25 +872,33 @@ export function walletAllowance(usedUnits) {
 async function dailyAllowance(owner, rate, now = Date.now()) {
   try {
     const sinceSec = Math.floor(now / 1000) - 86400;
-    const [u, n] = await Promise.all([USDT, CNGN].map((t) => transfersToAddress(owner, { token: t.address, sinceSec, pages: 10 })));
-    if (!u.complete || !n.complete) return { error: "too many transfers to check" };
-    const ngnPerUsd = Number(rate?.effectiveRate) || Number(rate?.ticker?.bid);
-    const naira = n.items.some((t) => lc(t.from) === lc(AGENT) && t.time >= sinceSec);
-    if (naira && !(ngnPerUsd > 0)) return { error: "no naira rate right now" };
-    return walletAllowance(agentPaidUsd([...u.items, ...n.items], { owner, sinceSec, ngnPerUsd }));
+    const toks = Object.values(TOKENS); // USD₮ and every local currency the agent pays out
+    const lists = await Promise.all(toks.map((t) => transfersToAddress(owner, { token: t.address, sinceSec, pages: 10 })));
+    if (lists.some((l) => !l.complete)) return { error: "too many transfers to check" };
+    const perUsd = Object.fromEntries(CURRENCIES.map((c) => [c.code, rateFor(rate, c.code)]));
+    for (const [i, t] of toks.entries()) {
+      if (!t.currency || perUsd[t.currency] > 0) continue;
+      if (lists[i].items.some((x) => lc(x.from) === lc(AGENT) && x.time >= sinceSec)) return { error: `no ${currencyOf(t.currency).plural} rate right now` };
+    }
+    return walletAllowance(agentPaidUsd(lists.flatMap((l) => l.items), { owner, sinceSec, ngnPerUsd: perUsd.cngn, perUsd }));
   } catch (e) {
     return { error: e.message };
   }
 }
 
-/** USD value (6-dp) the agent paid `owner` since `sinceSec` (cNGN valued at `ngnPerUsd`). Pure. */
-export function agentPaidUsd(transfers, { agent = AGENT, owner, sinceSec, ngnPerUsd }) {
+/**
+ * USD value (6-dp) the agent paid `owner` since `sinceSec`: USD₮ as is, cNGN at `ngnPerUsd`, any other local currency at
+ * `perUsd[code]` (local money per 1 USD₮). Pure.
+ */
+export function agentPaidUsd(transfers, { agent = AGENT, owner, sinceSec, ngnPerUsd, perUsd = {} }) {
   const lc = (s) => String(s).toLowerCase();
   let sum = 0n;
   for (const t of transfers) {
     if (lc(t.from) !== lc(agent) || lc(t.to) !== lc(owner) || t.time < sinceSec) continue;
-    if (lc(t.token) === lc(USDT.address)) sum += t.units;
-    else if (lc(t.token) === lc(CNGN.address) && ngnPerUsd > 0) sum += BigInt(Math.floor(Number(t.units) / ngnPerUsd));
+    if (lc(t.token) === lc(USDT.address)) { sum += t.units; continue; }
+    const cur = CURRENCIES.find((x) => lc(x.address) === lc(t.token));
+    const r = cur?.code === "cngn" ? Number(ngnPerUsd) || Number(perUsd.cngn) : Number(perUsd[cur?.code]);
+    if (cur && r > 0) sum += BigInt(Math.floor((Number(t.units) / 10 ** cur.decimals / r) * 1e6));
   }
   return sum;
 }
@@ -882,13 +933,15 @@ ${c.bold("Get started")}
 
 ${c.bold("Pay someone")}
   lokal whois ada                   who owns the Lokal tag @ada
-  lokal send ada 10                 you send $10 USD₮, @ada gets naira
+  lokal send ada 10                 you send $10 USD₮, @ada gets their preferred currency (else naira)
+  lokal send ada 10 --to rupiah     ... and @ada gets rupiah (IDRX); also naira, argentina-peso, colombia-peso
   lokal send ada 14000 --dollars    you send ₦14,000 cNGN, @ada gets dollars (USD₮)
   lokal status 0x<txhash>           is that payment confirmed and paid out?
   In PowerShell a leading @ is special: write ada, or put it in quotes ('@ada').
 
 ${c.bold("Your own tag")}
   lokal claim ada --name "Ada Obi"  claim @ada for your wallet (public and permanent)
+  lokal claim ada --to rupiah       set (or change) the currency you prefer to receive
   lokal release                     give up your tag (locked for you for ${RELEASE_LOCK_DAYS} days)
 
 ${c.bold("Send password")}
@@ -898,7 +951,9 @@ ${c.bold("Send password")}
   There is no recovery: if you forget it, re-import your own key backup with a new password.
 
 ${c.bold("Options")}
-  --dollars     pay in cNGN so the owner gets dollars (default: pay USD₮, owner gets naira)
+  --to X        what they receive: naira, rupiah, argentina-peso or colombia-peso (codes cngn, idrx, wars,
+                wcop and ISO codes NGN, IDR, ARS, COP work too). Default: the tag's preferred currency, else naira
+  --dollars     pay in cNGN so the owner gets dollars (default: pay USD₮, owner gets local money)
   --yes, -y     skip typing the tag to confirm (for scripts)
   --wait        after sending, wait for the agent's payout and print the receipt number
   --dry-run     show the exact transaction (to / data / value) and send nothing
@@ -1025,6 +1080,7 @@ async function cmdWhois(args) {
   out(formatBox(`@${tag}`, [
     ["Name", entry.name ?? c.dim("(no display name)")],
     ["Owner", entry.owner],
+    ["Prefers", `${currencyText(entry.currency)}${entry.currency ? "" : c.dim("  (the default; the owner hasn't chosen)")}`],
     ["Since", isoDay(entry.since)],
     ["Claim tx", celoscanTx(entry.hash)],
     ["Checked", "claim verified on the Celo network"],
@@ -1034,10 +1090,11 @@ async function cmdWhois(args) {
 }
 
 async function cmdSend(args, flags) {
-  if (args.length < 2) throw new UsageError("Usage: lokal send ada 10   (add --dollars to pay in cNGN)");
-  if (args.length > 2) throw new UsageError(`Too many values: ${args.slice(2).join(" ")}. Usage: lokal send ada 10`);
+  if (args.length < 2) throw new UsageError("Usage: lokal send ada 10 [--to rupiah]   (or --dollars to pay in cNGN)");
+  if (args.length > 2) throw new UsageError(`Too many values: ${args.slice(2).join(" ")}. Usage: lokal send ada 10 [--to rupiah]`);
   const tag = parseTag(args[0]);
   const token = flags.dollars ? "CNGN" : "USDT";
+  const chosen = flags.to != null ? parseCurrencyArg(flags.to) : flags.naira ? "cngn" : null; // null: the tag's preference
   const units = parseAmountUnits(args[1]);
   if (token === "USDT") checkAmount(units, token); // fail fast, before any network call
 
@@ -1053,7 +1110,18 @@ async function cmdSend(args, flags) {
   if (!entry) throw new CliError(`@${tag} is not claimed by anyone, so there is nobody to pay. Nothing was sent.`);
   if (account && account.address.toLowerCase() === entry.owner.toLowerCase()) throw new CliError(`@${tag} is your own tag. You can't pay yourself.`);
 
-  const tx = buildTransfer({ token, units, tag });
+  // What they receive: --to, else the tag's preferred currency, else naira. A currency Textile isn't quoting right now
+  // would be refused by the agent (never paid in another one), so stop here instead.
+  const currency = token === "CNGN" ? null : chosen ?? entry.currency ?? "cngn";
+  if (currency && rate && !rateFor(rate, currency)) {
+    throw new CliError(`${currencyText(currency)} isn't available on Textile FX right now, so the agent couldn't pay it out. Nothing was sent. Try again later or pick another currency with --to.`);
+  }
+  const maxUsd = currency ? Number(rate?.maxUsd?.[currency]) : 0;
+  if (maxUsd > 0 && Number(units) / 1e6 > maxUsd) {
+    throw new CliError(`Right now Textile FX can convert at most about $${maxUsd.toFixed(2)} into ${currencyOf(currency).plural}. Send less, or choose another currency with --to. Nothing was sent.`);
+  }
+  const preferText = token === "USDT" && entry.currency && currency !== entry.currency ? `${currencyText(entry.currency)}; you chose ${currencyOf(currency).plural}` : null;
+  const tx = buildTransfer({ token, units, tag, currency: currency ?? undefined });
   const tok = token === "CNGN" ? CNGN : USDT;
   let feeWei = null;
   if (account) {
@@ -1076,9 +1144,9 @@ async function cmdSend(args, flags) {
     );
   }
 
-  const est = estimateReceive(token, units, rate);
+  const est = estimateReceive(token, units, rate, currency ?? "cngn");
   out("");
-  out(formatSummary({ tag, name: entry.name, owner: entry.owner, token, units, receiveText: est.text, rateText: est.rateText, feeWei, fromAddress: account?.address, todayText: todayText(tag, allowance) }, { color: useColor() }));
+  out(formatSummary({ tag, name: entry.name, owner: entry.owner, token, units, receiveText: est.text, rateText: est.rateText, feeWei, fromAddress: account?.address, todayText: todayText(tag, allowance), preferText }, { color: useColor() }));
   out(c.dim(`  The agent pays @${tag}'s wallet ${shortAddr(entry.owner)} after your transfer confirms. The amount they get is an estimate at today's rate.`));
 
   if (flags.dryRun) {
@@ -1087,7 +1155,7 @@ async function cmdSend(args, flags) {
     out(`  to:    ${tx.to}   (${token === "CNGN" ? "cNGN" : "USD₮"} token contract)`);
     out(`  value: ${tx.value}`);
     out(`  data:  ${tx.data}`);
-    out(c.dim(`  The data is transfer(${AGENT}, ${units}) + "NTP:${tag}" + attribution suffix.`));
+    out(c.dim(`  The data is transfer(${AGENT}, ${units}) + "NTP:${tag}${currency && currency !== "cngn" ? ":" + currency : ""}" + attribution suffix.`));
     return;
   }
 
@@ -1116,7 +1184,7 @@ async function cmdSend(args, flags) {
     return;
   }
   const dep = depositFromReceipt(rc, tok.address) ?? { hash, block: Number(rc.blockNumber), logIndex: 0, units, payer: account.address };
-  await waitForPayout(pub, { owner: entry.owner, token, tag, dep, claimBlock: Number(entry.block), rate });
+  await waitForPayout(pub, { owner: entry.owner, token, tag, dep, claimBlock: Number(entry.block), rate, currency: currency ?? "cngn" });
 }
 
 /** One line about a payout check, for status and --wait. */
@@ -1145,14 +1213,14 @@ async function signAndSend(file, tx, beforeSign) {
   } finally { account = null; }
 }
 
-async function waitForPayout(pub, { owner, token, tag, dep, claimBlock, rate }) {
-  const buyToken = token === "CNGN" ? "USDT" : "CNGN";
+async function waitForPayout(pub, { owner, token, tag, dep, claimBlock, rate, currency = "cngn" }) {
+  const buyToken = token === "CNGN" ? "USDT" : currencyOf(currency).token.toUpperCase();
   const until = Date.now() + WAIT_MINUTES * 60_000;
   out(c.dim(`Waiting for the agent to pay @${tag} (up to ${WAIT_MINUTES} min; Ctrl+C stops waiting, your payment is safe)…`));
   let last = null;
   while (Date.now() < until) {
     try {
-      const r = await checkNtagPayout(pub, { tag, owner, token, dep, claimBlock, rate });
+      const r = await checkNtagPayout(pub, { tag, owner, token, dep, claimBlock, rate, currency });
       if (r.status === "paid") {
         if (process.stdout.isTTY) process.stdout.write("\n");
         const no = receiptNo(r.payout.hash);
@@ -1175,14 +1243,15 @@ async function waitForPayout(pub, { owner, token, tag, dep, claimBlock, rate }) 
 }
 
 async function cmdClaim(args, flags) {
-  if (!args[0]) throw new UsageError('Usage: lokal claim ada [--name "Ada Obi"]');
+  if (!args[0]) throw new UsageError('Usage: lokal claim ada [--name "Ada Obi"] [--to rupiah]');
   if (args.length > 1) throw new UsageError(`Unexpected "${args.slice(1).join(" ")}". Put a display name in quotes after --name.`);
   const tag = parseTag(args[0]);
   if (flags.name != null) {
     const e = ntagNameError(flags.name);
     if (e) throw new UsageError(`Display name: ${e}.`);
   }
-  const data = encodeNtagClaim({ t: tag, ...(flags.name != null ? { n: flags.name } : {}) });
+  const prefer = flags.to != null ? parseCurrencyArg(flags.to) : null;
+  const data = encodeNtagClaim({ t: tag, ...(flags.name != null ? { n: flags.name } : {}), ...(prefer ? { c: prefer } : {}) });
   const account = loadWallet();
   const pub = makePublic();
   const ops = await discoverOps();
@@ -1200,8 +1269,11 @@ async function cmdClaim(args, flags) {
   if (avail !== "free" && avail !== "yours") throw new CliError(msg);
   if (avail === "yours") {
     const cur = ownerOf(state, tag);
-    if (flags.name == null || flags.name.trim() === cur?.name) { ok(`${msg} Nothing to do.`); return; }
-    out(`${msg} This will change its display name to "${flags.name.trim()}".`);
+    const rename = flags.name != null && flags.name.trim() !== cur?.name;
+    const recur = prefer != null && prefer !== (cur?.currency ?? null);
+    if (!rename && !recur) { ok(`${msg} Nothing to do.`); return; }
+    if (rename) out(`${msg} This will change its display name to "${flags.name.trim()}".`);
+    if (recur) out(`${rename ? "It" : msg + " This"} will set the currency you prefer to receive to ${currencyText(prefer)}.`);
   } else {
     ok(msg);
     if (current) warn(`Claiming @${tag} releases your current tag @${current}, which then stays locked for you for ${RELEASE_LOCK_DAYS} days.`);
@@ -1213,7 +1285,7 @@ async function cmdClaim(args, flags) {
       const now = resolveNtags(st.ops);
       if (ntagOf(now, account.address) === tag) {
         const e = ownerOf(now, tag);
-        ok(`@${tag} is yours${e?.name ? ` (${e.name})` : ""}. People can now pay you with: lokal send ${tag} 10`);
+        ok(`@${tag} is yours${e?.name ? ` (${e.name})` : ""}${e?.currency ? `, and you prefer ${currencyText(e.currency)}` : ""}. People can now pay you with: lokal send ${tag} 10`);
         return;
       }
       const s = st.status;
@@ -1304,7 +1376,9 @@ async function cmdStatus(args) {
     return;
   }
 
-  const tag = decodeNtagMemo(tx.input);
+  const memo = decodeNtagPayment(tx.input);
+  const tag = memo?.tag ?? null;
+  const currency = memo?.currency ?? "cngn";
   const tr = parseTransferCalldata(tx.input);
   const token = to === USDT.address.toLowerCase() ? "USDT" : to === CNGN.address.toLowerCase() ? "CNGN" : null;
   if (!tag || !tr || !token || tr.to.toLowerCase() !== AGENT.toLowerCase()) {
@@ -1312,7 +1386,7 @@ async function cmdStatus(args) {
     process.exitCode = 1;
     return;
   }
-  const rows = [["Tag", `@${tag}`], ["Paid", fmtToken(tr.units, token)], ["From", tx.from], ["Status", confirmed]];
+  const rows = [["Tag", `@${tag}`], ["Paid", fmtToken(tr.units, token)], ["They get", token === "CNGN" ? "dollars (USD₮)" : currencyText(currency)], ["From", tx.from], ["Status", confirmed]];
   let owner = null;
   let e = null;
   if (rc?.status === "success") {
@@ -1326,8 +1400,8 @@ async function cmdStatus(args) {
     const dep = depositFromReceipt(rc, token === "CNGN" ? CNGN.address : USDT.address)
       ?? { hash, block: Number(rc.blockNumber), logIndex: 0, units: tr.units, payer: tx.from };
     let r = null;
-    try { r = await checkNtagPayout(pub, { tag, owner, token, dep, claimBlock: Number(e.block), rate: await loadRate() }); } catch { /* shown as unknown */ }
-    rows.push(...(r ? payoutRows(tag, r, token === "CNGN" ? "USDT" : "CNGN") : [["Payout", c.yellow("could not check right now")]]));
+    try { r = await checkNtagPayout(pub, { tag, owner, token, dep, claimBlock: Number(e.block), rate: await loadRate(), currency }); } catch { /* shown as unknown */ }
+    rows.push(...(r ? payoutRows(tag, r, token === "CNGN" ? "USDT" : currencyOf(currency).token.toUpperCase()) : [["Payout", c.yellow("could not check right now")]]));
   }
   out(formatBox("Lokal tag payment", rows, { color: useColor() }));
 }

@@ -142,12 +142,9 @@
             <div class="alert"><svg class="i"><use href="#i-info"/></svg><span>For the agent's owner: links to a saved contact are made on the agent's computer with the commands below. Anyone can make a link to their own wallet on <a class="link" href="get-paid.html">Get paid</a>.</span></div>
 
             <div class="field">
-              <span class="label" id="corridor-label">Corridor</span>
-              <div class="segmented" style="justify-self:start" role="group" aria-labelledby="corridor-label" id="corridor">
-                <button type="button" data-corridor="usdt-cngn" aria-pressed="true">Pay in naira</button>
-                <button type="button" data-corridor="cngn-usdt" aria-pressed="false">Pay in dollars</button>
-              </div>
-              <p class="hint" id="corridor-hint" aria-live="polite">The payer sends USD₮. The contact receives cNGN (naira).</p>
+              <span class="label" id="corridor-label">The contact receives</span>
+              <div id="corridor-slot"></div>
+              <p class="hint" id="corridor-hint" aria-live="polite">The payer sends USD₮. The contact receives naira (cNGN).</p>
             </div>
 
             <div class="field">
@@ -403,11 +400,11 @@
     <div class="cols">
       <div>
         <div class="foot-brand"><img src="logo.svg?v=lokal2" alt="" width="28" height="28">Lokal</div>
-        <p class="small soft" style="max-width:40ch">An agent that converts between USD₮ and cNGN on Textile FX and pays recipients on Celo.</p>
+        <p class="small soft" style="max-width:40ch">An agent that turns USD₮ into naira, rupiah or pesos on Textile FX and pays recipients on Celo.</p>
       </div>
       <div>
         <h4>Product</h4>
-        <ul><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Transactions</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
+        <ul><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Transactions</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="cash-out.html">Cash out</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
       </div>
       <div>
         <h4>Resources</h4>

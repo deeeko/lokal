@@ -2,23 +2,35 @@
 import os from "node:os";
 import path from "node:path";
 import { celo } from "viem/chains";
+import { CURRENCIES, USDT_ADDRESS, USDT_DECIMALS, corridorFor, currencyOf } from "./currencies.mjs";
 
 export const CHAIN = celo; // Celo mainnet, chain id 42220. This event only counts mainnet.
 
 export const TEXTILE_API = process.env.TEXTILE_API ?? "https://api.textilecredit.com/v2";
 
-// Token addresses from the official Agents Open for Business page (Celo mainnet).
-// Both tokens use 6 decimals on Celo (cNGN's is also re-checked on-chain before any real payout).
+// Token addresses from the official Agents Open for Business page (Celo mainnet). The local currencies come from the
+// shared registry (src/currencies.mjs, mirrored in site/assets/core.js): cNGN 6 decimals, IDRX 2, wARS 18, wCOP 18.
+// Each token's decimals are also re-checked on-chain before any real payout.
+const local = Object.fromEntries(CURRENCIES.map((c) => [c.token.toUpperCase(), { symbol: c.token, address: c.address, decimals: c.decimals, currency: c.code }]));
 export const TOKENS = {
-  USDT: { symbol: "USDT", address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", decimals: 6 },
-  CNGN: { symbol: "cNGN", address: "0xF6829D7393dAe24509eb1E52eE8e572e2E271a4f", decimals: 6 },
+  USDT: { symbol: "USDT", address: USDT_ADDRESS, decimals: USDT_DECIMALS },
+  ...local, // CNGN, IDRX, WARS, WCOP
 };
+/** The TOKENS key of a currency code: "idrx" -> "IDRX". */
+export const tokenKey = (code) => currencyOf(code)?.token.toUpperCase() ?? null;
 
-// The two supported corridors (same ids as site/assets/core.js CORRIDORS).
-// The amount a user types is always in the SELL token. `usd` says how the USD value used for the caps is measured.
+// The corridors payment links, "Get paid", Lokal tags and autopilot support (same ids as site/assets/core.js CORRIDORS).
+// The amount a user types is always in the SELL token. `usd` says how the USD value used for the caps is measured:
+// "sell" = the USD₮ sold (every usdt-<currency> corridor), "buy" = the USD₮ bought (cngn-usdt, valued by the quote).
+// `currency` = the local currency the corridor pays out in (usdt-* corridors only).
+const payout = (c) => [corridorFor(c.code), {
+  id: corridorFor(c.code), sell: "USDT", buy: c.token.toUpperCase(), usd: "sell", currency: c.code,
+  blurb: `pay someone in ${c.plural}`,
+}];
 export const CORRIDORS = {
-  "usdt-cngn": { id: "usdt-cngn", sell: "USDT", buy: "CNGN", usd: "sell", blurb: "pay someone in naira" },
+  [corridorFor("cngn")]: payout(currencyOf("cngn"))[1],
   "cngn-usdt": { id: "cngn-usdt", sell: "CNGN", buy: "USDT", usd: "buy", blurb: "pay someone in dollars" },
+  ...Object.fromEntries(CURRENCIES.filter((c) => c.code !== "cngn").map(payout)),
 };
 export const DEFAULT_CORRIDOR = "usdt-cngn";
 

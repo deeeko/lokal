@@ -1,4 +1,4 @@
-import { AGENT, EXPLORER_API, TOKENS, getJson, celoscanTx, celoscanAddr, lagosTime, lagosClock, short, num2, el, badge, icon, $, initChrome } from "../assets/core.js";
+import { AGENT, EXPLORER_API, TOKENS, CURRENCIES, formatCurrency, getJson, celoscanTx, celoscanAddr, lagosTime, lagosClock, short, num2, el, badge, icon, $, initChrome } from "../assets/core.js";
 
 initChrome();
 
@@ -13,11 +13,10 @@ const MAX_PAGES = 4; // per direction, 50 transfers each
 const WAIT_MS = 48 * 3600 * 1000; // default request lifetime (request --hours 48)
 const POLL_MS = 30_000;
 const agentLc = AGENT.toLowerCase();
-const TOKEN_BY_ADDR = {
-  [TOKENS.USDT.address.toLowerCase()]: "USDT",
-  [TOKENS.cNGN.address.toLowerCase()]: "cNGN",
-};
-const OTHER = { USDT: "cNGN", cNGN: "USDT" };
+// USD₮, cNGN, IDRX, wARS, wCOP: what the agent receives and pays out
+const TOKEN_BY_ADDR = Object.fromEntries(Object.entries(TOKENS).map(([k, t]) => [t.address.toLowerCase(), k]));
+/** Deposits pay out in the other kind: USD₮ in -> any local currency out (the memo or link chose it), cNGN in -> USD₮ out. */
+const pairs = (dep, out) => (dep === "USDT" ? out !== "USDT" : dep === "cNGN" ? out === "USDT" : false);
 
 const state = { loading: false, failed: false, loaded: false, rows: [], truncated: false, sig: "", gen: 0, updatedAt: null };
 
@@ -40,7 +39,7 @@ async function loadTransfers(filter) {
   return { items: out, more: true };
 }
 
-/** Normalise a Blockscout token transfer; null if it isn't USD₮/cNGN or is malformed. */
+/** Normalise a Blockscout token transfer; null if it isn't one of the agent's tokens or is malformed. */
 function norm(t) {
   const key = TOKEN_BY_ADDR[String(t?.token?.address_hash ?? t?.token?.address ?? "").toLowerCase()];
   if (!key) return null;
@@ -70,7 +69,7 @@ function build(inRaw, outRaw) {
     // The CLI adds a cents suffix to every payment-link amount; a whole amount is most likely the owner
     // topping up, so it gets no payment status and isn't paired with a payout.
     if (Math.round(d.amount * 100) % 100 === 0) return { d, p: null, status: "topup" };
-    const p = payouts.find((x) => !used.has(x) && x.key === OTHER[d.key] && x.time >= d.time && x.hash.toLowerCase() !== d.hash.toLowerCase());
+    const p = payouts.find((x) => !used.has(x) && pairs(d.key, x.key) && x.time >= d.time && x.hash.toLowerCase() !== d.hash.toLowerCase());
     if (p) used.add(p);
     const status = p ? "paid" : now - d.time < WAIT_MS ? "waiting" : "unmatched";
     return { d, p: p ?? null, status };
@@ -79,7 +78,10 @@ function build(inRaw, outRaw) {
 }
 
 // ---------- formatting ----------
-const amountText = (t) => `${num2.format(t.amount)} ${t.symbol}`;
+const amountText = (t) => {
+  const c = CURRENCIES.find((x) => x.token === t.symbol);
+  return c ? `${formatCurrency(t.amount, c.code, c.code === "cngn" ? 2 : c.places)} ${t.symbol}` : `${num2.format(t.amount)} ${t.symbol}`;
+};
 function duration(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
   if (s < 60) return `${s} s`;

@@ -11,8 +11,10 @@ import {
   plainError, sameAddr, sleep, nameText, LIMITS, LIMITS_TEXT, REFUSED_NOTE, receivableToday, loadNtagStateFresh, loadTagLedger,
   slowNotice, scrollToNode, focusHeading, noWalletHelp, noCeloAlert, celoBalance,
   agentStatus, allowanceFromStatus, combineAllowance, statusFinal, receivedStale, reasonText, paidText, sourceNote, units6Of,
-  STATUS_SOURCE, DELAYED_NOTE, SLOW_NOTE,
+  STATUS_SOURCE, DELAYED_NOTE, SLOW_NOTE, payoutText,
 } from "../assets/ntag-ui.js";
+import { currencyOf, formatCurrency } from "../assets/core.js";
+import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 
 initChrome();
 
@@ -504,9 +506,10 @@ function guide(mode, s, current) {
 function ownedView(s, tag, entry) {
   const addr = s.address;
   const url = ntagUrl(tag);
-  const card = ntagCard({ tag, name: entry.name, address: addr, since: entry.since, as: "button", label: `Your Lokal tag @${tag}. Copy the link to your pay page` });
+  const card = ntagCard({ tag, name: entry.name, address: addr, since: entry.since, currency: entry.currency, as: "button", label: `Your Lokal tag @${tag}. Copy the link to your pay page` });
   card.dataset.copy = url;
   card.dataset.copyLabel = "Link copied";
+  const receive = preferredCurrency(s, tag, entry);
   const change = el("button", { class: "btn btn-secondary btn-sm", type: "button" }, "Change tag or name");
   change.addEventListener("click", () => { A.view = "change"; A.interacted = true; renderTag(s); focusHeading($("#claim-h")); });
   const releaseBtn = el("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-expanded": "false", "aria-controls": "release-box" }, "Release tag");
@@ -530,16 +533,83 @@ function ownedView(s, tag, entry) {
         stage(card, "Tap the card to copy your link."),
         el("div", { class: "stack" },
           el("div", {}, el("h3", { class: "section-title" }, "People can pay ", el("span", { class: "np-tagname", style: "color:var(--celo)" }, "@" + tag)),
-            el("p", { class: "soft mt-8" }, "Share your link. Whoever pays picks naira or dollars; the agent converts and pays this wallet.")),
+            el("p", { class: "soft mt-8" }, "Share your link. People pay in dollars, and the agent converts it on Textile FX and pays this wallet in the currency you choose below.")),
+          receive,
           shareBlock(tag),
           el("div", { class: "nt-limits" }, today, el("p", { class: "micro muted" }, LIMITS_TEXT, ". ", REFUSED_NOTE)),
           el("ul", { class: "kv-list" },
             el("li", {}, el("span", {}, "Display name"), entry.name ? el("span", {}, nameText(entry.name)) : el("span", {}, "None")),
+            el("li", {}, el("span", {}, "You receive"), entry.currency
+              ? el("span", { class: "cur-inline" }, flagIcon(entry.currency), `${currencyOf(entry.currency).label} (${currencyOf(entry.currency).token})`)
+              : el("span", {}, "Naira (the default)")),
             el("li", {}, el("span", {}, "Claimed"), el("span", {}, `${lagosTime(entry.since * 1000)} WAT`)),
             el("li", {}, el("span", {}, "Claim transaction"), el("a", { class: "mono link", href: celoscanTx(entry.hash), title: entry.hash }, short(entry.hash)))),
           el("div", { class: "row" }, change, releaseBtn),
           releaseBox))));
 }
+/**
+ * "You receive": the currency payers see pre-selected on your pay page. Saving sends one zero-value transaction from your
+ * wallet to the agent, {"t":"<tag>","c":"<code>"} (like a name change): it changes nothing else about the tag. Payers can
+ * still choose another currency for their own payment.
+ */
+const MINIPAY_NOTE = "Using MiniPay? Choose dollars (USD₮); MiniPay doesn't show local tokens yet. Payers pick Dollars on your pay page.";
+function preferredCurrency(s, tag, entry) {
+  const addr = s.address;
+  const saved = entry.currency ?? null;
+  const status = el("div", { "aria-live": "polite" });
+  const save = el("button", { class: "btn btn-primary btn-sm", type: "button", disabled: true }, "Save");
+  const picker = currencyPicker({
+    label: "The currency you receive", describedBy: "receive-h", value: saved ?? "cngn", remember: false,
+    onChange: () => paint(),
+  });
+  const est = el("p", { class: "micro muted", "aria-live": "polite" });
+  function paint() {
+    const c = currencyOf(picker.value);
+    const changed = picker.value !== (saved ?? "cngn") || (saved == null && picker.value !== "cngn");
+    save.disabled = A.busy || !changed || !picker.isAvailable(picker.value);
+    save.textContent = changed ? `Save ${c.label}` : "Saved";
+    picker.note(`${saved ? `Payers see ${currencyOf(saved).plural} first on your pay page.` : "Not chosen yet: payers see naira first."} ${MINIPAY_NOTE}`);
+    const r = A.rate?.available?.[c.code] ? A.rate.rates[c.code] : null;
+    est.textContent = r ? `$10 from a payer ≈ ${formatCurrency(10 * r, c.code)} for you today (rounded down; the rate moves).` : " ";
+  }
+  save.addEventListener("click", async () => {
+    if (A.busy) return;
+    const code = picker.value, c = currencyOf(code);
+    setBusy(true);
+    save.disabled = true;
+    save.textContent = "Check your wallet…";
+    status.replaceChildren();
+    try {
+      const eth = await walletReady(addr);
+      const data = encodeNtagClaim({ t: tag, c: code });
+      const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from: addr, to: AGENT, value: "0x0", data }] });
+      if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
+      save.textContent = "Waiting for Celo…";
+      status.replaceChildren(el("p", { class: "small soft" }, "Sent. ", el("a", { class: "link", href: celoscanTx(hash) }, "View on Celoscan ", icon("ext"))));
+      const rc = await waitForReceipt(hash, { failMessage: "The transaction failed on Celo, so nothing changed. Only the network fee was spent." });
+      if (!rc) throw plainError("Celo hasn't confirmed it after a few minutes. It may still go through; check back soon.");
+      save.textContent = "Listing it…";
+      const st = await waitIndexed(hash);
+      if (st == null) throw plainError("Celo confirmed it, but the explorer hasn't listed it yet. It counts anyway; reload in a minute.");
+      if (ownerOf(A.st, tag)?.currency !== code) throw plainError(`The change was recorded but didn't take effect (${st}). Only the network fee was spent.`);
+      A.note = `Saved: you receive ${c.plural} (${c.token}). Payers see it first on your pay page.`;
+      setBusy(false);
+      A.rendered = undefined; // rebuild with the new preference
+      render();
+    } catch (e) {
+      setBusy(false);
+      status.replaceChildren(alertBox("err", "alert", el("p", {}, errText(e))));
+      paint();
+    }
+  });
+  if (!A.rate) loadRate().then((r) => { A.rate = r; picker.setAvailability(r.available); paint(); }).catch(() => {});
+  else picker.setAvailability(A.rate.available);
+  paint();
+  return el("div", { class: "nt-receive stack", style: "gap:10px" },
+    el("div", {}, el("h4", { class: "label", id: "receive-h" }, "You receive"), el("p", { class: "micro muted" }, "Pick what you'd like to be paid in. Changing it is one free transaction from your wallet (only the network fee).")),
+    picker.el, el("div", { class: "row", style: "gap:12px;flex-wrap:wrap" }, save), est, status);
+}
+
 async function loadAllowanceInto(node, addr) {
   const lim = `limit $${LIMITS.perPersonDay} per person per day`;
   try {
@@ -740,7 +810,8 @@ function payRow(d, tag) {
   if (ev?.status === "paid") {
     const got = paidText(ev);
     end = [el("span", { class: "badge ok" }, el("span", { class: "dot" }), got ? `Paid ${got}` : "Paid"),
-      el("a", { class: "link small", href: `receipt.html#${ev.receiptNo}` }, ev.receiptNo, " ", icon("right"))];
+      el("a", { class: "link small", href: `receipt.html#${ev.receiptNo}` }, ev.receiptNo, " ", icon("right")),
+      el("a", { class: "link small", href: "cash-out.html" }, "Cash out")];
   } else if (ev?.status === "refused") {
     end = [badge("Not paid", "err"), el("span", { class: "micro muted" }, `${reasonText(ev.reason)}. The payer can ask the agent's owner for a refund.`)];
   } else if (ev?.status === "failed") {
@@ -756,8 +827,9 @@ function payRow(d, tag) {
     else end = [badge("Above the limit — not paid automatically", "err"), el("span", { class: "micro muted" }, d.reason.text)];
   } else if (d.status === "paid") {
     const no = receiptNo(d.payout.hash);
-    end = [el("span", { class: "badge ok" }, el("span", { class: "dot" }), `Paid ${amountText(d.payout.units, d.payout.token)}`),
-      el("a", { class: "link small", href: `receipt.html#${no}` }, no, " ", icon("right"))];
+    end = [el("span", { class: "badge ok" }, el("span", { class: "dot" }), `Paid ${payoutText(d.payout.token, d.payout.units)}`),
+      el("a", { class: "link small", href: `receipt.html#${no}` }, no, " ", icon("right")),
+      el("a", { class: "link small", href: "cash-out.html" }, "Cash out")];
   } else if (d.status === "maybe") {
     const no = receiptNo(d.payout.hash);
     end = [badge("Possibly paid", "warn"),

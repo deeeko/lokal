@@ -111,7 +111,7 @@
       <div class="card-b">
         <ol class="steps">
           <li><h3>Connect your wallet</h3><p>MiniPay, MetaMask or any Celo wallet. The payout goes to this wallet.</p></li>
-          <li><h3>Fill in your request</h3><p>Choose naira or dollars, the amount, your name and how long the link works.</p></li>
+          <li><h3>Fill in your request</h3><p>Choose what you receive (naira, rupiah, pesos or dollars), the amount, your name and how long the link works.</p></li>
           <li><h3>Approve one transaction</h3><p>Your wallet writes the request to Celo. It sends no money, only a few cents of CELO as the network fee.</p></li>
           <li><h3>Share your link</h3><p>Send it by WhatsApp or show the QR code. When the payer sends the exact amount, the agent pays you.</p></li>
         </ol>
@@ -127,11 +127,8 @@
 
           <div class="field">
             <span class="label" id="corridor-label">You receive</span>
-            <div class="segmented" style="justify-self:start" role="group" aria-labelledby="corridor-label" id="corridor">
-              <button type="button" data-corridor="usdt-cngn" aria-pressed="true">Naira</button>
-              <button type="button" data-corridor="cngn-usdt" aria-pressed="false">Dollars</button>
-            </div>
-            <p class="hint" id="corridor-hint" aria-live="polite">The payer sends USD₮. You get cNGN (naira).</p>
+            <div id="currency-slot"></div>
+            <p class="hint" id="corridor-hint" aria-live="polite">The payer sends USD₮. You get naira (cNGN).</p>
           </div>
 
           <div class="field">
@@ -247,11 +244,11 @@
     <div class="cols">
       <div>
         <div class="foot-brand"><img src="logo.svg?v=lokal2" alt="" width="28" height="28">Lokal</div>
-        <p class="small soft" style="max-width:40ch">An agent that converts between USD₮ and cNGN on Textile FX and pays recipients on Celo.</p>
+        <p class="small soft" style="max-width:40ch">An agent that turns USD₮ into naira, rupiah or pesos on Textile FX and pays recipients on Celo.</p>
       </div>
       <div>
         <h4>Product</h4>
-        <ul><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Transactions</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
+        <ul><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Transactions</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="cash-out.html">Cash out</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
       </div>
       <div>
         <h4>Resources</h4>

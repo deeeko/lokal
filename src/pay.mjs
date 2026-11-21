@@ -1,6 +1,10 @@
-// The payout flow, for either corridor:
+// The payout flow, for every corridor (one flow, any configured local token):
 //   preview -> firm quote -> approve SELL token -> swap -> pay out the BUY token to the recipient.
-//   usdt-cngn (default): sell USDT, pay cNGN.   cngn-usdt: sell cNGN, pay USDT.
+//   usdt-cngn (default): sell USDT, pay cNGN.   usdt-idrx / usdt-wars / usdt-wcop: sell USDT, pay IDRX / wARS / wCOP.
+//   cngn-usdt: sell cNGN, pay USDT.
+// Every amount is read and written with its own token's decimals (USDT 6, cNGN 6, IDRX 2, wARS 18, wCOP 18); the USD
+// values the caps use are always 6-decimal USDT units. A local currency Textile isn't quoting is refused with the code
+// currency_unavailable: the payment is never paid in another currency.
 // Dry-run by default. Real money moves only with execute=true AND an explicit confirmation (or yes=true,
 // which only the CLI flag --yes and the watch --execute autopilot set).
 import fs from "node:fs";
@@ -14,10 +18,11 @@ import {
 import { loadAccount, makeClients } from "./chain.mjs";
 import {
   assertDailyCap, assertNotSelfPayment, assertRecipient, assertSlippage, assertWalletCap, assertWithinCap, dailyUsedUnits,
-  getCorridor, measuredReceived, parseAmount, parseContacts, refusal, resolveContact, walletUsedUnits,
+  getCorridor, measuredReceived, notQuoting, parseAmount, parseContacts, refusal, resolveContact, walletUsedUnits,
 } from "./guards.mjs";
 import { receiptLink, receiptNo, receiptNoLink } from "./requests.mjs";
 import { firmQuote, preview, submit } from "./textile.mjs";
+import { currencyOf, formatCurrencyUnits } from "./currencies.mjs";
 
 export function loadContacts() {
   if (!fs.existsSync(CONTACTS_FILE)) {
@@ -43,7 +48,10 @@ export async function confirm(question) {
   return answer === "yes";
 }
 
+/** USD values (the caps): always 6-decimal USDT units. */
 const fmt = (units) => formatUnits(units, 6);
+/** An amount of `token` (one of TOKENS) as a decimal string, exact, in that token's own decimals. */
+export const fmtToken = (units, token) => formatUnits(BigInt(units), token.decimals);
 export const balanceOf = (pub, token, owner) =>
   pub.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [owner] });
 
@@ -64,9 +72,9 @@ export function checkCaps(usdUnits, wallet) {
   if (wallet) assertWalletCap(walletUsedUnits(entries, wallet), usdUnits, MAX_WALLET_DAILY_USD);
 }
 
-/** Contracts that are never a payout recipient: the token contracts (USDT, cNGN, CELO) and the ERC-8004 registries. */
+/** Contracts that are never a payout recipient: every token contract (USDT, cNGN, IDRX, wARS, wCOP, CELO) and the ERC-8004 registries. */
 export const BLOCKED_RECIPIENTS = [
-  TOKENS.USDT.address, TOKENS.CNGN.address, CELO_TOKEN.address, IDENTITY_REGISTRY, REPUTATION_REGISTRY,
+  ...Object.values(TOKENS).map((t) => t.address), CELO_TOKEN.address, IDENTITY_REGISTRY, REPUTATION_REGISTRY,
 ];
 
 /**
@@ -103,8 +111,8 @@ export async function preflight({ to, amount, corridor = "usdt-cngn", agent, rec
   const c = getCorridor(corridor);
   const { contacts, own } = loadContacts();
   const amountStr = parseAmount(amount);
-  const sellAmount = parseUnits(amountStr, 6);
-  // usdt-cngn: the amount itself is the USD value, so check the caps before asking anyone for a price.
+  const sellAmount = parseUnits(amountStr, c.sellToken.decimals);
+  // usdt-<currency>: the amount itself is the USD value, so check the caps before asking anyone for a price.
   if (c.usd === "sell") checkCaps(sellAmount);
   const recipient = assertRecipient(resolveContact(to, contacts), {
     agent,
@@ -112,7 +120,7 @@ export async function preflight({ to, amount, corridor = "usdt-cngn", agent, rec
     blocked: BLOCKED_RECIPIENTS,
   });
   const pv = await preview(c.sellToken.address, c.buyToken.address, sellAmount.toString());
-  if (pv.status !== "preview") throw new Error(`No indicative price right now (${pv.status}).`);
+  if (pv.status !== "preview") throw notQuoting(c, pv.status, pv.reason);
   // cngn-usdt: the USD value is what we would buy; check it against the caps from the preview, and again on the firm quote.
   if (c.usd === "buy") checkCaps(BigInt(pv.buyAmount));
   return { c, amountStr, sellAmount, recipient, pv };
@@ -125,11 +133,11 @@ export async function preflight({ to, amount, corridor = "usdt-cngn", agent, rec
 async function preflightRegistration({ amount, corridor, agent, recipientAddress, payer }) {
   const c = getCorridor(corridor);
   const amountStr = parseAmount(amount);
-  const sellAmount = parseUnits(amountStr, 6);
+  const sellAmount = parseUnits(amountStr, c.sellToken.decimals);
   const recipient = registrationRecipient(recipientAddress, { agent: agent ?? AGENT_ADDRESS, payer, own: ownWallets() });
   if (c.usd === "sell") registrationCaps(sellAmount, recipient);
   const pv = await preview(c.sellToken.address, c.buyToken.address, sellAmount.toString());
-  if (pv.status !== "preview") throw new Error(`No indicative price right now (${pv.status}).`);
+  if (pv.status !== "preview") throw notQuoting(c, pv.status, pv.reason);
   if (c.usd === "buy") registrationCaps(BigInt(pv.buyAmount), recipient);
   return { c, amountStr, sellAmount, recipient, pv, wallet: recipient };
 }
@@ -166,27 +174,29 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
   const sell = c.sellToken;
   const buy = c.buyToken;
   console.log(
-    `Preview [${c.id}]: ${amountStr} ${sell.symbol} -> ~${fmt(BigInt(pv.buyAmount))} ${buy.symbol}` +
+    `Preview [${c.id}]: ${amountStr} ${sell.symbol} -> ~${fmtToken(pv.buyAmount, buy)} ${buy.symbol}` +
     ` (fee ${pv.feeAmount} base units) for ${to} (${recipient})`,
   );
 
+  if (c.currency) console.log(`  They get about ${formatCurrencyUnits(pv.buyAmount, c.currency)} (${currencyOf(c.currency).label}, ${buy.symbol}), before the firm quote.`);
   if (!execute) {
     console.log("DRY RUN: nothing was sent. Add --execute to run this for real.");
-    return { dryRun: true, preview: pv };
+    return { dryRun: true, preview: pv, corridor: c.id, buyToken: buy.symbol, buyAmount: fmtToken(pv.buyAmount, buy) };
   }
 
   const { pub, wallet } = makeClients(account);
-  // Both tokens must really be 6 decimals; every amount above assumes it.
+  // Both tokens must really have the decimals the registry says (USDT 6, cNGN 6, IDRX 2, wARS 18, wCOP 18); every
+  // amount above is read and written with them.
   for (const t of [sell, buy]) {
     const d = await pub.readContract({ address: t.address, abi: erc20Abi, functionName: "decimals" });
-    if (Number(d) !== 6) throw new Error(`${t.symbol} reports ${d} decimals, expected 6. Aborting.`);
+    if (Number(d) !== t.decimals) throw new Error(`${t.symbol} reports ${d} decimals, expected ${t.decimals}. Aborting.`);
   }
   const [sellBal, buyBefore, celoBal] = await Promise.all([
     balanceOf(pub, sell.address, account.address),
     balanceOf(pub, buy.address, account.address),
     pub.getBalance({ address: account.address }),
   ]);
-  if (sellBal < sellAmount) throw new Error(`Agent wallet holds ${fmt(sellBal)} ${sell.symbol}, needs ${amountStr}.`);
+  if (sellBal < sellAmount) throw new Error(`Agent wallet holds ${fmtToken(sellBal, sell)} ${sell.symbol}, needs ${amountStr}.`);
   if (celoBal < parseUnits("0.02", 18)) throw new Error("Agent wallet needs ~0.02 CELO for gas.");
 
   if (!yes && !(await confirm(`About to convert ${amountStr} ${sell.symbol} to ${buy.symbol} and pay ${to} on Celo MAINNET.`))) {
@@ -205,7 +215,14 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
 
   async function send() {
     // 1. Firm quote (signs a no-funds proof of wallet control only if Textile asks).
-    const q = await firmQuote(account, sell.address, buy.address, sellAmount.toString());
+    let q;
+    try {
+      q = await firmQuote(account, sell.address, buy.address, sellAmount.toString());
+    } catch (e) {
+      // Nothing was sent yet: a local currency that stopped quoting is refused (never paid in another currency).
+      if (e?.noQuote) throw notQuoting(c, "no_quote", e.reason);
+      throw e;
+    }
     assertSlippage(pv.buyAmount, q.quote.buyAmount, MAX_SLIPPAGE_BPS);
     const takerPays = BigInt(q.quote.takerPays);
     if (takerPays > sellAmount) throw new Error("Quote asks for more than the amount requested. Aborting.");
@@ -216,7 +233,7 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
     // autopilot records it as refused and carries on. The global daily cap still stops it. Contact payouts: unchanged.
     if (c.usd === "buy") (capWallet ? registrationCaps : checkCaps)(quotedBuy, capWallet);
     const reactor = q.quote.reactor;
-    console.log(`Firm quote: pay ${fmt(takerPays)} ${sell.symbol}, receive ${fmt(quotedBuy)} ${buy.symbol}`);
+    console.log(`Firm quote: pay ${fmtToken(takerPays, sell)} ${sell.symbol}, receive ${fmtToken(quotedBuy, buy)} ${buy.symbol}`);
 
     // 2. Approve only what is needed, on the SELL token. USDT-style tokens reject nonzero -> nonzero approvals, so reset first.
     const allowance = await pub.readContract({
@@ -263,13 +280,14 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
     const no = receiptNo(hashes.payout);
     log({
       corridor: c.id, to, recipient, requestId, ...(registrationId ? { registrationId, payer } : {}), ...(ntag ? { ntag, payer } : {}), receiptNo: no,
-      sold: { token: sell.symbol, amount: fmt(takerPays) },
-      paid: { token: buy.symbol, amount: fmt(received) },
+      sold: { token: sell.symbol, amount: fmtToken(takerPays, sell) },
+      paid: { token: buy.symbol, amount: fmtToken(received, buy) },
+      ...(c.currency ? { currency: c.currency } : {}),
       usd: fmt(usdUnits),
       ...(c.id === "usdt-cngn" ? { usdtSpent: fmt(takerPays), cngnPaid: fmt(received) } : {}),
       hashes, tags, untagged, receiptUrl,
     });
-    console.log(`Paid ${fmt(received)} ${buy.symbol} to ${to}.`);
+    console.log(`Paid ${fmtToken(received, buy)} ${buy.symbol} to ${to}.`);
     for (const [k, h] of Object.entries(hashes)) console.log(`  ${k}: https://celoscan.io/tx/${h}  tag=${JSON.stringify(tags[k])}`);
     console.log(`Receipt ${no}: ${receiptNoLink(no)}`);
     console.log(`  full receipt link: ${receiptUrl}`);
@@ -277,6 +295,9 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
       console.error(`WARNING: missing attribution tag ${ATTRIBUTION_CODE} on: ${untagged.join(", ")}. These will not be credited.`);
       process.exitCode = 1;
     }
-    return { hashes, tags, untagged, receiptUrl, receiptNo: no, receiptNoUrl: receiptNoLink(no), paid: fmt(received), usd: fmt(usdUnits) };
+    return {
+      hashes, tags, untagged, receiptUrl, receiptNo: no, receiptNoUrl: receiptNoLink(no), paid: fmtToken(received, buy), paidToken: buy.symbol,
+      usd: fmt(usdUnits),
+    };
   }
 }

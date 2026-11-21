@@ -132,6 +132,10 @@
         <div class="card-h"><h2>Quick quote</h2><span class="badge neutral" id="qq-basis">Estimate</span></div>
         <div class="card-b">
           <div class="field">
+            <span class="label" id="qq-cur-label">They receive</span>
+            <div id="qq-currency"></div>
+          </div>
+          <div class="field">
             <label class="label" for="qq-amount">You send</label>
             <div class="money">
               <input id="qq-amount" size="4" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="10" aria-describedby="qq-hint">
@@ -142,9 +146,9 @@
           <div class="swap-arrow" aria-hidden="true"><span><svg class="i"><use href="#i-down"/></svg></span></div>
           <div class="receive">
             <div class="label">Recipient gets</div>
-            <output id="qq-out" for="qq-amount" aria-live="polite"><span class="skel lg"></span></output>
+            <output id="qq-out" for="qq-amount" class="num" aria-live="polite"><span class="skel lg"></span></output>
           </div>
-          <p class="micro muted mt-16" id="qq-note">This site never holds your money or keys. You pay from your own wallet, and the agent converts and pays the recipient.</p>
+          <p class="micro muted mt-16" id="qq-note">Send money home to Lagos, Jakarta, Buenos Aires or Bogotá. This site never holds your money or keys: you pay from your own wallet, and the agent converts and pays the recipient.</p>
         </div>
         <div class="card-f">
           <span class="small muted">Firm price is set by Textile at send time.</span>
@@ -169,6 +173,19 @@
     </div>
   </section>
 
+  <section class="container mt-24" aria-labelledby="status-today-h">
+    <div class="card">
+      <div class="card-h"><h2 id="status-today-h">Status today</h2><span class="micro muted">What works, honestly</span></div>
+      <div class="card-b">
+        <ul class="status-today">
+          <li><span class="status-pill" data-status="live">Live</span><span>— <span class="muted">(no real mainnet payout has happened yet)</span></span></li>
+          <li><span class="status-pill" data-status="built">Built, not yet used on mainnet</span><span>Payouts in naira, rupiah and pesos through Textile FX, Lokal tags, payment links, Get paid, receipts</span></li>
+          <li><span class="status-pill" data-status="planned">Planned</span><span>Pots / Spray Wall, “Who am I paying?”, Pay with CELO for payers, MiniPay mode, Receipt Check / Listen mode</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <section class="section container" aria-labelledby="how-title">
     <div class="section-head">
       <div>
@@ -183,11 +200,11 @@
       </li>
       <li>
         <h3>Convert</h3>
-        <p>If the current allowance is too low, approves exactly the USD₮ the firm quote needs, then swaps it for cNGN.</p>
+        <p>If the current allowance is too low, approves exactly the USD₮ the firm quote needs, then swaps it for the money the recipient chose: naira, rupiah or pesos.</p>
       </li>
       <li>
         <h3>Pay</h3>
-        <p>Measures the cNGN the swap delivered and sends exactly that amount to the recipient.</p>
+        <p>Measures what the swap delivered and sends exactly that amount to the recipient, in their currency. Never more.</p>
       </li>
       <li>
         <h3>Check</h3>
@@ -218,11 +235,11 @@
     <div class="cols">
       <div>
         <div class="foot-brand"><img src="logo.svg?v=lokal2" alt="" width="28" height="28">Lokal</div>
-        <p class="small soft" style="max-width:40ch">An agent that converts between USD₮ and cNGN on Textile FX and pays recipients on Celo.</p>
+        <p class="small soft" style="max-width:40ch">An agent that turns USD₮ into naira, rupiah or pesos on Textile FX and pays recipients on Celo.</p>
       </div>
       <div>
         <h4>Product</h4>
-        <ul><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Transactions</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
+        <ul><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Transactions</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="cash-out.html">Cash out</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
       </div>
       <div>
         <h4>Resources</h4>

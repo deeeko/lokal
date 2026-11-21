@@ -22,6 +22,9 @@ export const tagSuffix = () => utf8Hex(ATTRIBUTION_CODE) + ATTRIBUTION_CODE.leng
 export const NTAG_PREFIX = "NT1:";
 export const NTAG_MEMO_PREFIX = "NTP:";
 export const RELEASE_LOCK_DAYS = 30;
+/** What a tag payment can ask to pay out in ("NTP:ada:idrx") and a tag owner can prefer ({"t":"ada","c":"idrx"}). None = naira.
+ *  Written out (not CURRENCY_CODES) so this block stays self-contained; a test checks it equals the registry. */
+export const NTAG_CURRENCIES = ["cngn", "idrx", "wars", "wcop"];
 /** Tags nobody can claim. */
 export const NTAG_RESERVED = new Set([
   "agent", "admin", "administrator", "root", "system", "support", "help", "official", "team", "staff", "mod", "moderator",
@@ -58,15 +61,16 @@ export function ntagNameError(n) {
   if (/[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/.test(v)) return "name can't contain invisible or text-direction characters";
   return null;
 }
-/** Validates a decoded nTag op body: claim {t[,n]} or release {t:""}. Error string or null. */
+/** Validates a decoded nTag op body: claim/update {t[,n][,c]} (c = preferred currency) or release {t:""}. Error string or null. */
 export function ntagOpError(op) {
   if (!op || typeof op !== "object" || Array.isArray(op)) return "not a Lokal tag op";
   const keys = Object.keys(op);
-  if (keys.some((k) => k !== "t" && k !== "n")) return "unexpected field";
+  if (keys.some((k) => k !== "t" && k !== "n" && k !== "c")) return "unexpected field";
   if (typeof op.t !== "string") return "invalid tag";
-  if (op.t === "") return "n" in op ? "a release has no name" : null;
+  if (op.t === "") return "n" in op ? "a release has no name" : "c" in op ? "a release has no currency" : null;
   const err = ntagError(op.t);
   if (err) return err;
+  if ("c" in op && !NTAG_CURRENCIES.includes(op.c)) return "unknown currency";
   if ("n" in op) return ntagNameError(op.n);
   return null;
 }
@@ -78,10 +82,11 @@ const stripErc8021 = (input) => {
   }
   return h;
 };
-/** Calldata for a claim tx: hex("NT1:" + JSON) + this app's attribution suffix. Throws on an invalid tag or name. */
-export function encodeNtagClaim({ t, n } = {}) {
+/** Calldata for a claim (or update) tx: hex("NT1:" + JSON) + this app's attribution suffix. Throws on a bad tag, name or currency. */
+export function encodeNtagClaim({ t, n, c } = {}) {
   const name = typeof n === "string" ? n.trim() : n;
   const body = name ? { t, n: name } : { t };
+  if (c != null) body.c = c;
   const err = body.t === "" ? "enter a tag" : ntagOpError(body);
   if (err) throw new Error(err);
   return "0x" + utf8Hex(NTAG_PREFIX + JSON.stringify(body)) + tagSuffix();
@@ -107,8 +112,9 @@ const ntagZeroValue = (v) => {
 };
 /**
  * Replays VALID ops with time <= atSec in (block, position) order. Returns { tags: Map<tag, {owner (lower-case), name,
- * since (sec), hash, block, position}>, byOwner: Map<lower-case address, tag>, locks: Map<tag, {owner, until (sec)}>,
- * statuses: Map<hash, "claimed"|"renamed"|"released"|"taken"|"locked"|"reserved"|"invalid"|"noop"> }.
+ * since (sec), hash, block, position, currency? (the owner's preferred currency code, once set)}>, byOwner: Map<lower-case
+ * address, tag>, locks: Map<tag, {owner, until (sec)}>,
+ * statuses: Map<hash, "claimed"|"renamed"|"updated"|"released"|"taken"|"locked"|"reserved"|"invalid"|"noop"> }.
  */
 export function resolveNtags(ops, atSec = Infinity) {
   const tags = new Map(), byOwner = new Map(), locks = new Map(), statuses = new Map();
@@ -133,10 +139,14 @@ export function resolveNtags(ops, atSec = Infinity) {
     const t = o.op.t;
     if (t === "") { statuses.set(o.hash, release(from, time) ? "released" : "noop"); continue; }
     const name = "n" in o.op ? o.op.n.trim() : null;
+    const currency = "c" in o.op ? o.op.c : null;
     const cur = tags.get(t);
     if (cur && cur.owner === from) {
-      if (name != null && name !== cur.name) { cur.name = name; statuses.set(o.hash, "renamed"); }
-      else statuses.set(o.hash, "noop");
+      const renamed = name != null && name !== cur.name;
+      const recurrency = currency != null && currency !== (cur.currency ?? null);
+      if (renamed) cur.name = name;
+      if (recurrency) cur.currency = currency;
+      statuses.set(o.hash, renamed ? "renamed" : recurrency ? "updated" : "noop");
       continue;
     }
     if (cur) { statuses.set(o.hash, "taken"); continue; }
@@ -144,7 +154,7 @@ export function resolveNtags(ops, atSec = Infinity) {
     if (lock && lock.until > time && lock.owner !== from) { statuses.set(o.hash, "locked"); continue; }
     release(from, time);
     locks.delete(t);
-    tags.set(t, { owner: from, name, since: time, hash: o.hash, block: Number(o.block), position: Number(o.position) });
+    tags.set(t, { owner: from, name, since: time, hash: o.hash, block: Number(o.block), position: Number(o.position), ...(currency ? { currency } : {}) });
     byOwner.set(from, t);
     statuses.set(o.hash, "claimed");
   }
@@ -155,7 +165,7 @@ export const resolveNtagsBefore = (ops, block, position) => resolveNtags((ops ??
   o && (Number(o.block) < Number(block) || (Number(o.block) === Number(block) && Number(o.position) < Number(position)))));
 /** The tag an address currently holds, or null. */
 export const ntagOf = (state, address) => state.byOwner.get(String(address ?? "").toLowerCase()) ?? null;
-/** The current entry { owner, name, since, hash, block, position } for a tag, or null. */
+/** The current entry { owner, name, since, hash, block, position, currency? } for a tag, or null. */
 export const ownerOf = (state, tag) => state.tags.get(tag) ?? null;
 /** "invalid" | "reserved" | "yours" | "taken" | "locked" | "free" for `forAddress` claiming `tag` at nowSec. */
 export function ntagAvailability(state, tag, forAddress, nowSec = Math.floor(Date.now() / 1000)) {
@@ -168,25 +178,37 @@ export function ntagAvailability(state, tag, forAddress, nowSec = Math.floor(Dat
   if (lock && lock.until > nowSec && lock.owner !== me) return "locked";
   return "free";
 }
-/** ERC-20 transfer(agent, units) calldata + hex("NTP:" + tag) memo + attribution suffix. Tokens ignore the extra bytes. */
-export function encodeNtagTransfer(agent, units, tag) {
+/**
+ * ERC-20 transfer(agent, units) calldata + hex("NTP:" + tag [+ ":" + currency]) memo + attribution suffix. Tokens ignore
+ * the extra bytes. No currency (or "cngn") writes the original memo "NTP:<tag>", which pays out in naira.
+ */
+export function encodeNtagTransfer(agent, units, tag, currency) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(agent))) throw new Error("invalid agent address");
   const v = BigInt(units);
   if (v <= 0n || v >= 1n << 256n) throw new Error("invalid amount");
   const err = ntagError(tag);
   if (err) throw new Error(err);
+  if (currency != null && !NTAG_CURRENCIES.includes(currency)) throw new Error("unknown currency");
+  const code = currency != null && currency !== NTAG_CURRENCIES[0] ? ":" + currency : "";
   return "0xa9059cbb" + String(agent).toLowerCase().replace(/^0x/, "").padStart(64, "0") + v.toString(16).padStart(64, "0")
-    + utf8Hex(NTAG_MEMO_PREFIX + tag) + tagSuffix();
+    + utf8Hex(NTAG_MEMO_PREFIX + tag + code) + tagSuffix();
 }
-/** The tag in a transfer's memo (suffix stripped, selector a9059cbb, then exactly "NTP:" + a valid tag), or null. */
-export function decodeNtagMemo(input) {
+/**
+ * A transfer's Lokal tag memo (suffix stripped, selector a9059cbb, then exactly "NTP:" + a valid tag, optionally followed
+ * by ":" + a currency code): { tag, currency } with currency null when the memo names none (= naira), or null.
+ */
+export function decodeNtagPayment(input) {
   const h = stripErc8021(input);
   if (!/^[0-9a-f]*$/.test(h) || h.length % 2 || !h.startsWith("a9059cbb") || h.length <= 136) return null;
   const memo = new TextDecoder().decode(hexBytes(h.slice(136)));
   if (!memo.startsWith(NTAG_MEMO_PREFIX)) return null;
-  const tag = memo.slice(NTAG_MEMO_PREFIX.length);
-  return ntagError(tag) ? null : tag;
+  const [tag, currency, ...more] = memo.slice(NTAG_MEMO_PREFIX.length).split(":");
+  if (more.length || ntagError(tag)) return null;
+  if (currency !== undefined && !NTAG_CURRENCIES.includes(currency)) return null;
+  return { tag, currency: currency ?? null };
 }
+/** The tag in a transfer's memo, or null (see decodeNtagPayment). */
+export const decodeNtagMemo = (input) => decodeNtagPayment(input)?.tag ?? null;
 // ---------- port: end ----------
 
 // ---------- nTag attempts (not ported: the agent's own safety net) ----------

@@ -3,7 +3,9 @@ import {
   lagosTime, lagosClock, celoscanTx, celoscanAddr, getJson, loadRate, parseRequest, initChrome, parseMoneyInput,
   loadTxByHash, decodeRegistration, registrationError, loadRegistrations, registrationStatuses, receiptNo,
   rpc, readContract, loadReceipt, encodeCall, tagSuffix, markWalletConnected, walletDisconnected, isNetworkError,
+  CURRENCIES, currencyOfCorridor, formatCurrency,
 } from "../assets/core.js";
+import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 import { ensureCelo, explainWalletError } from "../assets/session.js";
 import {
   agentStatus, depositStatus, allowanceFromStatus, globalFromStatus, receivedStale, statusFinal, reasonText, sourceNote, REFUND_NOTE,
@@ -20,9 +22,9 @@ const MAX_USDT_BASE = 24.99; // the agent adds 0.01-0.99 and keeps the total <= 
 
 const setText = (node, text) => node.replaceChildren(text);
 const sameAddr = (a, b) => String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
-const tokenOf = (key) => TOKENS[key]; // "USDT" | "cNGN"
+const tokenOf = (key) => TOKENS[key]; // "USDT" | "cNGN" | "IDRX" | "wARS" | "wCOP"
 
-/** "5.03" -> 5030000n (both tokens use 6 decimals on Celo). parseRequest already checked the format. */
+/** "5.03" -> 5030000n (the payer sends USD₮ or cNGN: both use 6 decimals on Celo). parseRequest already checked the format. */
 function toUnits(amount) {
   const [i, f = ""] = String(amount).split(".");
   return BigInt(i) * 1_000_000n + BigInt((f + "000000").slice(0, 6));
@@ -182,7 +184,8 @@ function initLink(req) {
   const sell = tokenOf(corridor.sell), buy = tokenOf(corridor.buy);
   const units = toUnits(req.amount);
   const uri = `ethereum:${sell.address}@${CELO_CHAIN_ID}/transfer?address=${AGENT}&uint256=${units}`;
-  const inNaira = req.dir === "usdt-cngn";
+  const cur = currencyOfCorridor(req.dir); // the local currency this link pays out in, or null (dollars)
+  const inNaira = cur !== null; // the payer sends USD₮ and the recipient gets local money
   const sendText = `${exactAmount(req.amount)} ${sell.symbol}`;
   const isReg = !!req.recipient; // #tx= link: the recipient registered it from their own wallet
 
@@ -190,7 +193,7 @@ function initLink(req) {
   setText($("#l-name"), req.name);
   const to = isReg ? `${req.name}'s wallet` : req.name;
   setText($("#l-lead"), inNaira
-    ? `Send USD₮ on Celo. The agent converts it on Textile FX and pays ${to} in naira (cNGN).`
+    ? `Send USD₮ on Celo. The agent converts it on Textile FX and pays ${to} in ${cur.plural} (${cur.token}).`
     : `Send cNGN on Celo. The agent converts it on Textile FX and pays ${to} in dollars (USD₮).`);
 
   if (isReg) {
@@ -215,7 +218,8 @@ function initLink(req) {
   $("#l-amount").value = exactAmount(req.amount);
   setText($("#l-token"), sell.symbol);
   $("#l-amount-copy").dataset.copy = req.amount;
-  setText($("#l-receive-label"), `${req.name} gets (approx.)`);
+  $("#l-receive-label").replaceChildren(`${req.name} gets (approx.) `,
+    el("span", { class: "badge neutral cur-inline", style: "margin-left:6px" }, inNaira ? flagIcon(cur.code) : flagIcon("usd"), inNaira ? `${cur.label} · ${cur.token}` : "Dollars · USD₮"));
   const agentLink = $("#l-agent");
   agentLink.href = celoscanAddr(AGENT);
   setText(agentLink, short(AGENT));
@@ -245,8 +249,13 @@ function initLink(req) {
     let usdValue = null;
     if (inNaira) {
       usdValue = Number(req.amount);
-      setText($("#l-receive"), naira(Number(req.amount) * r.rate));
-      setText($("#l-rate"), `1 USD₮ = ${naira(r.rate)}`);
+      const pu = r.available[cur.code] ? r.rates[cur.code] : null;
+      setText($("#l-receive"), pu ? formatCurrency(Number(req.amount) * pu, cur.code) : "—");
+      setText($("#l-rate"), pu ? `1 USD₮ = ${formatCurrency(pu, cur.code, cur.code === "cngn" ? 2 : cur.places)}` : `${cur.label}: not available right now`);
+      if (!pu) {
+        $("#l-notice").append(el("div", { class: "alert warn mt-16" }, icon("alert"),
+          el("span", {}, `${cur.label} isn't available on Textile FX right now. A payment sent now would be refused (never paid in another currency) and stay with the agent. Try again later.`)));
+      }
     } else if (r.reverseRate) {
       usdValue = Number(req.amount) * r.reverseRate;
       setText($("#l-receive"), `${num2.format(usdValue)} USD₮`);
@@ -259,9 +268,10 @@ function initLink(req) {
       $("#l-notice").append(el("div", { class: "alert warn mt-16" }, icon("alert"),
         el("span", {}, `This is over the agent's $${CAP} per-payment limit, so autopilot won't pay it out. Ask for a smaller request before sending.`)));
     }
-    // cNGN is valued in dollars at the rate (the reverse preview when published)
+    // cNGN is valued in dollars at the rate (the reverse preview when published); other local money at its own rate
     const usdOfNgn = (n) => (r.reverseRate ? n * r.reverseRate : n / r.rate);
-    renderRoom(usdValue ?? usdOfNgn(Number(req.amount)), usdOfNgn);
+    const usdOfLocal = (code, n) => (code === "cngn" ? usdOfNgn(n) : r.rates[code] ? n / r.rates[code] : 0);
+    renderRoom(usdValue ?? usdOfNgn(Number(req.amount)), usdOfLocal);
   }).catch(() => {
     setText($("#l-receive"), "—");
     setText($("#l-rate"), "Unavailable");
@@ -457,13 +467,14 @@ function initLink(req) {
    * contact's wallet isn't on the link) can be paid in the rolling 24 hours, from the agent's transfers on Blockscout,
    * and warns when this payment would go over. A failure here only hides the line.
    */
-  async function renderRoom(payUsd, usdOfNgn) {
+  async function renderRoom(payUsd, usdOfLocal) {
     const box = $("#l-room");
     const valueOf = (t) => {
-      const v = Number(t.total?.value ?? 0) / 10 ** Number(t.total?.decimals ?? 6);
       const tok = t.token?.address_hash ?? t.token?.address;
+      const c = CURRENCIES.find((x) => sameAddr(x.address, tok));
+      const v = Number(t.total?.value ?? 0) / 10 ** Number(t.total?.decimals ?? (c ? c.decimals : 6));
       if (sameAddr(tok, TOKENS.USDT.address)) return v;
-      if (sameAddr(tok, TOKENS.cNGN.address)) return usdOfNgn(v);
+      if (c) return usdOfLocal(c.code, v);
       return 0; // other tokens are never payouts
     };
     const since = Date.now() - 24 * 3600_000;
@@ -816,9 +827,20 @@ function initOpenLink() {
 // =====================================================================
 function initBuilder() {
   const nameIn = $("#b-name"), amountIn = $("#b-amount"), noteIn = $("#b-note"), hoursIn = $("#b-hours");
-  const corridorBtns = $$("#corridor button");
   const reqPre = $("#req-cmd"), reqCopy = $("#req-copy");
   let corridor = "usdt-cngn";
+  const picker = currencyPicker({
+    label: "What the contact receives", describedBy: "corridor-label",
+    extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮): the payer sends cNGN" }],
+    onChange: (c) => {
+      const next = c === "usd" ? "cngn-usdt" : `usdt-${c}`;
+      if ((next === "cngn-usdt") !== (corridor === "cngn-usdt")) amountIn.value = next === "cngn-usdt" ? "7200" : "5";
+      corridor = next;
+      render();
+    },
+  });
+  $("#corridor-slot").replaceChildren(picker.el);
+  corridor = picker.value === "usd" ? "cngn-usdt" : `usdt-${picker.value}`;
   let rate = null;
 
   const hint = (id, text, isErr) => { const h = $(id); h.classList.toggle("err", !!isErr); setText(h, text); };
@@ -853,7 +875,7 @@ function initBuilder() {
         err = false;
         const approx = inNgn
           ? (usdValue !== null ? `Contact gets about ${num2.format(usdValue)} USD₮. ` : "")
-          : (rate ? `Contact gets about ${naira(n * rate.rate)}. ` : "");
+          : (rate && rate.available[corridor.slice(5)] ? `Contact gets about ${formatCurrency(n * rate.rates[corridor.slice(5)], corridor.slice(5))}. ` : "");
         msg = `${approx}The agent adds 0.01 to 0.99 so the amount is unique.`;
       }
     }
@@ -880,11 +902,11 @@ function initBuilder() {
   }
 
   function render() {
-    for (const b of corridorBtns) b.setAttribute("aria-pressed", String(b.dataset.corridor === corridor));
     const c = CORRIDORS[corridor];
+    const lc = currencyOfCorridor(corridor);
     setText($("#b-token"), tokenOf(c.sell).symbol);
-    setText($("#corridor-hint"), corridor === "usdt-cngn"
-      ? "The payer sends USD₮. The contact receives cNGN (naira)."
+    setText($("#corridor-hint"), lc
+      ? `The payer sends USD₮. The contact receives ${lc.plural} (${lc.token}).`
       : "The payer sends cNGN. The contact receives USD₮ (dollars).");
 
     const name = readName(), amount = readAmount(), note = readNote(), hours = readHours();
@@ -895,7 +917,7 @@ function initBuilder() {
       return;
     }
     let cmd = `node src/agent.mjs request --to "${name}" --amount ${amount}`;
-    if (corridor !== "usdt-cngn") cmd += ` --corridor ${corridor}`;
+    if (corridor !== "usdt-cngn") cmd += lc ? ` --to-currency ${lc.aliases[0]}` : ` --corridor ${corridor}`;
     if (note) cmd += ` --note "${note}"`;
     if (hours !== 48) cmd += ` --hours ${hours}`;
     setText(reqPre, cmd);
@@ -903,16 +925,8 @@ function initBuilder() {
     reqCopy.dataset.copy = cmd;
   }
 
-  for (const b of corridorBtns) {
-    b.addEventListener("click", () => {
-      if (corridor === b.dataset.corridor) return;
-      corridor = b.dataset.corridor;
-      amountIn.value = corridor === "cngn-usdt" ? "7200" : "5";
-      render();
-    });
-  }
   for (const i of [nameIn, amountIn, noteIn, hoursIn]) i.addEventListener("input", render);
 
   render();
-  loadRate().then((r) => { rate = r; render(); }).catch(() => { /* the estimate is optional; the command still builds */ });
+  loadRate().then((r) => { rate = r; picker.setAvailability(r.available); render(); }).catch(() => { /* the estimate is optional; the command still builds */ });
 }

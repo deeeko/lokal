@@ -3,7 +3,7 @@ import {
   $, el, badge, icon, naira, usd, num2, short, lagos, lagosTime, celoscanTx, celoscanAddr,
   rpc, getJson, loadTxByHash, loadReceipt, decodeTransfers, decodeTag, loadTxPage, loadRegistrations,
   txKind, txLabel, txStatus, receiptNo, parseReceiptNo,
-  tokenSymbol, units6, encodeCall, tagSuffix, loadIdentity, copyText, toast, initChrome, isNetworkError,
+  tokenSymbol, units6, tokenUnits, encodeCall, CURRENCIES, currencyOfCorridor, formatCurrency, tagSuffix, loadIdentity, copyText, toast, initChrome, isNetworkError,
 } from "../assets/core.js";
 import { disconnectWallet, markWalletConnected, DISCONNECT_NOTE_FULL, DISCONNECT_NOTE_PARTIAL, toast as toastMsg } from "../assets/core.js";
 
@@ -305,7 +305,7 @@ async function findSwap(s, payout, corridor) {
   if (rc.status !== "0x1" || !soldRaw || !boughtRaw) {
     return { missing: `The ${source === "link" ? "linked" : "agent's latest"} conversion doesn't show the agent selling ${TOKENS[corridor.sell].symbol} for ${TOKENS[corridor.buy].symbol}.`, hash, tx };
   }
-  return { tx, soldRaw, sold: units6(soldRaw), bought: units6(boughtRaw), source };
+  return { tx, soldRaw, sold: tokenUnits(soldRaw, TOKENS[corridor.sell].address), bought: tokenUnits(boughtRaw, TOKENS[corridor.buy].address), source };
 }
 
 /** The deposit that funded the swap: the latest transfer INTO the agent of the sold token, for exactly the sold amount, before the swap. */
@@ -340,8 +340,10 @@ async function findName(wallet, payoutBlock) {
 
 async function openPayout(ctx, tx, out, my) {
   const pay = out[0];
-  const amount = units6(sum(out.filter((t) => eq(t.token, pay.token) && eq(t.to, pay.to))));
-  const corridor = eq(pay.token, TOKENS.cNGN.address) ? CORRIDORS["usdt-cngn"] : CORRIDORS["cngn-usdt"];
+  // each token by its own decimals (cNGN 6, IDRX 2, wARS/wCOP 18, USD₮ 6); a local currency was bought with USD₮
+  const amount = tokenUnits(sum(out.filter((t) => eq(t.token, pay.token) && eq(t.to, pay.to))), pay.token);
+  const cur = CURRENCIES.find((c) => eq(c.address, pay.token));
+  const corridor = cur ? CORRIDORS[`usdt-${cur.code}`] : CORRIDORS["cngn-usdt"];
   let swap;
   try { swap = await findSwap(ctx.s, tx, corridor); }
   catch (e) { swap = { missing: `Couldn't load the conversion (${e?.message ?? e}).` }; }
@@ -356,21 +358,22 @@ async function openPayout(ctx, tx, out, my) {
 }
 
 function renderPayout({ ctx, tx, pay, amount, corridor, swap, payer, name }) {
-  const isNaira = corridor.buy === "cNGN";
-  const amountText = isNaira ? naira(amount) : usd(amount);
+  const local = currencyOfCorridor(corridor.id); // the currency paid out, or null (dollars)
+  const isNaira = local !== null;
+  const amountText = isNaira ? formatCurrency(amount, local.code, local.code === "cngn" ? 2 : local.places) : usd(amount);
   const no = receiptNo(tx.hash);
   const time = tx.timestamp ? fullTime(tx.timestamp) : "—";
   let rateText = null, sentText = null;
   if (!swap.missing) {
-    const ngnPerUsd = isNaira ? swap.bought / swap.sold : swap.sold / swap.bought;
-    rateText = `1 USD₮ = ${naira(ngnPerUsd)}`;
+    const perUsd = isNaira ? swap.bought / swap.sold : swap.sold / swap.bought;
+    rateText = isNaira ? `1 USD₮ = ${formatCurrency(perUsd, local.code, 2)}` : `1 USD₮ = ${naira(perUsd)}`;
     sentText = `${num2.format(swap.sold)} ${TOKENS[corridor.sell].symbol}`;
   }
   const paidTo = name ? `${name} · ${short(pay.to)}` : short(pay.to);
   const slip = {
     kind: "payout", no, url: receiptUrl(no),
     eyebrow: "Payout receipt", label: "Received", headline: amountText,
-    sub: isNaira ? "Paid as cNGN on Celo, redeemable for naira" : "Paid as USD₮ on Celo",
+    sub: isNaira ? (local.code === "cngn" ? "Paid as cNGN on Celo, redeemable for naira" : `Paid as ${local.token} on Celo, ${local.plural} (${local.country})`) : "Paid as USD₮ on Celo",
     status: ["Completed", "ok"],
     rows: [
       { label: "Receipt number", text: no, node: el("span", { class: "mono" }, no) },
@@ -507,7 +510,8 @@ function renderSlip(slip, shareText) {
           el("p", { class: "small" }, el("b", {}, "Scan to check this receipt")),
           el("p", { class: "micro muted mt-8" }, "Opens this page, which rebuilds the receipt from Celo mainnet."),
           el("p", { class: "mono micro soft mt-8" }, slip.url.replace(/^https:\/\//, ""))))),
-    el("div", { class: "card-f no-print" }, el("div", { class: "row" }, dl, pdf, wa, copy))),
+    el("div", { class: "card-f no-print" }, el("div", { class: "row" }, dl, pdf, wa, copy,
+      slip.kind === "payout" ? el("a", { class: "btn btn-ghost btn-sm", href: "cash-out.html" }, "Cash out", icon("right")) : null))),
     el("p", { class: "small no-print" }, el("a", { class: "link", href: "receipt.html" }, "Find another receipt")));
 }
 

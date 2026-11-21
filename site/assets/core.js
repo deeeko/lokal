@@ -13,9 +13,102 @@ export const AGENT = "0x8a695cf54CB44753c8b784EB36d266f748617a1e";
 export const AGENT_ID = 10079n;
 export const REGISTRY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432";
 export const TAG = "celo_7360953d1b53";
+
+// ---------- currencies (what a recipient can receive) ----------
+// ---------- currencies: start ---------- (copied byte-for-byte into src/currencies.mjs; test/currencies.test.mjs checks it)
+/** USD₮ on Celo mainnet: Textile FX quotes every local currency against it. */
+export const USDT_ADDRESS = "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e";
+export const USDT_DECIMALS = 6;
+/**
+ * What a recipient can receive, in display order. `code` is the id used in corridors ("usdt-<code>"), Lokal tag memos
+ * ("NTP:ada:<code>") and tag preferences ({"t":"ada","c":"<code>"}). `decimals` are the token's onchain decimals;
+ * `places` are the decimals shown to people (amounts are always rounded DOWN to them); `plural` reads in a sentence
+ * ("they get rupiah"). `locale` is the country's own
+ * number format (Intl), shown as a tooltip next to English-formatted amounts.
+ */
+export const CURRENCIES = [
+  {
+    code: "cngn", token: "cNGN", address: "0xF6829D7393dAe24509eb1E52eE8e572e2E271a4f", decimals: 6, places: 2, iso: "NGN",
+    symbol: "₦", label: "Naira", name: "Nigerian naira", plural: "naira", country: "Nigeria", city: "Lagos", flag: "🇳🇬", locale: "en-NG",
+    aliases: ["naira", "ngn", "nigeria", "nigerian-naira"],
+  },
+  {
+    code: "idrx", token: "IDRX", address: "0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22", decimals: 2, places: 0, iso: "IDR",
+    symbol: "Rp", label: "Rupiah", name: "Indonesian rupiah", plural: "rupiah", country: "Indonesia", city: "Jakarta", flag: "🇮🇩", locale: "id-ID",
+    aliases: ["rupiah", "idr", "indonesia", "indonesian-rupiah"],
+  },
+  {
+    code: "wars", token: "wARS", address: "0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D", decimals: 18, places: 2, iso: "ARS",
+    symbol: "ARS", label: "Peso (AR)", name: "Argentine peso", plural: "Argentine pesos", country: "Argentina", city: "Buenos Aires", flag: "🇦🇷", locale: "es-AR",
+    aliases: ["argentina-peso", "argentine-peso", "ars", "argentina", "peso-ar"],
+  },
+  {
+    code: "wcop", token: "wCOP", address: "0x8a1D45e102e886510e891d2Ec656a708991e2D76", decimals: 18, places: 0, iso: "COP",
+    symbol: "COP", label: "Peso (CO)", name: "Colombian peso", plural: "Colombian pesos", country: "Colombia", city: "Bogotá", flag: "🇨🇴", locale: "es-CO",
+    aliases: ["colombia-peso", "colombian-peso", "cop", "colombia", "peso-co"],
+  },
+];
+/** What a payment pays out in when nobody chose: naira (Lokal tag memos without a code, older links). */
+export const DEFAULT_CURRENCY = "cngn";
+export const CURRENCY_CODES = CURRENCIES.map((c) => c.code);
+/** The currency for an exact code ("idrx"), or null. */
+export const currencyOf = (code) => CURRENCIES.find((c) => c.code === code) ?? null;
+/** Loose input ("rupiah", "IDRX", "idr", "Peso (AR)", "argentina-peso", "COP") -> the currency, or null. */
+export function findCurrency(input) {
+  const s = String(input ?? "").trim().toLowerCase().replace(/[()]/g, "").replace(/[\s_]+/g, "-");
+  if (!s) return null;
+  return CURRENCIES.find((c) => c.code === s || c.token.toLowerCase() === s || c.iso.toLowerCase() === s
+    || c.label.toLowerCase().replace(/[()]/g, "").replace(/\s+/g, "-") === s || c.name.toLowerCase().replace(/\s+/g, "-") === s
+    || c.aliases.includes(s)) ?? null;
+}
+/** The payout corridor for a currency: "usdt-idrx". */
+export const corridorFor = (code) => "usdt-" + code;
+/** The currency a "usdt-<code>" corridor pays out in, or null for any other corridor. */
+export const currencyOfCorridor = (id) => (/^usdt-[a-z]+$/.test(String(id)) ? currencyOf(String(id).slice(5)) : null);
+/** Base units -> a plain decimal string rounded DOWN to `places` ("92035.51"). Never more than the units say. */
+export function unitsToDecimal(units, decimals, places = decimals) {
+  const v = BigInt(units);
+  if (v < 0n) throw new Error("negative amount");
+  const p = Math.max(0, Math.min(Number(places), Number(decimals)));
+  const base = 10n ** BigInt(decimals);
+  const frac = (v % base).toString().padStart(Number(decimals), "0").slice(0, p);
+  return p > 0 ? `${v / base}.${frac}` : `${v / base}`;
+}
+const groupDigits = (s) => {
+  const [w, f] = String(s).split(".");
+  return w.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (f != null ? "." + f : "");
+};
+const withSymbol = (c, s) => (c.symbol.length > 1 ? `${c.symbol} ${s}` : `${c.symbol}${s}`);
+/** "₦7,212.83" · "Rp 92,035" · "ARS 8,848.74" · "COP 17,332" from the token's base units, rounded down. */
+export function formatCurrencyUnits(units, code, places) {
+  const c = currencyOf(code);
+  if (!c) throw new Error(`unknown currency "${code}"`);
+  return withSymbol(c, groupDigits(unitsToDecimal(units, c.decimals, places ?? c.places)));
+}
+/** The same for an estimate (a number: amount x rate), rounded down; "—" when it isn't a usable number. */
+export function formatCurrency(n, code, places) {
+  const c = currencyOf(code);
+  if (!c) throw new Error(`unknown currency "${code}"`);
+  const p = places ?? c.places;
+  if (typeof n !== "number" || !Number.isFinite(n) || n < 0 || n >= 1e15) return "—";
+  const f = 10 ** p;
+  return withSymbol(c, groupDigits((Math.floor(n * f + 1e-7) / f).toFixed(p)));
+}
+/** The amount in the country's own format ("Rp 92.035"), for a tooltip; English format if Intl can't. */
+export function nativeCurrency(n, code) {
+  const c = currencyOf(code);
+  if (!c) return "";
+  try {
+    const f = 10 ** c.places;
+    return new Intl.NumberFormat(c.locale, { style: "currency", currency: c.iso, minimumFractionDigits: c.places, maximumFractionDigits: c.places }).format(Math.floor(n * f + 1e-7) / f);
+  } catch { return formatCurrency(n, code); }
+}
+// ---------- currencies: end ----------
+
 export const TOKENS = {
-  USDT: { address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", symbol: "USD₮" },
-  cNGN: { address: "0xF6829D7393dAe24509eb1E52eE8e572e2E271a4f", symbol: "cNGN" },
+  USDT: { address: USDT_ADDRESS, symbol: "USD₮", decimals: USDT_DECIMALS },
+  // cNGN, IDRX, wARS, wCOP (from CURRENCIES: address, decimals and the currency code)
+  ...Object.fromEntries(CURRENCIES.map((c) => [c.token, { address: c.address, symbol: c.token, decimals: c.decimals, currency: c.code }])),
 };
 export const CAP = 25;
 /** The agent's rolling 24-hour limits (src/config.mjs MAX_WALLET_DAILY_USD and MAX_DAILY_USD). */
@@ -25,11 +118,20 @@ export const DAILY_CAP = 100;
 export const LIMITS_TEXT = `$${CAP} per payment · $${WALLET_DAILY_CAP} per person per day · $${DAILY_CAP} per day overall`;
 export const REPUTATION = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63"; // ERC-8004 Reputation Registry (proxy), Celo mainnet
 export const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-/** Both supported corridors. Amounts for both tokens use 6 decimals on Celo. */
+/**
+ * The supported corridors (same ids as src/config.mjs). sell/buy are TOKENS keys; the amount typed is in the sell token.
+ * usdt-<code>: you send USD₮, they receive that local currency. cngn-usdt: you send cNGN, they receive dollars.
+ */
+const payoutCorridor = (c) => ({
+  id: corridorFor(c.code), sell: "USDT", buy: c.token, currency: c.code, label: `USD₮ → ${c.token}`, blurb: `Pay someone in ${c.label.toLowerCase()}`,
+});
 export const CORRIDORS = {
-  "usdt-cngn": { id: "usdt-cngn", sell: "USDT", buy: "cNGN", label: "USD₮ → cNGN", blurb: "Pay someone in naira" },
+  "usdt-cngn": payoutCorridor(CURRENCIES[0]),
   "cngn-usdt": { id: "cngn-usdt", sell: "cNGN", buy: "USDT", label: "cNGN → USD₮", blurb: "Pay someone in dollars" },
+  ...Object.fromEntries(CURRENCIES.slice(1).map((c) => [corridorFor(c.code), payoutCorridor(c)])),
 };
+/** The corridor object for an id, or null (own keys only: "toString" is not a corridor). */
+export const corridorOf = (id) => (Object.prototype.hasOwnProperty.call(CORRIDORS, id) ? CORRIDORS[id] : null);
 /** Function selectors (computed with viem, see SPEC). */
 export const SEL = {
   giveFeedback: "0x3c036a7e", // giveFeedback(uint256,int128,uint8,string,string,string,string,bytes32)
@@ -222,12 +324,17 @@ export function decodeTransfers(receipt) {
     .filter((l) => l.topics?.[0]?.toLowerCase() === TRANSFER_TOPIC && l.topics.length === 3)
     .map((l) => ({ token: l.address, from: "0x" + l.topics[1].slice(26), to: "0x" + l.topics[2].slice(26), value: BigInt(l.data), logIndex: Number(BigInt(l.logIndex)) }));
 }
-export const tokenSymbol = (addr) => (addr?.toLowerCase() === TOKENS.USDT.address.toLowerCase() ? "USD₮" : addr?.toLowerCase() === TOKENS.cNGN.address.toLowerCase() ? "cNGN" : "token");
+/** The TOKENS entry for a token address (USD₮, cNGN, IDRX, wARS, wCOP), or null. */
+export const tokenOf = (addr) => Object.values(TOKENS).find((t) => t.address.toLowerCase() === String(addr ?? "").toLowerCase()) ?? null;
+export const tokenSymbol = (addr) => tokenOf(addr)?.symbol ?? "token";
 export const units6 = (v) => Number(v) / 1e6;
+/** Base units of a known token as a number, with that token's own decimals (IDRX 2, wARS/wCOP 18, USD₮/cNGN 6). */
+export const tokenUnits = (v, addr) => Number(v) / 10 ** (tokenOf(addr)?.decimals ?? 6);
 
 // ---------- "Get paid" registrations (recipient's own wallet, onchain) ----------
 // A zero-value tx FROM the recipient TO the agent with input = hex(utf8("NP1:" + JSON)) + tag suffix.
-// JSON { a: "5.03", d: "usdt-cngn"|"cngn-usdt", e: <expiry unix seconds>, n: <name 1-40>, m?: <note <=80> }.
+// JSON { a: "5.03", d: "usdt-cngn"|"usdt-idrx"|"usdt-wars"|"usdt-wcop"|"cngn-usdt", e: <expiry unix seconds>, n: <name 1-40>,
+// m?: <note <=80> }. d = the corridor: usdt-<currency> is what the recipient receives (naira, rupiah, pesos), USD₮ in.
 // The recipient is tx.from. Request id = the registration tx hash. See site/_spec/FEATURES2.md.
 export const REG_PREFIX = "NP1:";
 const utf8Hex = (s) => [...new TextEncoder().encode(s)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -235,9 +342,10 @@ export const MAX_REG_HOURS = 168;
 /** Validate the JSON body. `blockTimeSec` = registration block time (for the expiry window). Returns an error string or null. */
 export function registrationError(r, blockTimeSec) {
   if (!r || typeof r !== "object") return "not a registration";
-  if (!CORRIDORS[r.d]) return "unknown corridor";
+  const corridor = typeof r.d === "string" && Object.prototype.hasOwnProperty.call(CORRIDORS, r.d) ? CORRIDORS[r.d] : null;
+  if (!corridor) return "unknown corridor";
   if (typeof r.a !== "string" || !/^\d+(\.\d{1,2})?$/.test(r.a) || Number(r.a) <= 0) return "invalid amount";
-  if (r.d === "usdt-cngn" && (Number(r.a) < 1 || Number(r.a) > 24.99)) return "amount must be $1 to $24.99";
+  if (corridor.sell === "USDT" && (Number(r.a) < 1 || Number(r.a) > 24.99)) return "amount must be $1 to $24.99";
   if (typeof r.n !== "string" || !r.n.trim() || r.n.length > 40) return "invalid name";
   if (r.m != null && (typeof r.m !== "string" || r.m.length > 80)) return "invalid note";
   if (!Number.isInteger(r.e)) return "invalid expiry";
@@ -262,8 +370,8 @@ export function decodeRegistration(input) {
   try { return JSON.parse(new TextDecoder().decode(hexBytes(h.slice(utf8Hex(REG_PREFIX).length)))); } catch { return null; }
 }
 /**
- * The same-amount rule (the agent implements it identically): among VALID, UNEXPIRED registrations with the same
- * corridor and the same exact amount, the earliest (block, then position) is active; later ones are "amount in use".
+ * The same-amount rule (the agent implements it identically): among VALID, UNEXPIRED registrations paid in the same
+ * payer token (USD₮ for every usdt-* link) and the same exact amount, the earliest (block, then position) is active; later ones are "amount in use".
  * Input items: { hash, from, block, position, time (sec), req }. Returns a Map hash -> "active" | "in-use" | "expired" | "invalid".
  */
 export function registrationStatuses(regs, nowSec) {
@@ -277,7 +385,8 @@ export function registrationStatuses(regs, nowSec) {
   live.sort((x, y) => x.block - y.block || x.position - y.position);
   const taken = new Set();
   for (const r of live) {
-    const key = r.req.d + ":" + Number(r.req.a).toFixed(2);
+    // keyed by the token the payer sends: every usdt-<currency> link is paid in USD₮, so a USD₮ amount can only be in use once
+    const key = CORRIDORS[r.req.d].sell + ":" + Number(r.req.a).toFixed(2);
     out.set(r.hash, taken.has(key) ? "in-use" : "active");
     taken.add(key);
   }
@@ -318,6 +427,9 @@ export async function loadRegistrations(maxPages = 100) {
 export const NTAG_PREFIX = "NT1:";
 export const NTAG_MEMO_PREFIX = "NTP:";
 export const RELEASE_LOCK_DAYS = 30;
+/** What a tag payment can ask to pay out in ("NTP:ada:idrx") and a tag owner can prefer ({"t":"ada","c":"idrx"}). None = naira.
+ *  Written out (not CURRENCY_CODES) so this block stays self-contained; a test checks it equals the registry. */
+export const NTAG_CURRENCIES = ["cngn", "idrx", "wars", "wcop"];
 /** Tags nobody can claim. */
 export const NTAG_RESERVED = new Set([
   "agent", "admin", "administrator", "root", "system", "support", "help", "official", "team", "staff", "mod", "moderator",
@@ -354,15 +466,16 @@ export function ntagNameError(n) {
   if (/[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/.test(v)) return "name can't contain invisible or text-direction characters";
   return null;
 }
-/** Validates a decoded nTag op body: claim {t[,n]} or release {t:""}. Error string or null. */
+/** Validates a decoded nTag op body: claim/update {t[,n][,c]} (c = preferred currency) or release {t:""}. Error string or null. */
 export function ntagOpError(op) {
   if (!op || typeof op !== "object" || Array.isArray(op)) return "not a Lokal tag op";
   const keys = Object.keys(op);
-  if (keys.some((k) => k !== "t" && k !== "n")) return "unexpected field";
+  if (keys.some((k) => k !== "t" && k !== "n" && k !== "c")) return "unexpected field";
   if (typeof op.t !== "string") return "invalid tag";
-  if (op.t === "") return "n" in op ? "a release has no name" : null;
+  if (op.t === "") return "n" in op ? "a release has no name" : "c" in op ? "a release has no currency" : null;
   const err = ntagError(op.t);
   if (err) return err;
+  if ("c" in op && !NTAG_CURRENCIES.includes(op.c)) return "unknown currency";
   if ("n" in op) return ntagNameError(op.n);
   return null;
 }
@@ -374,10 +487,11 @@ const stripErc8021 = (input) => {
   }
   return h;
 };
-/** Calldata for a claim tx: hex("NT1:" + JSON) + this app's attribution suffix. Throws on an invalid tag or name. */
-export function encodeNtagClaim({ t, n } = {}) {
+/** Calldata for a claim (or update) tx: hex("NT1:" + JSON) + this app's attribution suffix. Throws on a bad tag, name or currency. */
+export function encodeNtagClaim({ t, n, c } = {}) {
   const name = typeof n === "string" ? n.trim() : n;
   const body = name ? { t, n: name } : { t };
+  if (c != null) body.c = c;
   const err = body.t === "" ? "enter a tag" : ntagOpError(body);
   if (err) throw new Error(err);
   return "0x" + utf8Hex(NTAG_PREFIX + JSON.stringify(body)) + tagSuffix();
@@ -403,8 +517,9 @@ const ntagZeroValue = (v) => {
 };
 /**
  * Replays VALID ops with time <= atSec in (block, position) order. Returns { tags: Map<tag, {owner (lower-case), name,
- * since (sec), hash, block, position}>, byOwner: Map<lower-case address, tag>, locks: Map<tag, {owner, until (sec)}>,
- * statuses: Map<hash, "claimed"|"renamed"|"released"|"taken"|"locked"|"reserved"|"invalid"|"noop"> }.
+ * since (sec), hash, block, position, currency? (the owner's preferred currency code, once set)}>, byOwner: Map<lower-case
+ * address, tag>, locks: Map<tag, {owner, until (sec)}>,
+ * statuses: Map<hash, "claimed"|"renamed"|"updated"|"released"|"taken"|"locked"|"reserved"|"invalid"|"noop"> }.
  */
 export function resolveNtags(ops, atSec = Infinity) {
   const tags = new Map(), byOwner = new Map(), locks = new Map(), statuses = new Map();
@@ -429,10 +544,14 @@ export function resolveNtags(ops, atSec = Infinity) {
     const t = o.op.t;
     if (t === "") { statuses.set(o.hash, release(from, time) ? "released" : "noop"); continue; }
     const name = "n" in o.op ? o.op.n.trim() : null;
+    const currency = "c" in o.op ? o.op.c : null;
     const cur = tags.get(t);
     if (cur && cur.owner === from) {
-      if (name != null && name !== cur.name) { cur.name = name; statuses.set(o.hash, "renamed"); }
-      else statuses.set(o.hash, "noop");
+      const renamed = name != null && name !== cur.name;
+      const recurrency = currency != null && currency !== (cur.currency ?? null);
+      if (renamed) cur.name = name;
+      if (recurrency) cur.currency = currency;
+      statuses.set(o.hash, renamed ? "renamed" : recurrency ? "updated" : "noop");
       continue;
     }
     if (cur) { statuses.set(o.hash, "taken"); continue; }
@@ -440,7 +559,7 @@ export function resolveNtags(ops, atSec = Infinity) {
     if (lock && lock.until > time && lock.owner !== from) { statuses.set(o.hash, "locked"); continue; }
     release(from, time);
     locks.delete(t);
-    tags.set(t, { owner: from, name, since: time, hash: o.hash, block: Number(o.block), position: Number(o.position) });
+    tags.set(t, { owner: from, name, since: time, hash: o.hash, block: Number(o.block), position: Number(o.position), ...(currency ? { currency } : {}) });
     byOwner.set(from, t);
     statuses.set(o.hash, "claimed");
   }
@@ -451,7 +570,7 @@ export const resolveNtagsBefore = (ops, block, position) => resolveNtags((ops ??
   o && (Number(o.block) < Number(block) || (Number(o.block) === Number(block) && Number(o.position) < Number(position)))));
 /** The tag an address currently holds, or null. */
 export const ntagOf = (state, address) => state.byOwner.get(String(address ?? "").toLowerCase()) ?? null;
-/** The current entry { owner, name, since, hash, block, position } for a tag, or null. */
+/** The current entry { owner, name, since, hash, block, position, currency? } for a tag, or null. */
 export const ownerOf = (state, tag) => state.tags.get(tag) ?? null;
 /** "invalid" | "reserved" | "yours" | "taken" | "locked" | "free" for `forAddress` claiming `tag` at nowSec. */
 export function ntagAvailability(state, tag, forAddress, nowSec = Math.floor(Date.now() / 1000)) {
@@ -464,25 +583,37 @@ export function ntagAvailability(state, tag, forAddress, nowSec = Math.floor(Dat
   if (lock && lock.until > nowSec && lock.owner !== me) return "locked";
   return "free";
 }
-/** ERC-20 transfer(agent, units) calldata + hex("NTP:" + tag) memo + attribution suffix. Tokens ignore the extra bytes. */
-export function encodeNtagTransfer(agent, units, tag) {
+/**
+ * ERC-20 transfer(agent, units) calldata + hex("NTP:" + tag [+ ":" + currency]) memo + attribution suffix. Tokens ignore
+ * the extra bytes. No currency (or "cngn") writes the original memo "NTP:<tag>", which pays out in naira.
+ */
+export function encodeNtagTransfer(agent, units, tag, currency) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(agent))) throw new Error("invalid agent address");
   const v = BigInt(units);
   if (v <= 0n || v >= 1n << 256n) throw new Error("invalid amount");
   const err = ntagError(tag);
   if (err) throw new Error(err);
+  if (currency != null && !NTAG_CURRENCIES.includes(currency)) throw new Error("unknown currency");
+  const code = currency != null && currency !== NTAG_CURRENCIES[0] ? ":" + currency : "";
   return "0xa9059cbb" + String(agent).toLowerCase().replace(/^0x/, "").padStart(64, "0") + v.toString(16).padStart(64, "0")
-    + utf8Hex(NTAG_MEMO_PREFIX + tag) + tagSuffix();
+    + utf8Hex(NTAG_MEMO_PREFIX + tag + code) + tagSuffix();
 }
-/** The tag in a transfer's memo (suffix stripped, selector a9059cbb, then exactly "NTP:" + a valid tag), or null. */
-export function decodeNtagMemo(input) {
+/**
+ * A transfer's Lokal tag memo (suffix stripped, selector a9059cbb, then exactly "NTP:" + a valid tag, optionally followed
+ * by ":" + a currency code): { tag, currency } with currency null when the memo names none (= naira), or null.
+ */
+export function decodeNtagPayment(input) {
   const h = stripErc8021(input);
   if (!/^[0-9a-f]*$/.test(h) || h.length % 2 || !h.startsWith("a9059cbb") || h.length <= 136) return null;
   const memo = new TextDecoder().decode(hexBytes(h.slice(136)));
   if (!memo.startsWith(NTAG_MEMO_PREFIX)) return null;
-  const tag = memo.slice(NTAG_MEMO_PREFIX.length);
-  return ntagError(tag) ? null : tag;
+  const [tag, currency, ...more] = memo.slice(NTAG_MEMO_PREFIX.length).split(":");
+  if (more.length || ntagError(tag)) return null;
+  if (currency !== undefined && !NTAG_CURRENCIES.includes(currency)) return null;
+  return { tag, currency: currency ?? null };
 }
+/** The tag in a transfer's memo, or null (see decodeNtagPayment). */
+export const decodeNtagMemo = (input) => decodeNtagPayment(input)?.tag ?? null;
 // ---------- port: end ----------
 
 let ntagCache = null; // { at (ms), ops } or { promise }
@@ -557,18 +688,49 @@ export function parseRequest(token) {
   return r;
 }
 
-/** { rate, fromPreview, fetchedAt, ageMin, stale, previewUsd, ticker } — throws if no rate. */
-export async function loadRate() {
+/**
+ * Every currency's rate from a /api/rate or rate.json body: { rates: { cngn, idrx, wars, wcop } (local money per 1 USD₮,
+ * Textile fee included, null when not quoting), available: { code: boolean }, maxUsd: { code: number | null } (the most
+ * Textile can convert right now, when it says) }. Older bodies only carry the naira fields: the others are then unavailable.
+ */
+export function ratesFrom(d) {
+  const rates = {}, available = {}, maxUsd = {};
+  for (const c of CURRENCIES) {
+    let r = Number(d?.rates?.[c.code]);
+    if (!(r > 0) && c.code === "cngn") r = Number(d?.effectiveRate) > 0 ? Number(d.effectiveRate) : Number(d?.ticker?.bid);
+    rates[c.code] = r > 0 ? r : null;
+    available[c.code] = r > 0 && d?.available?.[c.code] !== false;
+    const m = Number(d?.maxUsd?.[c.code]);
+    maxUsd[c.code] = m > 0 ? m : null;
+  }
+  return { rates, available, maxUsd };
+}
+let rateCache = null; // { at, promise }: the sidebar and the page share one request (refetched after 60 s)
+/**
+ * { rate (naira per USD₮, or null), rates, available, maxUsd (see ratesFrom), fromPreview, fetchedAt, ageMin, stale,
+ * previewUsd, ticker, reverseRate, reversePreviewNgn }. Throws when no currency has a rate at all.
+ */
+export function loadRate() {
+  if (rateCache && Date.now() - rateCache.at < 60_000) return rateCache.promise;
+  const promise = fetchRate();
+  rateCache = { at: Date.now(), promise };
+  promise.catch(() => { if (rateCache?.promise === promise) rateCache = null; });
+  return promise;
+}
+async function fetchRate() {
   let d;
   try { d = HAS_API ? await getJson("/api/rate") : null; } catch { d = null; } // live on Vercel
-  if (!d || !(Number(d.effectiveRate) > 0 || d.ticker)) d = await getJson("rate.json", { cache: "no-store" });
-  const fromPreview = Number(d.effectiveRate) > 0;
-  const rate = fromPreview ? Number(d.effectiveRate) : Number(d.ticker?.bid);
-  if (!(rate > 0)) throw new Error("no rate");
-  const ageMin = Math.max(0, Math.round((Date.now() - Date.parse(d.fetchedAt)) / 60000));
+  if (!d || !(Number(d.effectiveRate) > 0 || d.ticker || d.rates)) d = await getJson("rate.json", { cache: "no-store" });
+  const fromPreview = Number(d.effectiveRate) > 0 || Object.values(d.rates ?? {}).some((r) => Number(r) > 0);
+  const { rates, available, maxUsd } = ratesFrom(d);
+  if (!Object.values(rates).some(Boolean)) throw new Error("no rate");
+  const ageMin = Math.max(0, Math.round((Date.now() - Date.parse(d.fetchedAt ?? d.at)) / 60000));
   // reverseRate = USD₮ received per 1 NGN (cNGN -> USD₮ preview, fee included); null if not published yet
   const reverseRate = Number(d.reverseRate) > 0 ? Number(d.reverseRate) : null;
-  return { rate, fromPreview, fetchedAt: d.fetchedAt, ageMin, stale: !!d.stale || ageMin > 120, previewUsd: d.previewUsd ?? 10, ticker: d.ticker ?? null, reverseRate, reversePreviewNgn: d.reversePreviewNgn ?? null };
+  return {
+    rate: rates.cngn, rates, available, maxUsd, fromPreview, fetchedAt: d.fetchedAt ?? d.at, ageMin, stale: !!d.stale || ageMin > 120,
+    previewUsd: d.previewUsd ?? 10, ticker: d.ticker ?? null, reverseRate, reversePreviewNgn: d.reversePreviewNgn ?? null,
+  };
 }
 
 /** { ok, owner, file, uri } — owner check + decoded ERC-8004 registration file. */
@@ -617,14 +779,14 @@ export async function loadTxByHash(hash) {
 
 // ---------- transaction meaning ----------
 /** "identity" | "approve" | "convert" | "payout" | "other" */
-const isStable = (addr) => [TOKENS.USDT.address, TOKENS.cNGN.address].some((a) => a.toLowerCase() === addr);
+const isStable = (addr) => Object.values(TOKENS).some((t) => t.address.toLowerCase() === addr);
 // CELO (ERC-20 at the CELO token address) is sold by celo-cngn payouts: label its approvals and swaps, never as a payout.
 const CELO_ADDR = "0x471EcE3750Da237f93B8E339c536989b8978a438".toLowerCase();
 const labelSymbol = (addr) => (addr?.toLowerCase() === CELO_ADDR ? "CELO" : tokenSymbol(addr));
 export function txKind(tx) {
   const to = tx.to?.hash?.toLowerCase();
   if (to === REGISTRY.toLowerCase()) return "identity";
-  if (isStable(to) && tx.method === "transfer") return "payout"; // either corridor: cNGN or USD₮ paid out
+  if (isStable(to) && tx.method === "transfer") return "payout"; // any corridor: a local currency or USD₮ paid out
   if ((isStable(to) || to === CELO_ADDR) && tx.method === "approve") return "approve";
   if (tx.token_transfers || /execute/i.test(tx.method ?? "")) return "convert";
   return "other";
@@ -727,7 +889,7 @@ export function getConsent() {
 }
 function saveConsent(choice) {
   try { localStorage.setItem(CONSENT_KEY, JSON.stringify({ v: CONSENT_VERSION, choice, at: new Date().toISOString() })); } catch { /* blocked: ask again next visit */ }
-  if (choice === "declined") { try { localStorage.removeItem(SB_KEY); } catch {} }
+  if (choice === "declined") { try { localStorage.removeItem(SB_KEY); localStorage.removeItem("np-currency"); } catch {} }
 }
 function applyConsent(choice) {
   document.documentElement.dataset.consent = choice ?? "unset";
@@ -839,9 +1001,22 @@ function initSidebar() {
     }
   });
 
-  // live status card
+  // live status card: what 1 USD₮ buys in every currency (a compact 2 x 2 list; the rail shows it as a tooltip)
   const rateEl = document.getElementById("sb-rate");
-  if (rateEl) loadRate().then((r) => { rateEl.textContent = `1 USD₮ = ${naira(r.rate)}`; }).catch(() => { rateEl.textContent = "Rate unavailable"; });
+  if (rateEl) {
+    loadRate().then((r) => {
+      const cells = CURRENCIES.map((c) => {
+        const ok = r.available[c.code];
+        const text = ok ? formatCurrency(r.rates[c.code], c.code, 0) : `${c.symbol} —`;
+        return el("span", { class: `sb-rate${ok ? "" : " off"}`, title: ok ? `${c.label}: ${text} per 1 USD₮` : `${c.label}: not available right now` }, text);
+      });
+      rateEl.classList.add("sb-rates");
+      rateEl.setAttribute("aria-label", "1 USD₮ buys " + CURRENCIES.map((c) => (r.available[c.code] ? formatCurrency(r.rates[c.code], c.code, 0) : `no ${c.label} right now`)).join(", "));
+      rateEl.replaceChildren(...cells);
+      const box = rateEl.closest(".sb-status");
+      box?.setAttribute("title", "Celo mainnet · 1 USD₮ = " + CURRENCIES.filter((c) => r.available[c.code]).map((c) => formatCurrency(r.rates[c.code], c.code, 0)).join(" · "));
+    }).catch(() => { rateEl.textContent = "Rates unavailable"; });
+  }
 
   // enable transitions only after the first paint, so the remembered state doesn't animate in
   requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add("sb-ready")));

@@ -1,6 +1,7 @@
 // Safety rules. Pure functions, unit-tested. The AI layer can never bypass these.
 import { formatUnits, getAddress, isAddress, parseUnits, zeroAddress } from "viem";
 import { CELO_TOKEN, CORRIDORS, DIRECT_CORRIDORS, TOKENS } from "./config.mjs";
+import { currencyOf, findCurrency, corridorFor } from "./currencies.mjs";
 
 /**
  * Resolves a payment-link corridor id ("usdt-cngn" default, "cngn-usdt") to its sell/buy tokens. Used by payment
@@ -19,6 +20,25 @@ export function getCorridor(id) {
   return { ...c, sellToken: TOKENS[c.sell], buyToken: TOKENS[c.buy] };
 }
 
+/** The refusal code for a payout currency Textile FX isn't quoting (recorded as refused, reported to the status server). */
+export const CURRENCY_UNAVAILABLE = "currency_unavailable";
+
+/**
+ * A preview (or firm quote) that did not quote. For a corridor that pays out in a local currency this is a permanent
+ * refusal with the code `currency_unavailable`: the deposit is recorded as refused and is NEVER paid in another currency.
+ * Any other corridor (cngn-usdt) keeps the old behaviour: a plain error, so autopilot stops and tries again later.
+ * `status`/`reason` are Textile's (e.g. "no_quote", "no_makers_online").
+ */
+export function notQuoting(c, status, reason) {
+  const why = [status, reason].filter(Boolean).join(": ") || "no price";
+  if (!c?.currency) return new Error(`No indicative price right now (${why}).`);
+  const cur = currencyOf(c.currency);
+  return refusal(
+    `${CURRENCY_UNAVAILABLE}: ${cur ? `${cur.label} (${cur.token})` : c.currency} isn't available on Textile FX right now (${why}). ` +
+    "Not paid, and never paid in another currency.",
+  );
+}
+
 /** Any corridor the CLI's `pay` and `quote` accept: the payment-link corridors plus "celo-cngn". */
 export function getPayCorridor(id) {
   const key = String(id ?? "usdt-cngn").trim().toLowerCase();
@@ -29,6 +49,21 @@ export function getPayCorridor(id) {
   }
   return { ...d, sellToken: CELO_TOKEN, viaToken: TOKENS[d.via], buyToken: TOKENS[d.buy] };
 }
+
+/**
+ * What the recipient receives, from loose input ("rupiah", "idrx", "argentina-peso", "COP", "naira"): the currency
+ * code, or throws with the accepted names. Used by `lokal send --to`, `agent request --to-currency` and friends.
+ */
+export function parseCurrency(input) {
+  const c = findCurrency(input);
+  if (!c) {
+    throw new Error(`Unknown currency "${input}". Use one of: naira (cngn), rupiah (idrx), argentina-peso (wars, ars), colombia-peso (wcop, cop).`);
+  }
+  return c.code;
+}
+
+/** The payment-link corridor that pays out in `code` ("idrx" -> "usdt-idrx"). */
+export const payoutCorridor = (code) => getCorridor(corridorFor(parseCurrency(code))).id;
 
 /** CELO amount: "20", "20.5", "1,000 CELO". At most 6 decimal places. Returns { str, units } (18-dp base units). */
 export function parseCeloAmount(input) {

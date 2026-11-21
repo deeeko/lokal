@@ -33,7 +33,8 @@
 //     delays or changes a payout.
 import fs from "node:fs";
 import { createPublicClient, formatUnits, http, parseAbiItem, parseUnits } from "viem";
-import { AGENT_ADDRESS, CHAIN, TOKENS, WATCH_STATE_FILE } from "./config.mjs";
+import { AGENT_ADDRESS, CHAIN, CORRIDORS, TOKENS, WATCH_STATE_FILE } from "./config.mjs";
+import { corridorFor, currencyOf } from "./currencies.mjs";
 import { loadAccount } from "./chain.mjs";
 import { getCorridor, refusal } from "./guards.mjs";
 import { log, pay, preflight, readReceipts } from "./pay.mjs";
@@ -44,7 +45,7 @@ import {
   verifyRegistrationOnchain,
 } from "./registrations.mjs";
 import {
-  decodeNtagMemo, loadNtagOpsCache, loadNtagPayments, looksLikeNtagAttempt, ownerOf, refreshNtagOpsCache, resolveNtagsBefore,
+  decodeNtagPayment, loadNtagOpsCache, loadNtagPayments, looksLikeNtagAttempt, ownerOf, refreshNtagOpsCache, resolveNtagsBefore,
   saveNtagPayments, verifyNtagOpOnchain,
 } from "./ntags.mjs";
 import { depositEvent, makeStatusReporter } from "./status-report.mjs";
@@ -56,11 +57,17 @@ const MAX_BACKOFF_MS = 5 * 60_000;
 
 // ---------- nTag payments (pure, unit-tested) ----------
 
-/** Corridor an nTag payment takes, by the token deposited: USDT -> usdt-cngn (owner gets naira), cNGN -> cngn-usdt. */
-export function ntagCorridor(token) {
+/**
+ * Corridor an nTag payment takes, by the token deposited and the currency its memo asks for: USDT -> usdt-<currency>
+ * ("NTP:ada:idrx" -> usdt-idrx; no code -> usdt-cngn, naira), cNGN -> cngn-usdt (no code only). null = not accepted.
+ */
+export function ntagCorridor(token, currency = null) {
   const t = String(token ?? "").toLowerCase();
-  if (t === TOKENS.USDT.address.toLowerCase()) return "usdt-cngn";
-  if (t === TOKENS.CNGN.address.toLowerCase()) return "cngn-usdt";
+  if (t === TOKENS.USDT.address.toLowerCase()) {
+    const id = corridorFor(currency ?? "cngn");
+    return currency == null || (currencyOf(currency) && CORRIDORS[id]) ? id : null;
+  }
+  if (t === TOKENS.CNGN.address.toLowerCase()) return currency == null ? "cngn-usdt" : null;
   return null;
 }
 
@@ -69,7 +76,10 @@ export function ntagCorridor(token) {
  * floor well under $1 at any plausible rate; a cNGN deposit must also preview at >= NTAG_MIN_USD (checked live, see
  * ntagUsdFloor). Smaller deposits are refused (logged, not paid), so dust does not stop autopilot with a price error.
  */
-export const NTAG_MIN = { "usdt-cngn": "1", "cngn-usdt": "1000" };
+export const NTAG_MIN = {
+  ...Object.fromEntries(Object.values(CORRIDORS).filter((c) => c.sell === "USDT").map((c) => [c.id, "1"])),
+  "cngn-usdt": "1000",
+};
 export const NTAG_MIN_USD = "1";
 
 /**
@@ -101,7 +111,8 @@ export const NTAG_BAD_MEMO = "the transfer looks like a Lokal tag payment, but i
 
 /**
  * What autopilot does with a deposit that carries (or looks like it tries to carry) an nTag memo. Pure: no RPC, no files.
- *   dep = { key, tag (null when the memo does not decode), token, value (bigint), payer, tx: { from, to, input }, block, position }
+ *   dep = { key, tag (null when the memo does not decode), currency (the memo's currency code, null = naira), token,
+ *           value (bigint), payer, tx: { from, to, input }, block, position }
  *   ops = every nTag op known up to the deposit's block, or null when that list is not loaded (then: "hold");
  *   payments = ntag-payments.json (plus dry-run records); agent = agent address.
  * Returns { action: "handled", record } | { action: "hold" } | { action: "refuse", reason } |
@@ -112,7 +123,10 @@ export const NTAG_BAD_MEMO = "the transfer looks like a Lokal tag payment, but i
 export function classifyNtagDeposit(dep, ops, payments, agent) {
   if (payments?.[dep.key]) return { action: "handled", record: payments[dep.key] };
   if (!dep.tag) return { action: "refuse", reason: NTAG_BAD_MEMO };
-  const corridor = ntagCorridor(dep.token);
+  const corridor = ntagCorridor(dep.token, dep.currency ?? null);
+  if (!corridor && dep.currency != null && String(dep.token).toLowerCase() === TOKENS.CNGN.address.toLowerCase()) {
+    return { action: "refuse", reason: "the currency in the Lokal tag memo only applies to USD₮ payments (cNGN pays out in dollars)" };
+  }
   if (!corridor) return { action: "refuse", reason: "token not accepted for Lokal tag payments" };
   const h = String(dep.tx?.input ?? "").toLowerCase().replace(/^0x/, "");
   let memoValue = null;
@@ -130,7 +144,7 @@ export function classifyNtagDeposit(dep, ops, payments, agent) {
   if (!entry) return { action: "refuse", reason: "unknown Lokal tag" };
   const op = ops.find((o) => o.hash === entry.hash);
   if (!op) return { action: "refuse", reason: "Lokal tag claim not found" };
-  return { action: "pay", tag: dep.tag, entry, op, corridor, amount, units, dust };
+  return { action: "pay", tag: dep.tag, currency: currencyOf(CORRIDORS[corridor]?.currency)?.code ?? null, entry, op, corridor, amount, units, dust };
 }
 
 /** Inclusive [from, to] block ranges of at most `size` blocks each. */
@@ -331,8 +345,9 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     }
     // A transfer memo naming an nTag wins: such a deposit is never matched against requests or registrations. Neither is
     // anything that looks like an nTag attempt whose memo does not decode (refused in handleNtag).
-    const tag = decodeNtagMemo(tx.input);
-    if (tag || looksLikeNtagAttempt(tx.input)) return handleNtag(l, key, tag, { sym, amount, payer, timeMs, tx });
+    const memo = decodeNtagPayment(tx.input);
+    const tag = memo?.tag ?? null;
+    if (tag || looksLikeNtagAttempt(tx.input)) return handleNtag(l, key, tag, { sym, amount, payer, timeMs, tx, currency: memo?.currency ?? null });
     const req = matchDeposit({ token, value, timeMs }, list);
     const rm = matchRegistration({ token, value, timeMs }, regs, rstate);
     if (req && rm) {
@@ -531,12 +546,12 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     });
   }
 
-  async function handleNtag(l, key, tag, { sym, amount, payer, timeMs, tx }) {
+  async function handleNtag(l, key, tag, { sym, amount, payer, timeMs, tx, currency = null }) {
     const deposit = { payer, tx: l.transactionHash, logIndex: l.logIndex, block: String(l.blockNumber), at: new Date(timeMs).toISOString() };
     const where = { ntag: tag, token: sym, amount, from: payer, tx: l.transactionHash, logIndex: l.logIndex, block: String(l.blockNumber) };
     const ready = ntagCache != null && BigInt(l.blockNumber) <= ntagOpsHeight;
     const d = classifyNtagDeposit({
-      key, tag, token: l.address, value: l.args.value, payer, tx, block: l.blockNumber, position: l.transactionIndex ?? tx.index,
+      key, tag, currency, token: l.address, value: l.args.value, payer, tx, block: l.blockNumber, position: l.transactionIndex ?? tx.index,
     }, ready ? ntagCache.ops : null, ntagPayments(), agent);
     if (d.action === "handled") {
       say(`Deposit ${l.transactionHash}${tag ? ` for @${tag}` : ""} was already handled${d.record?.status === "refused" ? ` (refused: ${d.record.reason})` : ""}. Skipping.`);
@@ -556,7 +571,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     if (d.dust > 0n) say(`  Paying ${d.amount} ${sym}; ${formatUnits(d.dust, 6)} ${sym} of dust stays in the agent wallet.`);
     const record = (from) => ({
       id: key, tag, name: `@${tag}`, from, owner: from, claim: d.entry.hash, ...(d.entry.name ? { ownerName: d.entry.name } : {}),
-      token: sym, amount: d.amount, dir: d.corridor, ...(d.dust > 0n ? { dust: formatUnits(d.dust, 6) } : {}), deposit,
+      token: sym, amount: d.amount, dir: d.corridor, ...(d.currency ? { currency: d.currency } : {}), ...(d.dust > 0n ? { dust: formatUnits(d.dust, 6) } : {}), deposit,
     });
 
     if (!execute) {
