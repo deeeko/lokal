@@ -18,9 +18,12 @@ safety path. All four are built and tested; none has had a real mainnet payout y
 >   [The contract has the final say](#the-contract-has-the-final-say)). No real user payout yet.
 > - **Built, not yet used on mainnet:** payouts in naira, rupiah and pesos (plus naira → dollars), the currency
 >   picker, Lokal tags, **paying and claiming through the contracts** (site, `lokal` command and autopilot), payment
->   links, Get paid, autopilot, refunds, the `lokal` command, receipts and reviews, and the
->   [cash-out guide](https://lokalpay.vercel.app/cash-out.html).
-> - **Planned:** Pots on the site, the "Who am I paying?" card, Pay with CELO for payers, MiniPay mode.
+>   links, Get paid, autopilot, refunds, the `lokal` command, receipts and reviews, the
+>   [cash-out guide](https://lokalpay.vercel.app/cash-out.html), the sign-up gateway, the dashboard and "Add to wallet".
+> - **Planned:** Pots on the site, the "Who am I paying?" card, Pay with CELO for payers, "Pay for me" (a payment link
+>   with a title, note and share message, for someone else to pay), MiniPay mode.
+
+![The Lokal landing page: "Send dollars. They receive their lokal money." with the live converter](docs/assets/landing.jpg)
 
 **[Live app](https://lokalpay.vercel.app)** ·
 **[Agent on Celoscan](https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e)** ·
@@ -53,7 +56,7 @@ Built for the **Agents Open for Business** hackathon on Celo, **Track 3: Stablec
 
 1. [What it is and who it's for](#what-it-is-and-who-its-for)
 2. [Currencies](#currencies)
-3. [How people use it](#how-people-use-it)
+3. [How people use it](#how-people-use-it) (and [the website](#the-website-landing-sign-up-dashboard))
 4. [How a payout works](#how-a-payout-works)
 5. [The contract has the final say](#the-contract-has-the-final-say)
 6. [Safety and limits, enforced in code](#safety-and-limits-enforced-in-code)
@@ -139,16 +142,45 @@ USD₮. The payer picks the currency; all four are built, not yet used on mainne
 
 ## How people use it
 
-The site has six sections in its sidebar, each with a small tab strip for related pages:
+### The website: landing, sign-up, dashboard
 
-| Section | Tabs |
-|---|---|
-| Overview | sign in, find a Lokal tag, live stats, quote and activity |
-| Send | Quote · Pay a link (plus the public tag pages, `/@tag`) |
-| Get paid | Payment link · Your Lokal tag |
-| Activity | Transactions · Receipts · Verify |
-| Agent | Identity · Autopilot |
-| Docs | Docs · Privacy · Terms |
+The site has three front doors, and what each person sees depends on whether they are signed in on this device.
+
+| Page | Who it is for | What it does |
+|---|---|---|
+| **Landing** (`/`, `index.html`) | everyone new | Tells the whole story top to bottom: the hero with a **live converter** (type $10, see naira, rupiah and both pesos from `/api/rate`), the problem, how it works in three steps, the four countries with live rates, **everything Lokal does** (every capability with its honest Live / Built / Planned label and a "try it" link), why it's safe (the two contracts on Celoscan), getting money to a bank, **Proof** (the Status today box and real payouts read from Celo, with an honest empty state until the first one), developers, and an FAQ. A slim top bar: How it works, Countries, Safety, Docs, Sign in, Get started. |
+| **Sign-up gateway** (`start.html`) | someone who wants to get paid | One calm step at a time with a progress line: **Connect** (the wallet shares its address; nothing signed) → **Sign in** (the free signed message, the same sign-in as before) → **Your tag** (the LokalTags contract answers as you type) → **Your name** (optional), then **one** `claim(tag, name)` transaction, simulated first → **Welcome** (your card, your link and QR, "Add <token> to your wallet", next steps). Signing up and signing in are the same flow: the wallet is the account, with no email or password. No currency is asked for. |
+| **Dashboard** (`app.html`) | the signed-in wallet | Your tag card and link (copy, WhatsApp, QR), quick actions (create a payment link, send money), **money received** (payouts to this wallet, per currency), **recent payments** (only yours), **your payment links** with their status, **Add to your wallet** for cNGN, IDRX, wARS, wCOP and USD₮ (`wallet_watchAsset`, after switching the wallet to Celo), and **settings**: display name (`setName`), default currency (`setReceiveToken`, optional) and release, each simulated before the wallet opens. |
+
+**Signed in on this device, `/` opens the dashboard.** `site/assets/gate.js` runs in the landing's `<head>` (a plain
+script, allowed by `script-src 'self'`), reads the saved sign-in and sends the browser to `app.html` before anything is
+drawn. `index.html?about` ("About Lokal", in every page's footer and the account menu) always shows the landing. The
+dashboard never sends anyone back: signed out (or with the wallet locked) it shows a sign-in panel, so the two pages
+can't bounce between each other.
+
+**Public vs signed in.**
+
+- **Public, no account needed** (payers must be able to pay in seconds): a tag's pay page (`/@tag`, `tag.html`), payment
+  links (`pay.html`), quotes, receipts, verify, the cash-out guide, docs, privacy, terms, the agent page and autopilot.
+- **Signed in only:** the dashboard, and **Activity** (`transactions.html`), which now shows only your own payments
+  ("Yours"). Visitors see a sign-in prompt there instead: the agent's full feed and other people's addresses are not
+  shown to them. The autopilot board stays public for its timings but no longer prints anyone's wallet address. (The
+  chain itself is public; this site just doesn't put other people's payments in front of visitors.)
+
+**Navigation.** App pages share one sidebar: Dashboard · Send · Get paid · Activity · Account · Docs (Activity groups
+Your activity, Receipts, Verify, Agent and Autopilot; Docs groups Docs, Cash out, Privacy and Terms).
+`scripts/check-site.mjs` keeps that chrome identical on every app page (`app.html` is the reference;
+`node scripts/sync-chrome.mjs` copies it) and deliberately lets the landing and the gateway have their own slim chrome,
+checked by their own rules. Below 1100 px the app top bar is a full-width bar whose height is reserved, so it never sits
+on top of page content.
+
+**Design.** A deeper, calmer green ground (`#06110c`, raised `#0a1a12`, frames `#0c1f16`), text that clears WCAG AA,
+and Celo yellow (`#fcff52`) only for the one filled action, the cursive *lokal* and the arrows of text links. General
+Sans Light for big display lines (tight tracking), General Sans for body (no tracking), Sentient Italic for the one
+accent word, a system mono for addresses and code. Motion is calm (about 0.4 s, transform and opacity, no bounce),
+pressing anything scales it to 0.97 in 100 ms, the landing's sticky bar is the only glass, and
+`prefers-reduced-motion` (cross-fades only), `prefers-reduced-transparency` (solid panels) and `prefers-contrast: more`
+(stronger lines) are honoured. No framework, no CDN, self-hosted fonts.
 
 Every payment screen shows the limits: **$25 per payment, $25 per person per day, $100 per day overall**.
 
@@ -233,9 +265,10 @@ the edge), with a static `rate.json` fallback refreshed every 30 minutes.
 
 ### Activity, receipts and reviews
 
-- **Transactions** (`transactions.html`): every transaction sent from the agent wallet, with the attribution tag
-  decoded from each one's own calldata. Filters: All, **Yours** (shown when signed in: your wallet's payments to and from
-  the agent), Payouts, Conversions, Approvals, Identity.
+- **Your activity** (`transactions.html`): signed in, your wallet's own payments with Lokal: what you sent (tag
+  payments through LokalTags or older memos, link payments), what the agent paid you, and your tag and payment-link
+  transactions, each with its attribution tag and receipt; CSV export. Visitors see a sign-in prompt instead (the
+  agent's full feed is not shown on the site any more; it stays public on Celoscan).
 - **Receipts** (`receipt.html`): every executed payout gets a number `NP-` + the first 8 hex characters of the payout
   transaction hash, upper-case (for example `NP-7F3A-91C2`), so anyone can work it out from the chain. The receipt page
   finds a payout by number or hash and rebuilds it from Celo in the browser: payout, swap, effective rate and each
@@ -932,9 +965,14 @@ HTML, CSS and ES modules.
 | `src/intent.mjs` | plain-language parser for `ask` |
 | `src/register8004.mjs` | ERC-8004 registration |
 | `src/chain.mjs` | agent wallet and the attribution-tagged client |
-| `site/` | the live app: `index`, `quote`, `pay`, `tag`, `get-paid`, `account`, `transactions`, `receipt`, `verify`, `agent`, `autopilot`, `docs`, `privacy`, `terms`, `404` |
+| `site/` | the live app: `index` (the landing), `start` (sign-up), `app` (dashboard), `quote`, `pay`, `tag`, `get-paid`, `account`, `transactions`, `receipt`, `verify`, `agent`, `autopilot`, `docs`, `privacy`, `terms`, `404` |
 | `site/assets/core.js` | shared site code: ABI codec, link formats, registrations, the Lokal tag resolver, explorer and RPC helpers |
 | `site/assets/session.js` | wallet sign-in (message, session, Celo network switch, wallet error messages) |
+| `site/assets/gate.js` | the landing's front door: a signed-in visitor goes to the dashboard (classic script in `<head>`) |
+| `site/assets/front-door.js` | who sees what: Activity and dashboard gating, the gateway's first step, the public pages |
+| `site/assets/my-activity.js` | "Yours": one wallet's own payments with Lokal, shared by the dashboard and Activity |
+| `site/assets/wallet-assets.js` | "Add <token> to your wallet" (`wallet_watchAsset`) |
+| `site/assets/landing.css`, `app.css` | the landing and gateway styles; the dashboard styles |
 | `site/assets/ntag-ui.js`, `ntags.css` | the tag card, claim and pay UI pieces |
 | `api/session.js` | stateless sign-in check |
 | `api/rate.js` | live Textile rate, edge-cached 60 s, falls back to the static `rate.json` |
@@ -944,9 +982,11 @@ HTML, CSS and ES modules.
 | `scripts/check-site.mjs` | static site checks: links, assets, CSP, page scripts parse, JSON and SVG valid |
 | `scripts/fetch-rate.mjs` | writes `site/rate.json` |
 | `scripts/serve.mjs` | local preview server (`node scripts/serve.mjs`, port 4173) |
+| `scripts/sync-chrome.mjs` | copies the app chrome (sidebar, top bar, footer) from `site/app.html` to every app page |
+| `scripts/screenshots.mjs` | screenshots of the landing, the gateway steps and the dashboard (Playwright; mocks only in its own browser) |
 | `contracts/` | Solidity contracts (`LokalTags`, `LokalPots`, `LokalText`), Hardhat + TypeScript tests, the one-command demo, the deploy script and ABIs (see [The contract has the final say](#the-contract-has-the-final-say)) |
 | `docs/WHO-ENFORCES-WHAT.md` | every rule, and whether the contract, the agent or the site enforces it |
-| `test/` | 197 unit and integration tests (`node --test`) |
+| `test/` | 296 unit and integration tests (`node --test`) |
 | `.github/workflows/ci.yml` | tests, a syntax check of every script, and the site check on every push and pull request |
 | `.github/workflows/contracts.yml` | compiles and tests the contracts and runs the demo (every row asserted) whenever the contracts or the site's tag rules change |
 | `.github/workflows/pages.yml` | GitHub Pages mirror: deploys only after tests and the site check pass; refreshes the rate every 30 min (read-only, no secrets) |
@@ -1091,7 +1131,7 @@ control (no funds moved) is sent only if Textile asks for it.
 ### Tests
 
 ```powershell
-npm test                          # 288 tests, all passing
+npm test                          # 296 tests, all passing
 node scripts/check-site.mjs       # static site check
 ```
 
@@ -1124,12 +1164,37 @@ node scripts/check-site.mjs       # static site check
 | `test/contracts-site.test.mjs` | 8 | the site's contract module: every selector, topic and error id against the verified ABI, calldata builders with the attribution suffix, the USD₮ permit, reverts in plain English, reads with a mocked RPC |
 | `test/refunded-site.test.mjs` | 3 | "Refunded · RF-XXXX-XXXX" on the site: rank, final status, the refused note |
 | `test/ntag-cli-contract.test.mjs` | 2 | the `lokal` CLI on LokalTags: reading a tag, a refusal explained before signing |
+| `test/front-door.test.mjs` | 8 | the landing's redirect for signed-in visitors (never for `?about`, expired or disconnected sessions), Activity and dashboard gating, the gateway's first step, exact `wallet_watchAsset` params and the switch to Celo first, the "Yours" rows (no addresses in labels) and totals |
 
 ---
 
 ## Progress log
 
 Newest first.
+
+### 2026-11-21: the front door: a landing that tells the story, a sign-up gateway and a private dashboard
+
+- **Landing at `/`** ([the website](#the-website-landing-sign-up-dashboard)): one story top to bottom, with a live
+  converter in the hero ($10 → naira, rupiah and both pesos from the live Textile FX rate; over $25 it says the contract
+  would refuse it), the four countries with live rates, an index of **everything Lokal does** with honest
+  Live / Built / Planned labels and try-it links, the contracts on Celoscan, the cash-out route, Proof (real payouts read
+  from Celo, with an honest empty state; no invented numbers, users or testimonials), developers and an FAQ.
+- **Sign-up gateway** (`start.html`): Connect → Sign in → Your tag → Your name → Welcome, with a progress line. The tag
+  and name go out in one `claim` transaction. No email, no password, no currency required.
+- **Dashboard** (`app.html`): your tag, money received, recent payments (only yours), your payment links, quick actions,
+  **Add to your wallet** (`wallet_watchAsset` for cNGN, IDRX, wARS, wCOP and USD₮) and settings (name, default
+  currency, release). Signed-in visitors who open `/` land here; "About Lokal" (`index.html?about`) shows the landing.
+- **The activity feed is for the signed-in wallet only.** Activity shows your own payments; visitors get a sign-in prompt.
+  The landing no longer shows the agent's feed, and the autopilot board no longer prints wallet addresses. Payer pages
+  stay public.
+- **Navigation:** Dashboard · Send · Get paid · Activity · Account · Docs. Below 1100 px the top bar is a full-width bar
+  with its height reserved, so it never covers content (it used to float over the Account claim summary).
+- **Refined palette and motion**: deeper greens, AA text contrast, yellow only where it matters, press feedback, calm
+  reveals, reduced-motion / reduced-transparency / more-contrast support.
+- `scripts/check-site.mjs` now checks the exact sidebar, allows the landing's and gateway's own chrome on purpose (with
+  their own rules), and checks that Activity starts hidden for visitors. `scripts/sync-chrome.mjs` copies the chrome;
+  `scripts/screenshots.mjs` takes the screenshots. Privacy page updated.
+- Tests: 296 (new: `test/front-door.test.mjs`, the redirect, gating, gateway steps, add-to-wallet params, "Yours" rows).
 
 ### 2026-11-21: tags and payments through the contracts
 
@@ -1341,7 +1406,7 @@ their own wallet in seconds.
 
 **Done**
 
-- [x] Agent on Celo mainnet, 288 tests passing (plus 130 contract tests)
+- [x] Agent on Celo mainnet, 296 tests passing (plus 130 contract tests)
 - [x] Live Textile price previews for all three corridors
 - [x] ERC-8004 identity registered (agentId 10079)
 - [x] Payment links, Get paid, autopilot, two stablecoin corridors plus CELO, receipts and onchain reviews
@@ -1353,6 +1418,7 @@ their own wallet in seconds.
 - [x] Live Textile FX quotes checked for rupiah (IDRX) and pesos (wARS, wCOP), see [Currencies](#currencies)
 - [x] LokalTags and LokalPots contracts deployed on Celo mainnet and source-verified; admin held by a separate wallet
 - [x] Site, `lokal` command and autopilot switched to the contracts (built and tested, not yet used on mainnet)
+- [x] A story-telling landing, a sign-up gateway and a private dashboard; the activity feed is for the signed-in wallet only
 
 **Still to do** (added here only once they have happened)
 
