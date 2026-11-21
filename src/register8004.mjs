@@ -15,13 +15,36 @@ export function registrationFile({ repoUrl, agentId } = {}) {
     type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
     name: "Lokal",
     description:
-      "Lokal (formerly Naira Payout): pay anyone in their local money. Converts USD₮ to local stablecoins (cNGN for Nigeria today) on Textile FX and pays the recipient's own wallet on Celo. Spending is capped and recipients are checked in code.",
-    services: [{ name: "web", endpoint: repoUrl }],
+      "Lokal (formerly Naira Payout): pay anyone in their local money. Payers send USD₮ on Celo to a Lokal tag or payment link; the LokalTags and LokalPots contracts check every limit before money moves, and the agent converts on Textile FX and pays the recipient's own wallet in naira (cNGN), rupiah (IDRX), Argentine or Colombian pesos (wARS, wCOP) or dollars. Non-custodial, capped, refundable, and every transaction carries the ERC-8021 tag.",
+    services: [
+      { name: "web", endpoint: "https://lokalpay.vercel.app" },
+      { name: "source", endpoint: repoUrl },
+    ],
     x402Support: false,
     active: true,
     supportedTrust: ["reputation"],
     ...(agentId ? { registrations: [{ agentId, agentRegistry: `eip155:42220:${IDENTITY_REGISTRY}` }] } : {}),
   };
+}
+
+/**
+ * Rewrites the agent card of an existing identity (setAgentURI), e.g. after the rename to Lokal. Dry run by default:
+ * prints the new card and the current one. Only the identity's owner (the agent wallet) can send it.
+ */
+export async function updateCard({ repoUrl, agentId, execute = false }) {
+  const account = loadAccount();
+  const { pub, wallet } = makeClients(account);
+  const card = registrationFile({ repoUrl, agentId });
+  const uri = toDataUri(card);
+  console.log(`Identity ${agentId}, owner check by simulation from ${account.address}`);
+  console.log(JSON.stringify(card, null, 2));
+  const { request } = await pub.simulateContract({ account, address: IDENTITY_REGISTRY, abi, functionName: "setAgentURI", args: [BigInt(agentId), uri] });
+  if (!execute) { console.log("DRY RUN: the update simulates cleanly. Add --execute to send it (one transaction, gas only)."); return; }
+  const hash = await wallet.writeContract(request);
+  const rc = await pub.waitForTransactionReceipt({ hash });
+  if (rc.status !== "success") throw new Error(`setAgentURI failed: ${hash}`);
+  console.log(`Agent card updated. tx=https://celoscan.io/tx/${hash}`);
+  return { hash };
 }
 
 export const toDataUri = (obj) => "data:application/json;base64," + Buffer.from(JSON.stringify(obj)).toString("base64");

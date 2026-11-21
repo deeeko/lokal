@@ -59,7 +59,7 @@ import {
   discoverRegistrations, listStatus, loadRegState, MAX_REG_HOURS, registrationLink, registrationStatuses, saveRegState,
 } from "./registrations.mjs";
 import { preview } from "./textile.mjs";
-import { register } from "./register8004.mjs";
+import { register, updateCard } from "./register8004.mjs";
 import {
   decodeNtagPayment, discoverNtagOps, encodeNtagTransfer, loadNtagPayments, normalizeNtag, ntagAvailability, ntagError, ntagOf,
   ownerOf, refusedRetryBlocker, resolveNtags, saveNtagPayments, verifyNtagOpOnchain,
@@ -647,7 +647,8 @@ async function main() {
       break;
     }
     case "register":
-      await register({ repoUrl: flag("repo") ?? "https://github.com/deeeko/lokal", execute: has("execute") });
+      if (has("update")) await updateCard({ repoUrl: flag("repo") ?? "https://github.com/deeeko/lokal", agentId: Number(flag("agent-id") ?? 10079), execute: has("execute") });
+      else await register({ repoUrl: flag("repo") ?? "https://github.com/deeeko/lokal", execute: has("execute") });
       break;
     case "verify": {
       const hash = rest[0];
