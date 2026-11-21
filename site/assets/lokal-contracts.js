@@ -57,6 +57,8 @@ export const TOPIC = {
   TagPaid: "0x57b50e2be06fdec5b22f282242d835deab044aa55598a4de94be1529eb2282c3",
   PotPaid: "0xe6b3aacdc629ba3f805853881b3370c2c489f7ab58b24a69060156672797d169",
   TagClaimed: "0xa18f42c7ad94b182292b8f65d73bb99d36d9cac8bedaa606d1c8a680ae5a891e",
+  TagReleased: "0x50f69538f3553ef026fd76d9331b67c3a95369c0b3b3f2ffb9c00c4a7483293d",
+  NameChanged: "0xd2aff0024ac43f9a1c17c8d39d017a0313852d5d08731e280698408d3a5ffe67",
 };
 
 /** USD₮ on Celo implements EIP-2612 with this domain (DOMAIN_SEPARATOR checked live before signing). */

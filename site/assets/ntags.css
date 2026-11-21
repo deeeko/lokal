@@ -453,6 +453,7 @@ button.ntag-card, a.ntag-card { cursor: pointer; }
 .nt-dispname, .ntag-name { unicode-bidi: isolate; }
 .nt-namecell { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; min-width: 0; }
 .nt-nowallet { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 20px; }
+.nt-nowallet .btn { white-space: normal; text-align: left; } /* a long label wraps instead of widening the card on a phone */
 .nt-qr.sm { width: 148px; padding: 8px; border-radius: 14px; box-shadow: none; }
 
 /* focus moved by the page after a rebuild: no ring for pointer users, a ring for keyboard users */

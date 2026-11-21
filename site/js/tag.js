@@ -2,7 +2,7 @@ import {
   AGENT, CAP, TOKENS, $$, el, icon, badge, short, num2, naira, usd, celoscanAddr, celoscanTx, initChrome,
   toast, readContract, loadRate, loadNtagOps, resolveNtags, ownerOf, ntagAvailability, normalizeNtag, ntagError,
   encodeNtagTransfer, ntagUrl, receiptNo, walletDisconnected, markWalletConnected, parseMoneyInput, lagosTime, $,
-  currencyOf, formatCurrency, celoscanAddr as addrLink, legacyNtagOps,
+  currencyOf, formatCurrency, celoscanAddr as addrLink, legacyNtagOps, getConsent,
 } from "../assets/core.js";
 import {
   LOKAL_TAGS, ZERO_ADDRESS, approveData, checkPayment, currencyRef, payTagData, payTagWithPermitData, permitDomainOk,
@@ -17,6 +17,9 @@ import {
   agentStatus, depositStatus, allowanceFromStatus, combineAllowance, receivedStale, reasonText, paidText, sourceNote, refusedNote, refundedLine,
   DELAYED_NOTE, SLOW_NOTE, payoutText, lookupTag,
 } from "../assets/ntag-ui.js";
+import {
+  assessTag, loadTagEvents, addBlockTimes, eventsNeedingTime, legacyHistory, readPaidTags, recordPaidTag,
+} from "../assets/trust.js";
 
 initChrome();
 // A pay page belongs under "Send". On Vercel it's served at /@ada, which no sidebar entry names, so mark it here.
@@ -147,26 +150,103 @@ function renderProfile(tag, entry) {
   const card = ntagCard({ tag, name: entry.name, address: entry.owner, since: entry.since, currency: entry.currency, as: "button", label: `Lokal tag @${tag}. Copy the link to this page` });
   card.dataset.copy = ntagUrl(tag);
   card.dataset.copyLabel = "Link copied";
-  const details = el("section", { class: "card", "aria-labelledby": "who-h" },
-    el("div", { class: "card-h" }, el("h2", { id: "who-h" }, "Who you're paying"), badge(C ? "On the LokalTags contract" : "Older memo tag", "neutral")),
-    el("div", { class: "card-b" }, el("ul", { class: "kv-list" },
-      el("li", {}, el("span", {}, "Lokal tag"), el("span", { class: "np-tagname", style: "font-size:17px;color:var(--celo)" }, "@" + tag)),
-      entry.name ? el("li", {}, el("span", {}, "Name"), el("span", { class: "nt-namecell" }, nameText(entry.name), el("small", { class: "micro muted" }, "Name set by the owner"))) : null,
-      el("li", {}, el("span", {}, "Wallet"), el("a", { class: "mono link", href: celoscanAddr(entry.owner), title: entry.owner }, short(entry.owner), " ", icon("ext"))),
-      el("li", {}, el("span", {}, "Prefers"), pref
-        ? el("span", { class: "cur-inline" }, flagIcon(pref.code), `${pref.label} (${pref.token})`)
-        : C && entry.receive === "usdt" ? el("span", { class: "cur-inline" }, flagIcon("usd"), "Dollars (USD₮)")
-          : el("span", { class: "soft" }, "Not set (naira by default)")),
-      el("li", {}, el("span", {}, "Since"), el("span", {}, dayMonthYear(entry.since))),
-      C ? el("li", {}, el("span", {}, "Registry"), el("a", { class: "link", href: addrLink(LOKAL_TAGS) }, "LokalTags contract ", icon("ext")))
-        : el("li", {}, el("span", {}, "Claim"), el("a", { class: "link", href: celoscanTx(entry.hash) }, "Transaction ", icon("ext"))))),
-    el("div", { class: "card-f" }, el("span", { class: "small muted" }, "The tag's owner chose this name; nobody checks it. Make sure it's who you expect."),
+  const who = whoCard(tag, entry, pref);
+  root.replaceChildren(el("div", { class: "grid-main" }, payCard(tag, entry, who.before), el("div", { class: "nt-profile" }, stage(card), who.section)));
+  const my = renderSeq;
+  loadTrust(tag, entry).then((a) => { if (my === renderSeq) who.show(a); });
+}
+
+// ---------- "Who am I paying?": the tag's age, owner and history, and calm warnings, before anything is paid ----------
+const paidStore = () => { try { return localStorage; } catch { return null; } };
+/** Remembers that this browser paid `tag` (only if the visitor allowed this site to remember things; see trust.js). */
+const rememberPaid = (tag) => recordPaidTag(paidStore(), getConsent(), tag);
+/** Everything the card needs, read from Celo. Never throws: a read that fails becomes "couldn't check". */
+async function loadTrust(tag, entry) {
+  const legacyOf = async () => {
+    const ops = legacyNtagOps(await loadNtagOps());
+    return legacyHistory(ops, resolveNtags(ops).statuses, tag);
+  };
+  let history = null, legacyClaims = null;
+  if (entry.source === "contract") {
+    [history, legacyClaims] = await Promise.all([
+      loadTagEvents(tag).then(async (h) => { await addBlockTimes(eventsNeedingTime(h.events, entry.owner)); return h; }).catch(() => null),
+      legacyOf().then((l) => l.claims).catch(() => null),
+    ]);
+  } else {
+    history = await legacyOf().then((legacy) => ({ legacy })).catch(() => null);
+  }
+  return assessTag({ tag, entry, history, legacyClaims, paid: readPaidTags(paidStore(), getConsent()), nowSec: Math.floor(Date.now() / 1000) });
+}
+/**
+ * The card on the right ("Who am I paying?") and a short note for the pay card (`before`, shown above the Pay button,
+ * so the warnings are in front of the payer on a phone too). show(assessment) fills both in.
+ */
+function whoCard(tag, entry, pref) {
+  const C = entry.source === "contract";
+  const at = "@" + tag;
+  const pending = (w = "8em") => el("span", { class: "skel", style: `width:${w}` });
+  const ageCell = el("span", { class: "nt-namecell" }, pending());
+  const paidCell = el("span", { class: "nt-namecell" }, pending("10em"));
+  const checks = el("div", { class: "trust-checks", "aria-live": "polite" },
+    el("p", { class: "small muted trust-loading", role: "status" }, el("span", { class: "skel", style: "width:14px;height:14px;border-radius:50%" }), `Checking ${at}'s history on Celo…`));
+  const before = el("div", { class: "trust-before", "aria-live": "polite" });
+  const owner = el("span", { class: "trust-owner" },
+    el("a", { class: "mono link", href: celoscanAddr(entry.owner), title: `${entry.owner} on Celoscan` }, short(entry.owner), " ", icon("ext")),
+    el("button", { class: "icon-btn sm", type: "button", "aria-label": "Copy the owner's address", title: "Copy address", dataset: { copy: entry.owner, copyLabel: "Address copied" } }, icon("copy")));
+  const section = el("section", { class: "card trust-card", "aria-labelledby": "who-h" },
+    el("div", { class: "card-h" }, el("h2", { id: "who-h", tabindex: "-1" }, "Who am I paying?"), badge(C ? "On the LokalTags contract" : "Older memo tag", "neutral")),
+    el("div", { class: "card-b stack" },
+      checks,
+      el("ul", { class: "kv-list" },
+        el("li", {}, el("span", {}, "Lokal tag"), el("span", { class: "np-tagname", style: "font-size:17px;color:var(--celo)" }, at)),
+        el("li", {}, el("span", {}, "Tag age"), ageCell),
+        el("li", {}, el("span", {}, "Owner"), owner),
+        el("li", {}, el("span", {}, "Name"), entry.name
+          ? el("span", { class: "nt-namecell" }, nameText(entry.name), el("small", { class: "micro muted" }, "Set by the owner, not checked by anyone"))
+          : el("span", { class: "soft" }, "None set")),
+        el("li", {}, el("span", {}, "Paid through Lokal"), paidCell),
+        el("li", {}, el("span", {}, "Prefers"), pref
+          ? el("span", { class: "cur-inline" }, flagIcon(pref.code), `${pref.label} (${pref.token})`)
+          : C && entry.receive === "usdt" ? el("span", { class: "cur-inline" }, flagIcon("usd"), "Dollars (USD₮)")
+            : el("span", { class: "soft" }, "Not set (naira by default)")),
+        C ? el("li", {}, el("span", {}, "Registry"), el("a", { class: "link", href: addrLink(LOKAL_TAGS) }, "LokalTags contract ", icon("ext")))
+          : el("li", {}, el("span", {}, "Claim"), el("a", { class: "link", href: celoscanTx(entry.hash) }, "Transaction ", icon("ext"))))),
+    el("div", { class: "card-f" }, el("span", { class: "small muted" }, "Read from Celo just now. Lokal can't tell you who owns a tag: if anything looks off, ask them before you pay."),
       el("button", { class: "btn btn-ghost btn-sm", type: "button", dataset: { copy: ntagUrl(tag), copyLabel: "Link copied" } }, icon("copy"), "Copy link")));
-  root.replaceChildren(el("div", { class: "grid-main" }, payCard(tag, entry), el("div", { class: "nt-profile" }, stage(card), details)));
+
+  function show(a) {
+    ageCell.replaceChildren(el("span", {}, a.age.since ? a.age.text.replace(/^Claimed /, "") : "Unknown"),
+      a.age.since ? el("small", { class: "micro muted" }, `${dayMonthYear(a.age.since)}${C ? "" : ", older memo claim"}`) : null);
+    const p = a.payments;
+    if (p.state === "unknown" && p.count == null) paidCell.replaceChildren(el("span", { class: "soft" }, "Couldn't check"), el("small", { class: "micro muted" }, p.reason));
+    else {
+      const n = p.count;
+      const text = n === 0 ? "No payments yet" : `${n}${p.capped ? "+" : ""} payment${n === 1 ? "" : "s"}${p.since ? ` since ${dayMonthYear(p.since)}` : ""}`;
+      paidCell.replaceChildren(el("span", {}, text), el("small", { class: "micro muted" }, p.state === "ok" ? "To this owner, through LokalTags. Payers aren't shown." : p.reason));
+    }
+    const row = (c) => el("li", { class: `trust-${c.state}` },
+      el("span", { class: "trust-mark", "aria-hidden": "true" }, icon(c.state === "warn" ? "alert" : c.state === "ok" ? "check" : "info")),
+      el("div", {}, el("b", {}, c.state === "warn" ? el("span", { class: "sr-only" }, "Warning: ") : null, c.title), c.reason ? el("span", {}, c.reason) : null));
+    const order = { warn: 0, unknown: 1, ok: 2 };
+    const sorted = [...a.checks].sort((x, y) => order[x.state] - order[y.state]);
+    checks.replaceChildren(
+      el("p", { class: "trust-sum" }, a.warnings.length
+        ? el("b", {}, `${a.warnings.length} thing${a.warnings.length === 1 ? "" : "s"} to check before you pay`)
+        : el("b", {}, `No warnings for ${at}`),
+        el("span", { class: "muted" }, a.warnings.length ? " · none of these stop a payment" : " · what was checked")),
+      el("ul", { class: "trust-list" }, sorted.map(row)));
+    if (a.warnings.length) {
+      const why = el("a", { class: "link", href: "#who-h" }, "Why");
+      why.addEventListener("click", (e) => { e.preventDefault(); scrollToNode(section); section.querySelector("#who-h")?.focus({ preventScroll: true }); });
+      before.replaceChildren(alertBox("warn", "alert",
+        el("p", {}, el("b", {}, "Before you pay: "), a.warnings.map((w) => w.title).join(" "), " ", why)));
+    } else before.replaceChildren();
+  }
+  return { section, before, show };
 }
 
 // ---------- pay ----------
-function payCard(tag, entry) {
+function payCard(tag, entry, beforePay = null) {
   // C: the tag is on the LokalTags contract and is paid through it. Either way the PAYER chooses what the owner gets on
   // this payment (the owner's optional default is pre-selected, else naira): you send USD₮ for naira, rupiah or pesos,
   // or cNGN for dollars. On the contract the choice travels in payTag's `ref` ("cur:<code>"), which the agent reads.
@@ -235,7 +315,7 @@ function payCard(tag, entry) {
       el("li", {}, el("span", {}, "Rate"), sRate),
       el("li", {}, el("span", {}, "Through"), el("span", {}, C ? "The LokalTags contract, which checks every limit first" : "A transfer to the agent with a memo")),
       el("li", {}, el("span", {}, "Paid by"), el("span", {}, "The agent, when autopilot next runs"))),
-    limits, walletBox, actions, msg);
+    limits, beforePay, walletBox, actions, msg);
   const body = el("div", { class: "card-b" }, form);
   const basis = el("span", { class: "badge neutral", id: "pay-basis" }, "Estimate");
   const section = el("section", { class: "card", "aria-labelledby": "pay-h" },
@@ -509,6 +589,7 @@ function payCard(tag, entry) {
       const data = encodeNtagTransfer(AGENT, a.units, tag, isNaira() ? code() : undefined);
       const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from, to: token.address, value: "0x0", data }] });
       if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
+      rememberPaid(tag);
       const pending = { hash, from, corridor, cents: a.cents, owner: entry.owner, since: entry.since, at: Date.now() };
       try { sessionStorage.setItem(PENDING_KEY(tag), JSON.stringify(pending)); } catch { /* storage blocked: tracking works until the page closes */ }
       P.busy = false;
@@ -595,6 +676,7 @@ function payCard(tag, entry) {
       msg.replaceChildren();
       const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from, to: LOKAL_TAGS, value: "0x0", data }] });
       if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
+      rememberPaid(tag);
       const pending = { hash, from, corridor, payCode, cents: a.cents, owner: entry.owner, since: entry.since, at: Date.now(), contract: true };
       try { sessionStorage.setItem(PENDING_KEY(tag), JSON.stringify(pending)); } catch { /* storage blocked: tracking works until the page closes */ }
       P.busy = false;

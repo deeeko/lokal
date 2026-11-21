@@ -14,7 +14,7 @@ const signedIn = (session) => Boolean(session && ADDR.test(String(session.addres
 
 /** Pages anyone can open without signing in. */
 export const PUBLIC_PAGES = Object.freeze(["index.html", "start.html", "tag.html", "pay.html", "quote.html", "receipt.html", "verify.html",
-  "cash-out.html", "docs.html", "privacy.html", "terms.html", "agent.html", "autopilot.html", "get-paid.html", "404.html"]);
+  "cash-out.html", "docs.html", "privacy.html", "terms.html", "agent.html", "autopilot.html", "get-paid.html", "proof.html", "404.html"]);
 /** Pages whose content is only for the signed-in wallet (they show a sign-in prompt otherwise, never a redirect loop). */
 export const SIGNED_IN_PAGES = Object.freeze(["app.html", "transactions.html", "account.html"]);
 

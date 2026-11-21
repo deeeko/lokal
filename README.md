@@ -19,8 +19,10 @@ safety path. All four are built and tested; none has had a real mainnet payout y
 > - **Built, not yet used on mainnet:** payouts in naira, rupiah and pesos (plus naira → dollars), the currency
 >   picker, Lokal tags, **paying and claiming through the contracts** (site, `lokal` command and autopilot), payment
 >   links, Get paid, autopilot, refunds, the `lokal` command, receipts and reviews, the
->   [cash-out guide](https://lokalpay.vercel.app/cash-out.html), the sign-up gateway, the dashboard and "Add to wallet".
-> - **Planned:** Pots on the site, the "Who am I paying?" card, Pay with CELO for payers, "Pay for me" (a payment link
+>   [cash-out guide](https://lokalpay.vercel.app/cash-out.html), the sign-up gateway, the dashboard, "Add to wallet",
+>   the ["Who am I paying?"](#who-am-i-paying) card on every tag page and the [Proof page](#proof) (it lists every
+>   real payout read from Celo, and today honestly says there are none yet).
+> - **Planned:** Pots on the site, Pay with CELO for payers, "Pay for me" (a payment link
 >   with a title, note and share message, for someone else to pay), MiniPay mode.
 
 ![The Lokal landing page: "Send dollars. They receive their lokal money." with the live converter](docs/assets/landing.jpg)
@@ -161,7 +163,8 @@ can't bounce between each other.
 **Public vs signed in.**
 
 - **Public, no account needed** (payers must be able to pay in seconds): a tag's pay page (`/@tag`, `tag.html`), payment
-  links (`pay.html`), quotes, receipts, verify, the cash-out guide, docs, privacy, terms, the agent page and autopilot.
+  links (`pay.html`), quotes, receipts, verify, the cash-out guide, docs, privacy, terms, the agent page, autopilot and
+  the [Proof page](#proof) (`proof.html`).
 - **Signed in only:** the dashboard, and **Activity** (`transactions.html`), which now shows only your own payments
   ("Yours"). Visitors see a sign-in prompt there instead: the agent's full feed and other people's addresses are not
   shown to them. The autopilot board stays public for its timings but no longer prints anyone's wallet address. (The
@@ -170,8 +173,8 @@ can't bounce between each other.
 **Navigation.** App pages share one sidebar: Dashboard · Send · Get paid · Activity · Account · Docs (Activity groups
 Your activity, Receipts, Verify, Agent and Autopilot; Docs groups Docs, Cash out, Privacy and Terms).
 `scripts/check-site.mjs` keeps that chrome identical on every app page (`app.html` is the reference;
-`node scripts/sync-chrome.mjs` copies it) and deliberately lets the landing and the gateway have their own slim chrome,
-checked by their own rules. Below 1100 px the app top bar is a full-width bar whose height is reserved, so it never sits
+`node scripts/sync-chrome.mjs` copies it) and deliberately lets the landing, the gateway and the public Proof page have
+their own slim chrome, checked by their own rules. Below 1100 px the app top bar is a full-width bar whose height is reserved, so it never sits
 on top of page content.
 
 **Design.** A deeper, calmer green ground (`#06110c`, raised `#0a1a12`, frames `#0c1f16`), text that clears WCAG AA,
@@ -278,6 +281,57 @@ the edge), with a static `rate.json` fallback refreshed every 30 minutes.
   The Agent page lists the ratings; "Verified payer" is our own check that the reviewer has sent USD₮ or a local
   stablecoin (today cNGN) to the agent, since the registry cannot check that.
 - **Verify** (`verify.html`): paste any Celo transaction hash to see its attribution tag.
+
+### "Who am I paying?"
+
+Every tag page (`/@ada`, `tag.html`) shows a **"Who am I paying?"** card before anything is paid, read from Celo when
+the page opens (`site/assets/trust.js`, drawn by `site/js/tag.js`). Built, not yet used on mainnet.
+
+| Shown | Where it comes from |
+|---|---|
+| **Tag age**: "Claimed 3 days ago" with the date | LokalTags `tagInfo().since` (the `TagClaimed` block time); for an older memo tag, its NT1 claim |
+| **Owner**: short address, copy button, Celoscan link | `tagInfo().owner` |
+| **Name**, marked "set by the owner, not checked by anyone" | `tagInfo().name` |
+| **Paid through Lokal**: "6 payments since 14 Oct 2026" | `TagPaid` events to the current owner. Never who paid. Older memo tags say they aren't counted here |
+
+Then up to five **warnings**, each with a one-line reason. None of them blocks a payment, and the pay card repeats them
+above the Pay button ("Before you pay: …") so they are in front of the payer on a phone too:
+
+| Warning | When |
+|---|---|
+| **First-time payee**: "First time paying @x? Check with them directly that this is their tag." | This browser has no record of paying @x. The list of paid tags is kept in `localStorage` (`np-paid-tags`, tags only) **only if the visitor said "Sure" to the site's privacy choice**; "No thanks" deletes it. Without that consent the warning is always shown, with the reason that this browser doesn't keep the list |
+| **New tag** | Claimed in the last 24 hours |
+| **Changed hands** | The current owner claimed it in the last 30 days and someone else held it before (an earlier `TagClaimed` by another wallet, or an older memo holder) |
+| **Lookalike** | One edit (insert, delete, change or swap a letter, or a digit posing as a letter such as `0` for `o`) from a tag this browser paid before (`@adaa` vs `@ada`), or close to a reserved name (`@suport`, `@adm1n`), or a brand word at either end (`@lokal_ng`, `@celo_help`) |
+| **Name changed** | A `NameChanged` by the owner in the last 7 days |
+
+**Reads.** The tag's event history comes from `eth_getLogs` on LokalTags filtered by the **tag hash** (keccak-256 of the
+tag, the indexed topic 1 of every tag event; the site has its own small keccak, checked against viem): first from
+Blockscout's JSON-RPC (no block-range limit, one call per event type), and if that fails from Forno in 5,000-block
+chunks over at most the last 200,000 blocks. A read that fails, or a history that doesn't reach the deployment, is
+shown as **"Couldn't check …"**, never as fine. Passed checks are listed as one quiet line each, so the payer sees what
+was checked.
+
+### Proof
+
+**`proof.html`** is a public page that lists **every real Lokal payout, read live from Celo**, never typed in by hand
+(`site/assets/proof.js`, drawn by `site/js/proof.js`). Linked from the landing's Proof section and footer.
+
+- **Payouts**: the agent's own outgoing transfers of USD₮, cNGN, IDRX, wARS or wCOP (Blockscout), newest first.
+- For each: **date**, **corridor** (USD₮ → naira, cNGN → dollars, …), **amount in and out**, **receipt number**, links
+  to the **deposit** and **payout** transactions on Celoscan, and a check that the attribution tag
+  **`celo_7360953d1b53`** is at the end of the payout's input (mint when present, red when missing).
+- **Deposits** are matched from the status server's records when it has them (by payout transaction), else from the
+  contracts' `TagPaid` / `PotPaid` events (`eth_getLogs`): the newest earlier deposit to the same recipient that no
+  other payout has claimed. No match says "Deposit not matched", never a guess.
+- **Totals**: payouts, USD converted, currencies used and **people paid, as a count only**.
+- **Never an address**: payers and recipients are used for matching and counting inside the module and never rendered
+  (a test checks no address reaches the model).
+- **Named users**: `site/proof-users.json` (empty today: `[]`) is where the owner can later add consented entries
+  `{ "receiptNo": "NP-XXXX-XXXX", "label": "Ada", "city": "Lagos", "usedFor": "school fees" }`. An entry is shown only
+  next to a real payout with that receipt number; one that doesn't match the chain is shown in red, never hidden.
+- **Honest empty state**: "No real payouts yet. The first one will appear here with its transactions." If Celo can't be
+  read, the page says so instead of showing zero.
 
 ### Pay from CELO (operator)
 
@@ -441,7 +495,7 @@ flowchart TB
   %% ---------- checks before money moves ----------
   subgraph CHECKS["Checked before anything is sent"]
     direction TB
-    C1["Who am I paying?<br/>tag owner, age, first-time warning<br/>(planned)"]
+    C1["Who am I paying?<br/>tag owner, age, history, warnings<br/>(built)"]
     C2["Limits shown and enforced<br/>$25 per payment · $25 per person/day<br/>$100 per day overall"]
     C3["LokalTags + LokalPots contracts<br/>refuse over-limit payments<br/>before money moves<br/>(live on mainnet; site switch planned)"]
   end
@@ -1131,7 +1185,7 @@ control (no funds moved) is sent only if Textile asks for it.
 ### Tests
 
 ```powershell
-npm test                          # 296 tests, all passing
+npm test                          # 321 tests, all passing
 node scripts/check-site.mjs       # static site check
 ```
 
@@ -1165,12 +1219,39 @@ node scripts/check-site.mjs       # static site check
 | `test/refunded-site.test.mjs` | 3 | "Refunded · RF-XXXX-XXXX" on the site: rank, final status, the refused note |
 | `test/ntag-cli-contract.test.mjs` | 2 | the `lokal` CLI on LokalTags: reading a tag, a refusal explained before signing |
 | `test/front-door.test.mjs` | 8 | the landing's redirect for signed-in visitors (never for `?about`, expired or disconnected sessions), Activity and dashboard gating, the gateway's first step, exact `wallet_watchAsset` params and the switch to Celo first, the "Yours" rows (no addresses in labels) and totals |
+| `test/trust.test.mjs` | 17 | "Who am I paying?": keccak and the tag hash against viem, the new event topics, age buckets, edit-distance and reserved-name lookalikes, paid tags only with consent, first-time with and without consent, owner-change detection (contract and legacy), every warning, "couldn't check" on failed or partial reads, Blockscout then Forno-chunk log reads |
+| `test/proof.test.mjs` | 8 | the Proof page: attribution detection, payouts from the agent's transactions, aggregation from fixture logs (agent-record and chain matching, corridors, totals, no addresses), one deposit per payout, named users (matched, mismatched, malformed), the reader and the empty `proof-users.json` |
 
 ---
 
 ## Progress log
 
 Newest first.
+
+### 2026-11-21: "Who am I paying?" and the Proof page
+
+- **"Who am I paying?"** ([details](#who-am-i-paying)): the tag page's "Who you're paying" card is now a check before
+  paying. Tag age (from the claim), owner (short address, copy, Celoscan), the display name marked "set by the owner,
+  not checked by anyone", and how many payments the owner has received through LokalTags and since when (never who
+  paid). Five calm warnings with a one-line reason each, none of which blocks payment: first-time payee (this browser,
+  only with the privacy consent), new tag (24 h), changed hands (30 days), lookalike (one edit from a tag you paid, or a
+  reserved name) and name changed (7 days). The pay card repeats them above the Pay button. History is read with
+  `eth_getLogs` by tag hash (Blockscout's JSON-RPC, else Forno in 5,000-block chunks); anything unread says "Couldn't
+  check".
+- **Proof page** ([details](#proof), `proof.html`): every real payout read live from Celo, with corridor, amounts,
+  receipt, deposit and payout transactions and the `celo_7360953d1b53` check, totals (payouts, USD converted,
+  currencies, people paid as a count), optional consented named users in `site/proof-users.json` (empty) that must
+  match a real receipt or show in red, and the honest empty state "No real payouts yet". The landing's Proof section
+  uses the same reading and links to it; so do the landing footer and this README.
+- Landing: "Who am I paying?" moved from Planned to **Built, not yet used on mainnet** (Everything Lokal does, the
+  Status today box), and a Proof page entry added.
+- Privacy: the consent banner and the privacy page now say the tags you've paid are remembered on this device only if
+  you say "Sure"; "No thanks" deletes them.
+- Fix: on a phone without a wallet, the "Install the MetaMask browser extension" button no longer widens the pay card
+  past the screen.
+- `scripts/check-site.mjs` and `scripts/sync-chrome.mjs` treat `proof.html` as a public page with the landing's chrome;
+  `scripts/screenshots-trust.mjs` takes the screenshots with a mocked chain inside its own browser only.
+- Tests: 321 (new: `test/trust.test.mjs`, `test/proof.test.mjs`).
 
 ### 2026-11-21: the front door: a landing that tells the story, a sign-up gateway and a private dashboard
 
@@ -1406,7 +1487,7 @@ their own wallet in seconds.
 
 **Done**
 
-- [x] Agent on Celo mainnet, 296 tests passing (plus 130 contract tests)
+- [x] Agent on Celo mainnet, 321 tests passing (plus 130 contract tests)
 - [x] Live Textile price previews for all three corridors
 - [x] ERC-8004 identity registered (agentId 10079)
 - [x] Payment links, Get paid, autopilot, two stablecoin corridors plus CELO, receipts and onchain reviews
@@ -1419,6 +1500,7 @@ their own wallet in seconds.
 - [x] LokalTags and LokalPots contracts deployed on Celo mainnet and source-verified; admin held by a separate wallet
 - [x] Site, `lokal` command and autopilot switched to the contracts (built and tested, not yet used on mainnet)
 - [x] A story-telling landing, a sign-up gateway and a private dashboard; the activity feed is for the signed-in wallet only
+- [x] "Who am I paying?" on every tag page, and a public Proof page that reads every real payout from Celo
 
 **Still to do** (added here only once they have happened)
 

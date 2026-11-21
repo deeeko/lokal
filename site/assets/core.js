@@ -885,8 +885,9 @@ export const DISCONNECT_NOTE_FULL = "Disconnected. This site no longer has acces
 
 // ---------- page chrome: nav, sidebar, copy buttons ----------
 // ---------- privacy consent ----------
-// No cookies, no analytics, fonts are self-hosted. The only OPTIONAL thing is remembering layout
-// preferences on this device (the sidebar state) in localStorage. The choice itself is stored under
+// No cookies, no analytics, fonts are self-hosted. The only OPTIONAL things are remembering layout
+// preferences on this device (the sidebar state, the last currency) and the Lokal tags paid from this browser (so a tag
+// page can warn about a first-time payee or a lookalike: assets/trust.js) in localStorage. The choice itself is stored under
 // CONSENT_KEY (needed to honour it). Declining keeps every feature working; nothing is remembered.
 const CONSENT_KEY = "np-consent";
 const CONSENT_VERSION = 2; // bumped: fonts are no longer part of the ask, so people are asked again
@@ -898,7 +899,8 @@ export function getConsent() {
 }
 function saveConsent(choice) {
   try { localStorage.setItem(CONSENT_KEY, JSON.stringify({ v: CONSENT_VERSION, choice, at: new Date().toISOString() })); } catch { /* blocked: ask again next visit */ }
-  if (choice === "declined") { try { localStorage.removeItem(SB_KEY); localStorage.removeItem("np-currency"); } catch {} }
+  // declining forgets everything optional: the layout, the last currency and the tags paid from here (assets/trust.js)
+  if (choice === "declined") { try { localStorage.removeItem(SB_KEY); localStorage.removeItem("np-currency"); localStorage.removeItem("np-paid-tags"); } catch {} }
 }
 function applyConsent(choice) {
   document.documentElement.dataset.consent = choice ?? "unset";
@@ -913,8 +915,8 @@ function consentBanner() {
       el("h2", { id: "consent-title" }, "Quick one"),
       el("p", { id: "consent-text" },
         // phones get the short line (the long one would cover a fifth of the screen); both say the same thing
-        el("span", { class: "consent-long" }, "We don't track you. No cookies, no analytics. Can we remember how you like the layout on this device? Everything works either way. "),
-        el("span", { class: "consent-short" }, "No tracking, no cookies. Remember your layout on this device? "),
+        el("span", { class: "consent-long" }, "We don't track you. No cookies, no analytics. Can we remember your layout, and which tags you've paid, on this device? Everything works either way. "),
+        el("span", { class: "consent-short" }, "No tracking, no cookies. Remember your layout and who you've paid, on this device? "),
         policy, ".")),
     el("div", { class: "consent-actions" }, decline, accept));
   box.addEventListener("click", (e) => {
@@ -925,7 +927,7 @@ function consentBanner() {
     applyConsent(choice);
     box.classList.add("leaving");
     setTimeout(() => box.remove(), 220);
-    toast(choice === "accepted" ? "Got it, we'll remember your layout" : "No problem, nothing is stored");
+    toast(choice === "accepted" ? "Got it, we'll remember them on this device" : "No problem, nothing is stored");
   });
   document.body.append(box);
   requestAnimationFrame(() => box.classList.add("shown"));
