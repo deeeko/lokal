@@ -1,12 +1,13 @@
 // Copies the app chrome (sidebar, top bar, footer) from site/app.html to every other app page, so editing it once is
 // enough: node scripts/sync-chrome.mjs. scripts/check-site.mjs fails when the copies differ.
 // 404.html gets the same markup with absolute /lokal/ URLs (it is served for any missing path).
-// The landing (index.html) and the sign-up gateway (start.html) have their own chrome and are left alone.
+// The landing (index.html), the sign-up gateway (start.html) and the public Proof page (proof.html) have their own
+// chrome and are left alone.
 import fs from "node:fs";
 import path from "node:path";
 
 const SITE = path.resolve("site");
-const OWN_CHROME = new Set(["index.html", "start.html"]);
+const OWN_CHROME = new Set(["index.html", "start.html", "proof.html"]);
 const BLOCKS = [
   /<aside class="sidebar"[^]*?<\/aside>/,
   /<div class="nav-wrap">[^]*?<\/nav>\s*<\/div>/,

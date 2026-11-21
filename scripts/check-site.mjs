@@ -14,8 +14,9 @@ const pages = fs.readdirSync(SITE).filter((f) => f.endsWith(".html"));
 if (!pages.includes("index.html")) fail("site/index.html is missing");
 // the dashboard, the gateway and the tag pages are linked from every page's sidebar and footer
 for (const p of ["app.html", "start.html", "account.html", "tag.html"]) if (!pages.includes(p)) fail(`site/${p} is missing`);
-/** Pages with their own chrome on purpose: the landing and the sign-up gateway (see the CHROME comment below). */
-const OWN_CHROME = new Set(["index.html", "start.html"]);
+/** Pages with their own chrome on purpose: the landing, the sign-up gateway and the public Proof page (see the CHROME comment below). */
+const OWN_CHROME = new Set(["index.html", "start.html", "proof.html"]);
+if (!pages.includes("proof.html")) fail("site/proof.html is missing (the public Proof page)");
 /** The app sidebar, in order (the owner's brief, 21 Nov 2026). Account is an entry now; the user chip stays too. */
 const SIDEBAR = "Dashboard=app.html, Send=quote.html, Get paid=get-paid.html, Activity=transactions.html, Account=account.html, Docs=docs.html";
 
