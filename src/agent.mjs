@@ -278,10 +278,10 @@ async function main() {
       const kind = flag("ntag") != null ? "ntag" : flag("registration") != null ? "registration" : "request";
       const id = flag("ntag") ?? flag("registration") ?? flag("request");
       if (!id) throw new Error("Usage: retry --request ID | --registration HASH | --ntag TX:LOGINDEX [--force-refused] [--execute] [--yes]");
-      const what = kind === "ntag" ? "nTag payment" : kind;
+      const what = kind === "ntag" ? "Lokal tag payment" : kind;
       const isReg = kind !== "request";
       const force = has("force-refused");
-      if (force && kind !== "ntag") throw new Error("--force-refused is only for nTag payments (retry --ntag TX:LOGINDEX --force-refused).");
+      if (force && kind !== "ntag") throw new Error("--force-refused is only for Lokal tag payments (retry --ntag TX:LOGINDEX --force-refused).");
       const r = target(kind, id);
       if (!r) throw new Error(`No ${what} with that id.`);
       const refused = kind === "ntag" && r.status === "refused";
@@ -376,7 +376,7 @@ async function main() {
       let tag;
       if (isAddress(q)) {
         tag = ntagOf(state, q);
-        if (!tag) { console.log(`${q} holds no nTag right now.`); break; }
+        if (!tag) { console.log(`${q} holds no Lokal tag right now.`); break; }
       } else {
         tag = normalizeNtag(q);
       }
@@ -408,12 +408,12 @@ async function main() {
       // Every tag held right now (Blockscout, all pages, same resolver as the site).
       const ops = await discoverNtagOps({ agent: agentAddress() });
       const { tags } = resolveNtags(ops, nowSec());
-      if (!tags.size) { console.log("No nTags yet. Claim one at site/account.html."); break; }
+      if (!tags.size) { console.log("No Lokal tags yet. Claim one at site/account.html."); break; }
       const list = [...tags].sort((a, b) => a[1].since - b[1].since);
       for (const [tag, e] of list) {
         console.log(`@${tag.padEnd(20)}  ${e.owner}  since ${iso(e.since).slice(0, 10)}${e.name ? `  ${e.name}` : ""}`);
       }
-      console.log(`${list.length} nTag(s).`);
+      console.log(`${list.length} Lokal tag(s).`);
       break;
     }
     case "ntag-data": {
@@ -432,10 +432,10 @@ async function main() {
       const units = parseUnits(amount, 6);
       if (units < parseUnits(NTAG_MIN[corridor], 6)) {
         throw new Error(tok === "usdt"
-          ? `The smallest nTag payment is ${NTAG_MIN[corridor]} USDT; smaller deposits are not paid.`
-          : `The smallest nTag payment is about ${NTAG_MIN_USD} USD of cNGN (and never under ${NTAG_MIN[corridor]} cNGN); smaller deposits are not paid.`);
+          ? `The smallest Lokal tag payment is ${NTAG_MIN[corridor]} USDT; smaller deposits are not paid.`
+          : `The smallest Lokal tag payment is about ${NTAG_MIN_USD} USD of cNGN (and never under ${NTAG_MIN[corridor]} cNGN); smaller deposits are not paid.`);
       }
-      if (tok === "usdt" && units > parseUnits(MAX_USD, 6)) throw new Error(`The largest nTag payment is ${MAX_USD} USDT (per-payout cap); larger deposits are not paid automatically.`);
+      if (tok === "usdt" && units > parseUnits(MAX_USD, 6)) throw new Error(`The largest Lokal tag payment is ${MAX_USD} USDT (per-payout cap); larger deposits are not paid automatically.`);
       const { entry } = await resolveOwner(tag);
       await ntagUsdFloor(corridor, units); // cNGN: refuse amounts worth under the minimum at today's price
       if (tok === "cngn") {
@@ -495,7 +495,7 @@ async function main() {
       await watch({ execute: has("execute"), interval: flag("interval") ?? 15 });
       break;
     case "register":
-      await register({ repoUrl: flag("repo") ?? "https://github.com/deeeko/celo-naira-payout-agent", execute: has("execute") });
+      await register({ repoUrl: flag("repo") ?? "https://github.com/deeeko/lokal", execute: has("execute") });
       break;
     case "verify": {
       const hash = rest[0];
@@ -506,7 +506,7 @@ async function main() {
     }
     default:
       console.log("Lokal agent. Commands: keygen | status | quote | pay | ask | request | requests | registrations | ntag | ntags | ntag-data | watch | retry | status-sync | register | verify  (see README)");
-      console.log("  nTags: ntag <@tag|address> · ntags · pay @tag <amount> [--corridor ID] [--execute] · ntag-data @tag <amount> [--token usdt|cngn] · retry --ntag TX:LOGINDEX [--force-refused]");
+      console.log("  Lokal tags: ntag <@tag|address> · ntags · pay @tag <amount> [--corridor ID] [--execute] · ntag-data @tag <amount> [--token usdt|cngn] · retry --ntag TX:LOGINDEX [--force-refused]");
       console.log("  In PowerShell quote the tag ('@ada') or leave out the @ (ntag ada, pay --ntag ada --amount 5).");
       console.log("  Status server: autopilot (watch --execute) reports each deposit's status (paid, refused, received) and the day's");
       console.log("    totals to the site's /api/status, so pay pages show exact facts instead of estimates from Celo. Set up once:");

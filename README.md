@@ -3,14 +3,14 @@
 Formerly Naira Payout.
 
 Send dollars, they receive their local money: an agent on Celo that converts USD₮ to a local stablecoin on Textile FX
-(cNGN for Nigeria today, with more local stablecoins on the way) and pays the recipient's own wallet, by @nTag, payment
+(cNGN for Nigeria today, with more local stablecoins on the way) and pays the recipient's own wallet, by Lokal tag, payment
 link or command line, with every limit enforced in code.
 
 **[Live app](https://lokalpay.vercel.app)** ·
 **[Agent on Celoscan](https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e)** ·
 **[ERC-8004 identity (agentId 10079)](https://celoscan.io/token/0x8004A169FB4a3325136EB29fA0ceB6D2e539a432?a=10079)** ·
 **[Docs](https://lokalpay.vercel.app/docs.html)** ·
-[GitHub Pages mirror](https://deeeko.github.io/celo-naira-payout-agent/)
+[GitHub Pages mirror](https://deeeko.github.io/lokal/)
 
 Built for the **Agents Open for Business** hackathon on Celo, **Track 3: Stablecoin Corridors (Textile FX)**
 (deadline 7 Dec 2026). Runs on **Celo mainnet** (chain 42220).
@@ -34,7 +34,7 @@ Built for the **Agents Open for Business** hackathon on Celo, **Track 3: Stablec
 2. [How people use it](#how-people-use-it)
 3. [How a payout works](#how-a-payout-works)
 4. [Safety and limits, enforced in code](#safety-and-limits-enforced-in-code)
-5. [nTag rules](#ntag-rules)
+5. [Lokal tag rules](#lokal-tag-rules)
 6. [Architecture](#architecture)
 7. [Run it yourself](#run-it-yourself)
 8. [Progress log](#progress-log)
@@ -51,9 +51,9 @@ the recipient's own Celo wallet. Today the corridor is Nigeria: **cNGN** (a nair
 are on the way. It also runs the other way (naira in, dollars out), and the operator can pay out in naira from the
 agent's CELO.
 
-- **Senders** pay from any Celo wallet: to an **@nTag** (a short handle), through a **payment link**, from the site,
-  or from the **`ntag` command line** in PowerShell.
-- **Recipients** get paid straight into their own wallet. They can claim an @nTag and share `lokalpay.vercel.app/@name`,
+- **Senders** pay from any Celo wallet: to a **Lokal tag** (a short handle), through a **payment link**, from the site,
+  or from the **`lokal` command line** in PowerShell.
+- **Recipients** get paid straight into their own wallet. They can claim a Lokal tag and share `lokalpay.vercel.app/@name`,
   or publish a payment link from their own wallet ("Get paid").
 - **The operator** runs the agent (`src/agent.mjs`): it watches for deposits (`watch --execute`) and pays them out,
   under hard limits.
@@ -63,8 +63,8 @@ wallet. The agent holds only what it is converting at that moment.
 
 | Corridor | Payer sends | Recipient gets | Amount typed in | Used by |
 |---|---|---|---|---|
-| `usdt-cngn` (default) | USD₮ | cNGN | USD₮ | nTags, payment links, Get paid, CLI, operator |
-| `cngn-usdt` | cNGN | USD₮ | naira (cNGN) | nTags, payment links, Get paid, CLI, operator |
+| `usdt-cngn` (default) | USD₮ | cNGN | USD₮ | Lokal tags, payment links, Get paid, CLI, operator |
+| `cngn-usdt` | cNGN | USD₮ | naira (cNGN) | Lokal tags, payment links, Get paid, CLI, operator |
 | `celo-cngn` | CELO (from the agent wallet) | cNGN | CELO | operator `pay` and `quote` only |
 
 ---
@@ -75,24 +75,24 @@ The site has six sections in its sidebar, each with a small tab strip for relate
 
 | Section | Tabs |
 |---|---|
-| Overview | sign in, find an nTag, live stats, quote and activity |
+| Overview | sign in, find a Lokal tag, live stats, quote and activity |
 | Send | Quote · Pay a link (plus the public tag pages, `/@tag`) |
-| Get paid | Payment link · Your nTag |
+| Get paid | Payment link · Your Lokal tag |
 | Activity | Transactions · Receipts · Verify |
 | Agent | Identity · Autopilot |
 | Docs | Docs · Privacy · Terms |
 
 Every payment screen shows the limits: **$25 per payment, $25 per person per day, $100 per day overall**.
 
-### nTags: get paid at @yourname
+### Lokal tags: get paid at @yourname
 
-An nTag is a handle like `@ada` tied to one Celo wallet. People pay the tag; the agent pays the wallet that holds it.
+A Lokal tag is a handle like `@ada` tied to one Celo wallet. People pay the tag; the agent pays the wallet that holds it.
 
 1. **Sign in with your wallet** (`account.html`). Connect a wallet and sign a short sign-in message (EIP-4361 style,
    via `personal_sign`). It is free, sends nothing, and needs no password. The session (address, message, signature,
    expiry; 7 days) is kept in your browser under `np-session`. Signing out deletes it and disconnects the wallet.
    On Vercel the signature is checked by `POST /api/session` (see [Safety](#safety-and-limits-enforced-in-code)).
-2. **Your name.** The setup guide (Sign in → Your name → Claim your @nTag → Done) asks for an optional display name
+2. **Your name.** The setup guide (Sign in → Your name → Claim your Lokal tag → Done) asks for an optional display name
    (1–40 characters).
 3. **Claim your @tag.** Type a tag; availability is checked live as you type (free, yours, taken, reserved, locked or
    invalid, with the exact rule broken), with suggestions when it is taken and a live preview of your tag card. You
@@ -180,12 +180,13 @@ node src/agent.mjs pay --to ada --amount 20 --corridor celo-cngn            # dr
 node src/agent.mjs pay --to ada --amount 20 --corridor celo-cngn --execute  # real, asks you to type yes
 ```
 
-### The `ntag` command line (PowerShell)
+### The `lokal` command line (PowerShell)
 
-`src/ntag.mjs` lets anyone pay an nTag from **their own wallet** in a terminal. It never touches the agent's key and
+`src/ntag.mjs` (the `lokal` command; `ntag`, its name before the rename, runs the same thing) lets anyone pay a Lokal
+tag from **their own wallet** in a terminal. It never touches the agent's key and
 refuses to use it.
 
-#### Install the ntag command (Windows)
+#### Install the lokal command (Windows)
 
 The quickest way, for anyone: open PowerShell (no admin needed) and paste
 
@@ -198,17 +199,19 @@ Requirement: **Node.js 20 or newer**. If it is missing or too old, the installer
 You can read [`site/install.ps1`](site/install.ps1) (served as plain text at the URL above) before running it. It:
 
 1. checks for Node.js 20+ and npm;
-2. downloads the code as a zip from GitHub (`codeload.github.com/deeeko/celo-naira-payout-agent/zip/<ref>`, `main`
+2. downloads the code as a zip from GitHub (`codeload.github.com/deeeko/lokal/zip/<ref>`, `main`
    unless `$env:NTAG_REF` names a branch, tag or commit), over TLS 1.2 in Windows PowerShell 5.1 too;
-3. runs `npm ci --omit=dev --ignore-scripts --no-audit --no-fund` in a staging folder and checks that `ntag help` runs;
+3. runs `npm ci --omit=dev --ignore-scripts --no-audit --no-fund` in a staging folder and checks that `lokal help` runs;
 4. swaps it into `%LOCALAPPDATA%\lokal\app` with a rename (a failed update keeps the previous install);
-5. writes `%LOCALAPPDATA%\lokal\bin\ntag.cmd` and adds that folder to your **user** PATH (and to the current
-   window). `$env:NTAG_NO_PATH = "1"` skips the PATH change and prints the folder to add instead;
+5. writes `%LOCALAPPDATA%\lokal\bin\lokal.cmd`, plus `ntag.cmd` (the command's old name, so `ntag` keeps working),
+   and adds that folder to your **user** PATH (and to the current window). `$env:NTAG_NO_PATH = "1"` skips the PATH
+   change and prints the folder to add instead;
 6. cleans up an install from before the rename to Lokal: deletes `%LOCALAPPDATA%\naira-payout\app` and `bin` and takes
    the old bin folder out of your user PATH, so the old `ntag` can never shadow the new one.
 
-Then: `ntag wallet new`, send USD₮ and a little CELO (for fees) to the address `ntag wallet` shows, `ntag whois ada`,
-`ntag send ada 10`. Written for both Windows PowerShell 5.1 (built into Windows) and PowerShell 7.
+Then: `lokal wallet new`, send USD₮ and a little CELO (for fees) to the address `lokal wallet` shows, `lokal whois ada`,
+`lokal send ada 10`. `ntag` still works as another name for the same command. Written for both Windows PowerShell 5.1
+(built into Windows) and PowerShell 7.
 
 - **Update:** run the same line again.
 - **Uninstall:** `$env:NTAG_UNINSTALL = "1"; irm https://lokalpay.vercel.app/install.ps1 | iex` removes the app
@@ -217,22 +220,22 @@ Then: `ntag wallet new`, send USD₮ and a little CELO (for fees) to the address
   creates, reads, moves or deletes it, so updates and uninstalls keep it. Back it up, for example
   `Copy-Item $HOME\.lokal\wallet.json D:\backup\`, and remember the send password.
 - **Wallets made before the rename** stay at `%USERPROFILE%\.naira-payout\wallet.json`. When that file exists and the
-  new one doesn't, `ntag` keeps using it where it is and says so once; nothing is moved for you.
+  new one doesn't, `lokal` keeps using it where it is and says so once; nothing is moved for you.
 
 **Setup** (from a checkout of this repo, any OS)
 
 ```powershell
-cd celo-naira-payout-agent
+cd lokal
 npm install
-npm link                          # optional: makes "ntag" a command; otherwise use "node src/ntag.mjs" or "npm run ntag --"
+npm link                          # optional: makes "lokal" (and "ntag") a command; otherwise use "node src/ntag.mjs" or "npm run lokal --"
 
-ntag wallet new                   # creates a wallet, encrypted with a send password you choose (min 8 characters, typed twice)
-ntag wallet import                # or use a key you already have (typed at a hidden prompt, or NTAG_PRIVATE_KEY)
-ntag wallet                       # address, CELO / USD₮ / cNGN balances and your nTag
+lokal wallet new                  # creates a wallet, encrypted with a send password you choose (min 8 characters, typed twice)
+lokal wallet import               # or use a key you already have (typed at a hidden prompt, or NTAG_PRIVATE_KEY)
+lokal wallet                      # address, CELO / USD₮ / cNGN balances and your Lokal tag
 ```
 
 The wallet file (default `%USERPROFILE%\.lokal\wallet.json`, or the older `.naira-payout\wallet.json` if only that exists; override with `NTAG_WALLET_FILE`) holds the key
-encrypted with **scrypt (N = 131072) and AES-256-GCM**; on Windows its permissions are limited to your user. `ntag`
+encrypted with **scrypt (N = 131072) and AES-256-GCM**; on Windows its permissions are limited to your user. `lokal`
 never shows or exports the key and never overwrites an existing wallet. There is no recovery: back up the file and
 remember the password; if you forget it, re-import your own key backup with a new password.
 
@@ -241,14 +244,14 @@ remember the password; if you forget it, re-import your own key backup with a ne
 In PowerShell, `@` at the start of an argument is special. Leave it out (`ada`) or quote it (`'@ada'`).
 
 ```powershell
-ntag whois ada                    # who owns @ada, and how much more they can receive today
-ntag send ada 10                  # you send $10 USD₮, @ada gets naira
-ntag send ada 14000 --dollars     # you send ₦14,000 cNGN, @ada gets dollars (USD₮)
-ntag send ada 10 --wait           # after sending, wait for the agent's payout and print the receipt number
-ntag send ada 5.50 --dry-run      # show the exact transaction (to / data / value), send nothing
-ntag status 0x<txhash>            # is that payment confirmed and paid out?
+lokal whois ada                   # who owns @ada, and how much more they can receive today
+lokal send ada 10                 # you send $10 USD₮, @ada gets naira
+lokal send ada 14000 --dollars    # you send ₦14,000 cNGN, @ada gets dollars (USD₮)
+lokal send ada 10 --wait          # after sending, wait for the agent's payout and print the receipt number
+lokal send ada 5.50 --dry-run     # show the exact transaction (to / data / value), send nothing
+lokal status 0x<txhash>           # is that payment confirmed and paid out?
 
-npm run ntag -- send ada 10 --wait               # the same without npm link
+npm run lokal -- send ada 10 --wait              # the same without npm link
 node src/ntag.mjs send '@ada' 5.50 --dry-run
 ```
 
@@ -264,9 +267,9 @@ a price move cannot push it over). At most 2 decimals; `$10.29`, `₦14,000` are
 **Your own tag**
 
 ```powershell
-ntag claim ada --name "Ada Obi"   # claim @ada for your wallet (public and permanent)
-ntag release                      # give up your tag (locked for you for 30 days)
-ntag wallet password              # change the send password (old one, then the new one twice)
+lokal claim ada --name "Ada Obi"  # claim @ada for your wallet (public and permanent)
+lokal release                     # give up your tag (locked for you for 30 days)
+lokal wallet password             # change the send password (old one, then the new one twice)
 ```
 
 **Send password and lockout**: `send`, `claim` and `release` ask for the password after you confirm, before anything is
@@ -319,23 +322,23 @@ up deposits that arrived while it was off. RPC errors back off up to 5 minutes; 
 
 | Deposit | Matched when | Pays |
 |---|---|---|
-| **nTag payment** | the transfer calldata carries a valid `NTP:<tag>` memo | the wallet that held the tag just before the deposit (by block and position) |
+| **Lokal tag payment** | the transfer calldata carries a valid `NTP:<tag>` memo | the wallet that held the tag just before the deposit (by block and position) |
 | **Operator request** (`request`) | sell token, **exact** amount, after creation and before expiry | the allow-listed contact |
 | **"Get paid" registration** | the **active** registration for that token and exact amount, at the deposit's block time | the registration's sender |
 
 Rules that hold for all three:
 
-- **Memo payments are never amount-matched.** A deposit with an nTag memo is never matched against requests or
-  registrations, and neither is anything that merely *looks like* an nTag attempt (the `NTP:` bytes anywhere in the
+- **Memo payments are never amount-matched.** A deposit with a Lokal tag memo is never matched against requests or
+  registrations, and neither is anything that merely *looks like* a Lokal tag attempt (the `NTP:` bytes anywhere in the
   input, also inside a smart-wallet call, or a transfer with unexplained extra bytes). Those are refused unless the memo
   decodes cleanly on a direct transfer.
 - **Checks first, then record, then pay.** Before anything is recorded, the claim or registration is **re-read over
   RPC** (success, sent to the agent, same sender, block, position, block time, content, zero value), and the recipient
   rules, caps and a live preview run. The deposit is then **recorded before paying** (`requests.json`,
   `registrations-state.json` or `ntag-payments.json`), so a crash can never pay it twice.
-- **Refusals are recorded.** Self-payment, a blocked recipient, an unknown tag, an nTag payment under $1, a claim or registration that does not
+- **Refusals are recorded.** Self-payment, a blocked recipient, an unknown tag, a Lokal tag payment under $1, a claim or registration that does not
   check out, or a per-payment / per-wallet cap (also when only the firm quote breaks it) is logged as
-  `refused_deposit` and recorded as handled, so a rescan never pays it. The money stays in the agent wallet; for nTag
+  `refused_deposit` and recorded as handled, so a rescan never pays it. The money stays in the agent wallet; for Lokal tag
   payments the operator can pay one later by hand with `retry --ntag <tx>:<logIndex> --force-refused` (every cap
   applies again).
 - **Stops instead of guessing.** The global daily cap or a missing price stops autopilot *without* recording anything,
@@ -382,7 +385,7 @@ All numbers are defaults from `src/config.mjs`; the language-parsing layer of `a
 | Rule | Value | Where |
 |---|---|---|
 | Per payment | **$25** (`MAX_USD`) | `src/guards.mjs`, `src/pay.mjs` |
-| Per recipient wallet, rolling 24 h | **$25** (`MAX_WALLET_DAILY_USD`; Get paid and nTag payouts) | `src/guards.mjs`, `src/pay.mjs` |
+| Per recipient wallet, rolling 24 h | **$25** (`MAX_WALLET_DAILY_USD`; Get paid and Lokal tag payouts) | `src/guards.mjs`, `src/pay.mjs` |
 | Everything the agent pays, rolling 24 h | **$100** (`MAX_DAILY_USD`, counted from `receipts.jsonl`) | `src/guards.mjs` |
 | Firm quote vs. preview | at most **3%** worse (`MAX_SLIPPAGE_BPS` = 300), per swap | `src/guards.mjs`, `src/pay.mjs` |
 | `cngn-usdt` cap | checked on the preview, the firm quote and the amount actually paid | `src/pay.mjs` |
@@ -414,13 +417,13 @@ Autopilot never uses it.
 
 ---
 
-## nTag rules
+## Lokal tag rules
 
 | Rule | Detail |
 |---|---|
 | Format | 3–20 characters: lowercase letters, numbers and `_`, starting with a letter (`^[a-z][a-z0-9_]{2,19}$`), no `__`, not ending in `_`. The onchain JSON must already be lowercase; the site and CLI normalise input (trim, strip one `@`, lowercase). |
 | Display name | optional, 1–40 characters, no control characters |
-| Reserved | agent, admin, administrator, root, system, support, help, official, team, staff, mod, moderator, security, celo, minipay, valora, opera, textile, naira, nairapayout, payout, payouts, ntag, ntags, cngn, usdt, usdc, tether, cusd, ceur, wallet, bank, cbn, null, undefined, anonymous, everyone, me, you, test, demo, api, www, app, pay, send, receive |
+| Reserved | agent, admin, administrator, root, system, support, help, official, team, staff, mod, moderator, security, celo, minipay, valora, opera, textile, naira, nairapayout, payout, payouts, ntag, ntags, lokal, lokalpay, cngn, usdt, usdc, tether, cusd, ceur, wallet, bank, cbn, null, undefined, anonymous, everyone, me, you, test, demo, api, www, app, pay, send, receive |
 | One tag per wallet | claiming another tag releases the old one |
 | Release lock | a released tag stays locked for its previous owner's reclaim only, for **30 days** |
 | Ordering | claims are applied in (block, position) order; the first valid claim wins; later claims for a held tag are "taken" |
@@ -434,7 +437,7 @@ the agent resolves the tag strictly **before** the deposit (`resolveNtagsBefore(
 
 **Discovery.** Tag claims are read from Blockscout (`/addresses/<agent>/transactions?filter=to`). The agent loads the
 full list once and then refreshes incrementally, re-reading the last 600 blocks each time so a reorg or late-indexed
-block is picked up. It never works from a partial list: past the page limit it stops with an error, and an nTag deposit
+block is picked up. It never works from a partial list: past the page limit it stops with an error, and a Lokal tag deposit
 above the height the list is complete to waits (requests and registrations before it carry on). Spam sent to the agent
 cannot make it pay from a stale or partial list.
 
@@ -454,15 +457,15 @@ HTML, CSS and ES modules.
 | `src/celo.mjs` | pay in naira from CELO: two swaps, gas reserve, recovery message |
 | `src/requests.mjs` | operator payment requests: unique amounts, link encoding, deposit matching, receipt numbers |
 | `src/registrations.mjs` | "Get paid" registrations: decoding, discovery, the same-amount rule (ported from the site) |
-| `src/ntags.mjs` | nTags: resolver (byte-identical port of the site's), memo decoding, discovery, onchain claim check, local state |
-| `src/watch.mjs` | autopilot: watches deposits and pays requests, registrations and nTag payments |
-| `src/ntag.mjs` | the `ntag` CLI: encrypted wallet, whois, send, claim, release, status |
+| `src/ntags.mjs` | Lokal tags: resolver (byte-identical port of the site's), memo decoding, discovery, onchain claim check, local state |
+| `src/watch.mjs` | autopilot: watches deposits and pays requests, registrations and Lokal tag payments |
+| `src/ntag.mjs` | the `lokal` CLI (also runs as `ntag`): encrypted wallet, whois, send, claim, release, status |
 | `src/agent.mjs` | the operator command line |
 | `src/intent.mjs` | plain-language parser for `ask` |
 | `src/register8004.mjs` | ERC-8004 registration |
 | `src/chain.mjs` | agent wallet and the attribution-tagged client |
 | `site/` | the live app: `index`, `quote`, `pay`, `tag`, `get-paid`, `account`, `transactions`, `receipt`, `verify`, `agent`, `autopilot`, `docs`, `privacy`, `terms`, `404` |
-| `site/assets/core.js` | shared site code: ABI codec, link formats, registrations, the nTag resolver, explorer and RPC helpers |
+| `site/assets/core.js` | shared site code: ABI codec, link formats, registrations, the Lokal tag resolver, explorer and RPC helpers |
 | `site/assets/session.js` | wallet sign-in (message, session, Celo network switch, wallet error messages) |
 | `site/assets/ntag-ui.js`, `ntags.css` | the tag card, claim and pay UI pieces |
 | `api/session.js` | stateless sign-in check |
@@ -490,8 +493,8 @@ security headers and cache rules.
 Needs Node.js (CI and the deploy use Node 22).
 
 ```powershell
-git clone https://github.com/deeeko/celo-naira-payout-agent.git
-cd celo-naira-payout-agent
+git clone https://github.com/deeeko/lokal.git
+cd lokal
 npm install
 npm test
 node scripts/serve.mjs            # preview the site at http://localhost:4173
@@ -530,7 +533,7 @@ node src/agent.mjs register --execute                    # ERC-8004 identity on 
 node src/agent.mjs verify 0x<txhash>                     # shows a transaction's attribution tag
 ```
 
-`npm start`, `npm run quote`, `npm run requests`, `npm run watch` and `npm run ntag` are shortcuts.
+`npm start`, `npm run quote`, `npm run requests`, `npm run watch` and `npm run lokal` (or `npm run ntag`) are shortcuts.
 
 | Command | Flags |
 |---|---|
@@ -544,7 +547,7 @@ node src/agent.mjs verify 0x<txhash>                     # shows a transaction's
 | `ntag <@tag or address>` | none |
 | `ntag-data @tag N` | `--token usdt` (default) or `cngn` |
 | `watch` | `--execute`, `--interval SECONDS` (default 15, minimum 5) |
-| `retry` | `--request ID`, `--registration HASH` or `--ntag TX:LOGINDEX`; `--force-refused` (nTag only), `--execute`, `--yes` |
+| `retry` | `--request ID`, `--registration HASH` or `--ntag TX:LOGINDEX`; `--force-refused` (Lokal tag only), `--execute`, `--yes` |
 | `register` | `--repo URL`, `--execute` (needs the key file) |
 | `verify <hash>` | none (needs the key file) |
 
@@ -560,7 +563,7 @@ All optional (see `.env.example`).
 | Variable | Default | Controls |
 |---|---|---|
 | `MAX_USD` | `25` | Largest single payout, in USD |
-| `MAX_WALLET_DAILY_USD` | `25` | Most USD paid to any one wallet in a rolling 24 h (Get paid and nTag payouts) |
+| `MAX_WALLET_DAILY_USD` | `25` | Most USD paid to any one wallet in a rolling 24 h (Get paid and Lokal tag payouts) |
 | `MAX_DAILY_USD` | `100` | Most USD paid out in any rolling 24 h |
 | `MAX_SLIPPAGE_BPS` | `300` | Allowed gap between preview and firm quote (300 = 3%), per swap |
 | `MIN_CELO_RESERVE` | `2` | CELO the agent must still hold after a `celo-cngn` payout |
@@ -574,14 +577,14 @@ All optional (see `.env.example`).
 | `REQUESTS_FILE` | `requests.json` | Operator payment requests |
 | `WATCH_STATE_FILE` | `watch-state.json` | Autopilot block cursor (written only with `--execute`) |
 | `REGISTRATIONS_STATE_FILE` | `registrations-state.json` | "Get paid" deposits and payouts |
-| `NTAG_PAYMENTS_FILE` | `ntag-payments.json` | nTag deposits seen by autopilot, keyed by `tx:logIndex` |
+| `NTAG_PAYMENTS_FILE` | `ntag-payments.json` | Lokal tag deposits seen by autopilot, keyed by `tx:logIndex` |
 | `BLOCKSCOUT_API` | `https://celo.blockscout.com/api/v2` | Where registrations and tag claims are discovered |
-| `CELO_RPC_URL` | Forno | RPC for `watch`, the agent's read commands and the `ntag` CLI |
+| `CELO_RPC_URL` | Forno | RPC for `watch`, the agent's read commands and the `lokal` CLI |
 | `TEXTILE_API` | `https://api.textilecredit.com/v2` | Textile FX RFQ endpoint |
-| `NTAG_WALLET_FILE` | `~/.lokal/wallet.json` (or `~/.naira-payout/wallet.json` if only that exists) | `ntag` CLI wallet (encrypted) |
-| `NTAG_PASSWORD`, `NTAG_OLD_PASSWORD` | not set | Answer the `ntag` password prompts in scripts (less safe) |
-| `NTAG_PRIVATE_KEY` | not set | Key for `ntag wallet import` instead of the hidden prompt |
-| `NTAG_WAIT_MINUTES` | `30` | How long `ntag send --wait` waits for the payout |
+| `NTAG_WALLET_FILE` | `~/.lokal/wallet.json` (or `~/.naira-payout/wallet.json` if only that exists) | `lokal` CLI wallet (encrypted) |
+| `NTAG_PASSWORD`, `NTAG_OLD_PASSWORD` | not set | Answer the `lokal` password prompts in scripts (less safe) |
+| `NTAG_PRIVATE_KEY` | not set | Key for `lokal wallet import` instead of the hidden prompt |
+| `NTAG_WAIT_MINUTES` | `30` | How long `lokal send --wait` waits for the payout |
 | `NP_STATUS_SECRET` | not set | Shared secret that signs status reports (or the file `status-secret` next to the agent key) |
 | `STATUS_URL` | `<SITE_URL>/api/status` | Where autopilot reports payout status |
 | `STATUS_OUTBOX_FILE` | `status-outbox.jsonl` | Queue of reports waiting to be sent |
@@ -606,8 +609,8 @@ node scripts/check-site.mjs       # static site check
 | `test/registrations.test.mjs` | 10 | "Get paid": port matches the site, matching, per-wallet cap, self-payment refusals, discovery, onchain re-check |
 | `test/watch-autopilot.test.mjs` | 10 | memo guard, recorded refusals, failed saves never drop a deposit, "paid" write failure, waiting on the tag list, firm-quote refusals |
 | `test/ntags.test.mjs` | 15 | the byte-identical port, rules, codec, resolution and ordering, cross-check with the site, discovery, onchain re-check, cache refresh, force-pay |
-| `test/ntags-watch.test.mjs` | 13 | nTag autopilot: corridor by token, exact amounts, owner resolved before the deposit, minimums, attempts refused |
-| `test/ntag-cli.test.mjs` | 21 | the `ntag` CLI: wallet location (and the pre-rename wallet), parsing, exact amounts and limits, dry-run data, refusing the agent's key, keystore, password change, lockout, allowance, payout matching |
+| `test/ntags-watch.test.mjs` | 13 | Lokal tag autopilot: corridor by token, exact amounts, owner resolved before the deposit, minimums, attempts refused |
+| `test/ntag-cli.test.mjs` | 21 | the `lokal` CLI: wallet location (and the pre-rename wallet), parsing, exact amounts and limits, dry-run data, refusing the agent's key, keystore, password change, lockout, allowance, payout matching |
 | `test/ntag-ui.test.mjs` | 12 | tag input, live rules, availability, suggestions, limits, deposit eligibility, payout tracking, daily allowance |
 | `test/session-api.test.mjs` | 8 | the sign-in check: hosts (Lokal and the older addresses), the pre-rename sign-in text, chain, expiry, body limits, contract wallets |
 | `test/site-helpers.test.mjs` | 5 | the limits line matches `src/config.mjs` on every page, rate age, network errors, decimal-comma amounts |
@@ -621,6 +624,17 @@ node scripts/check-site.mjs       # static site check
 ## Progress log
 
 Newest first.
+
+### 2026-11-22: Lokal tags, the `lokal` command and the repo move to deeeko/lokal
+
+- **nTags are now Lokal tags.** Every page, receipt, message, the docs, privacy and terms say "Lokal tag" ("Claim your
+  Lokal tag", "Pay a Lokal tag"). Only the words changed: the onchain formats (`NT1:` claims, `NTP:` memos), the
+  resolver and every existing claim are untouched, so all tags keep working. `lokal` and `lokalpay` are now reserved.
+- **The CLI is `lokal`.** `lokal send ada 10`, `lokal whois ada`, `lokal wallet new`. The installer writes
+  `bin\lokal.cmd` and keeps `bin\ntag.cmd` as an alias, so `ntag` still works; `npm link` installs both names.
+- **Repo rename prepared.** Links, the installer's download (`codeload.github.com/deeeko/lokal`), the GitHub Pages
+  path (`/lokal/`, used by `404.html` and the rate fallback) and the package name now say `lokal`. GitHub redirects
+  the old repo URL. Autopilot's status codes still read refusal reasons written before the rename.
 
 ### 2026-11-22: nTags, wallet sign-in, the `ntag` CLI and a safety pass
 
@@ -717,10 +731,10 @@ Newest first.
 - [x] Live Textile price previews for all three corridors
 - [x] ERC-8004 identity registered (agentId 10079)
 - [x] Payment links, Get paid, autopilot, two stablecoin corridors plus CELO, receipts and onchain reviews
-- [x] nTags, wallet sign-in and the `ntag` CLI
+- [x] Lokal tags, wallet sign-in and the `lokal` CLI (first shipped as `ntag`)
 - [x] Live app on Vercel behind a test-gated deploy
 - [x] Status server: exact payout status and daily limits on the site
-- [x] One-line Windows installer for the `ntag` command
+- [x] One-line Windows installer for the `lokal` command (`ntag` kept as an alias)
 - [x] Renamed to Lokal, at lokalpay.vercel.app (naira-payout.vercel.app keeps working)
 
 **Still to do** (added here only once they have happened)

@@ -80,7 +80,7 @@ export async function ntagUsdFloor(corridor, units, previewImpl = preview) {
   if (corridor !== "cngn-usdt") return;
   const pv = await previewImpl(TOKENS.CNGN.address, TOKENS.USDT.address, BigInt(units).toString());
   if (pv?.status === "preview" && BigInt(pv.buyAmount) < parseUnits(NTAG_MIN_USD, 6)) {
-    throw refusal(`${formatUnits(BigInt(units), 6)} cNGN is worth about ${formatUnits(BigInt(pv.buyAmount), 6)} USD, below the ${NTAG_MIN_USD} USD minimum for nTag payments. Not paid.`);
+    throw refusal(`${formatUnits(BigInt(units), 6)} cNGN is worth about ${formatUnits(BigInt(pv.buyAmount), 6)} USD, below the ${NTAG_MIN_USD} USD minimum for Lokal tag payments. Not paid.`);
   }
 }
 
@@ -97,7 +97,7 @@ export function ntagPayAmount(units, places = 6) {
 
 const word = (h, i) => h.slice(8 + i * 64, 8 + (i + 1) * 64);
 
-export const NTAG_BAD_MEMO = "the transfer looks like an nTag payment, but its memo is not a valid one on a plain transfer to the agent";
+export const NTAG_BAD_MEMO = "the transfer looks like a Lokal tag payment, but its memo is not a valid one on a plain transfer to the agent";
 
 /**
  * What autopilot does with a deposit that carries (or looks like it tries to carry) an nTag memo. Pure: no RPC, no files.
@@ -113,7 +113,7 @@ export function classifyNtagDeposit(dep, ops, payments, agent) {
   if (payments?.[dep.key]) return { action: "handled", record: payments[dep.key] };
   if (!dep.tag) return { action: "refuse", reason: NTAG_BAD_MEMO };
   const corridor = ntagCorridor(dep.token);
-  if (!corridor) return { action: "refuse", reason: "token not accepted for nTag payments" };
+  if (!corridor) return { action: "refuse", reason: "token not accepted for Lokal tag payments" };
   const h = String(dep.tx?.input ?? "").toLowerCase().replace(/^0x/, "");
   let memoValue = null;
   try { memoValue = BigInt("0x" + word(h, 1)); } catch { /* malformed: refused below */ }
@@ -122,14 +122,14 @@ export function classifyNtagDeposit(dep, ops, payments, agent) {
     || word(h, 0).slice(24) !== String(agent).toLowerCase().replace(/^0x/, "")
     || memoValue !== BigInt(dep.value)
     || String(dep.tx?.from ?? "").toLowerCase() !== String(dep.payer ?? "").toLowerCase()
-  ) return { action: "refuse", reason: "the nTag memo does not match this transfer" };
+  ) return { action: "refuse", reason: "the Lokal tag memo does not match this transfer" };
   const { amount, units, dust } = ntagPayAmount(dep.value);
-  if (units < parseUnits(NTAG_MIN[corridor], 6)) return { action: "refuse", reason: `below the nTag minimum of ${NTAG_MIN[corridor]}` };
+  if (units < parseUnits(NTAG_MIN[corridor], 6)) return { action: "refuse", reason: `below the Lokal tag minimum of ${NTAG_MIN[corridor]}` };
   if (ops == null) return { action: "hold" };
   const entry = ownerOf(resolveNtagsBefore(ops, dep.block, dep.position), dep.tag);
-  if (!entry) return { action: "refuse", reason: "unknown nTag" };
+  if (!entry) return { action: "refuse", reason: "unknown Lokal tag" };
   const op = ops.find((o) => o.hash === entry.hash);
-  if (!op) return { action: "refuse", reason: "nTag claim not found" };
+  if (!op) return { action: "refuse", reason: "Lokal tag claim not found" };
   return { action: "pay", tag: dep.tag, entry, op, corridor, amount, units, dust };
 }
 
@@ -200,7 +200,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
   const state = execute ? io.loadState() : {};
   const dryMatched = new Map(); // dry run only: request id -> simulated deposit, in memory
   const dryRegMatched = new Map(); // dry run only: registration hash -> simulated deposit, in memory
-  const dryNtag = new Map(); // dry run only: nTag deposit key -> simulated record, in memory
+  const dryNtag = new Map(); // dry run only: Lokal tag deposit key -> simulated record, in memory
   let regs = []; // "Get paid" registrations, refreshed every poll
   // nTag ops: loaded in full once, then refreshed incrementally. ntagOpsHeight = the indexed height the cache is
   // complete up to; nTag deposits above it wait.
@@ -519,7 +519,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
    * so it counts as handled (a rescan never pays it). Dry run: printed only.
    */
   function refuseNtag(key, reason, fields, where) {
-    say(`Refused nTag deposit ${where.amount} ${where.token} from ${short(where.from)} (tx ${where.tx})${where.ntag ? ` for @${where.ntag}` : ""}: ${reason}. NOT paid; the deposit stays in the agent wallet${execute ? " (recorded as refused)" : ""}. Continuing.`);
+    say(`Refused Lokal tag deposit ${where.amount} ${where.token} from ${short(where.from)} (tx ${where.tx})${where.ntag ? ` for @${where.ntag}` : ""}: ${reason}. NOT paid; the deposit stays in the agent wallet${execute ? " (recorded as refused)" : ""}. Continuing.`);
     if (!execute) return;
     io.log({ type: "refused_deposit", reason, ...where });
     const s = io.loadNtagPayments();
@@ -544,7 +544,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     }
     if (d.action === "hold") {
       throw Object.assign(new HoldError(
-        `nTag deposit ${amount} ${sym} from ${short(payer)} (tx ${l.transactionHash}) for @${tag} waits: the nTag list is not loaded up to block ${l.blockNumber}` +
+        `Lokal tag deposit ${amount} ${sym} from ${short(payer)} (tx ${l.transactionHash}) for @${tag} waits: the Lokal tag list is not loaded up to block ${l.blockNumber}` +
         `${ntagOpsError ? ` (${ntagOpsError})` : ""}. It is neither paid nor refused; autopilot keeps its place before it and tries again next poll.`,
       ), { key, where });
     }
@@ -552,7 +552,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
       return refuseNtag(key, d.reason, { tag: tag ?? null, token: sym, amount, deposit, ...(tag ? { name: `@${tag}` } : {}), input: tag ? undefined : tx.input }, where);
     }
     const args = { to: `@${tag}`, amount: d.amount, corridor: d.corridor, recipientAddress: d.entry.owner, payer, ntag: tag };
-    say(`nTag payment: ${amount} ${sym} from ${short(payer)} (tx ${l.transactionHash}) -> pay @${tag} (${short(d.entry.owner)}) via ${d.corridor}.`);
+    say(`Lokal tag payment: ${amount} ${sym} from ${short(payer)} (tx ${l.transactionHash}) -> pay @${tag} (${short(d.entry.owner)}) via ${d.corridor}.`);
     if (d.dust > 0n) say(`  Paying ${d.amount} ${sym}; ${formatUnits(d.dust, 6)} ${sym} of dust stays in the agent wallet.`);
     const record = (from) => ({
       id: key, tag, name: `@${tag}`, from, owner: from, claim: d.entry.hash, ...(d.entry.name ? { ownerName: d.entry.name } : {}),
@@ -585,7 +585,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
       pin();
       io.log({ type: "preflight_failed", ...where, error: e.message });
       throw new StopError(
-        `Pre-flight failed for the nTag payment to @${tag}: ${e.message}. NOTHING was recorded or paid; the deposit stays in the agent wallet. ` +
+        `Pre-flight failed for the Lokal tag payment to @${tag}: ${e.message}. NOTHING was recorded or paid; the deposit stays in the agent wallet. ` +
         `Fix the cause, then run "watch --execute" again: it rescans from block ${cursor + 1n} and matches this deposit again. Stopping.`,
       );
     }
@@ -604,7 +604,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
       // A per-payout / per-wallet cap the firm quote broke (e.g. cNGN near $25), before anything was sent: a refusal.
       if (e.permanent && !e.hashes) return refuseNtag(key, e.message, {}, where);
       report({ ...ev, status: "failed", at: new Date().toISOString() });
-      saveFailure(`the nTag payment ${key}`, () => {
+      saveFailure(`the Lokal tag payment ${key}`, () => {
         const after = io.loadNtagPayments();
         after[key].error = e.message;
         if (e.hashes) after[key].hashes = e.hashes;
@@ -615,7 +615,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
         `Fix the cause, then "node src/agent.mjs retry --ntag ${key}" (dry run; add --execute to pay). Stopping.`,
       );
     }
-    recordPaid(`The nTag payment ${key} to @${tag}`, res, () => {
+    recordPaid(`The Lokal tag payment ${key} to @${tag}`, res, () => {
       const after = io.loadNtagPayments();
       Object.assign(after[key], { paidAt: new Date().toISOString(), hashes: res.hashes, receiptUrl: res.receiptUrl, receiptNo: res.receiptNo, paid: res.paid });
       io.saveNtagPayments(after);
@@ -634,7 +634,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     try {
       ntagCache = ntagCache ? await io.refreshNtagOpsCache(ntagCache, { agent }) : await io.loadNtagOpsCache({ agent });
       ntagOpsHeight = indexed;
-      if (ntagOpsError) say(`nTag list loaded again (${ntagCache.ops.length} op(s)); waiting nTag payments are handled now.`);
+      if (ntagOpsError) say(`Lokal tag list loaded again (${ntagCache.ops.length} op(s)); waiting Lokal tag payments are handled now.`);
       ntagOpsError = null;
       ntagFailures = 0;
     } catch (e) {
@@ -643,8 +643,8 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
       ntagFailures++;
       const msg = e.shortMessage ?? e.message;
       if (msg !== ntagOpsError) {
-        say(`Could not ${full ? "load" : "refresh"} the nTag list: ${msg} Payment requests and "Get paid" registrations carry on; ` +
-          `nTag payments ${ntagOpsHeight >= 0n ? `after block ${ntagOpsHeight} ` : ""}wait (not paid, not refused) until it loads.`);
+        say(`Could not ${full ? "load" : "refresh"} the Lokal tag list: ${msg} Payment requests and "Get paid" registrations carry on; ` +
+          `Lokal tag payments ${ntagOpsHeight >= 0n ? `after block ${ntagOpsHeight} ` : ""}wait (not paid, not refused) until it loads.`);
       }
       ntagOpsError = msg;
     }
@@ -665,7 +665,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
         await refreshNtags(indexed);
         if (cursor == null) {
           cursor = state.cursor != null ? BigInt(state.cursor) : initialFromBlock(latest, [...requests(), ...registrationWindows(regs)]) - 1n;
-          say(`Scanning from block ${cursor + 1n} (latest ${latest}). ${regs.length} "Get paid" registration(s) and ${ntagCache ? ntagCache.ops.length : "no"} nTag op(s) found.`);
+          say(`Scanning from block ${cursor + 1n} (latest ${latest}). ${regs.length} "Get paid" registration(s) and ${ntagCache ? ntagCache.ops.length : "no"} Lokal tag op(s) found.`);
         }
         const head = indexed < latest ? indexed : latest;
         const chunks = chunkRanges(cursor + 1n, head);
@@ -696,7 +696,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
           if (!heldNoted.has(held.key)) {
             heldNoted.add(held.key);
             say(held.message);
-            if (execute) io.log({ type: "ntag_held", ...held.where, error: ntagOpsError ?? "nTag list not loaded" });
+            if (execute) io.log({ type: "ntag_held", ...held.where, error: ntagOpsError ?? "Lokal tag list not loaded" });
           }
         } else if (failures > 0 || (chunks.length > 0 && !caughtUp)) {
           if (!stopping) say(`Up to date at block ${cursor}. Waiting for deposits… (Ctrl+C to stop)`);

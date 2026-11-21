@@ -66,6 +66,14 @@ test("reason codes: refusal messages map to the codes the site explains", () => 
   assert.equal(reasonCode("900 cNGN is worth about 0.6 USD, below the 1 USD minimum for nTag payments. Not paid."), "below_minimum");
   assert.equal(reasonCode("Recipient is blocked (agent, own wallet or contract). Not paid."), "recipient_blocked");
   assert.equal(reasonCode("token not accepted for nTag payments"), "token_not_accepted");
+  // the same reasons as written since the rename to Lokal tags (records from before it keep the nTag wording)
+  assert.equal(reasonCode("unknown Lokal tag"), "unknown_tag");
+  assert.equal(reasonCode("Lokal tag claim not found"), "unknown_tag");
+  assert.equal(reasonCode(`Lokal tag claim ${h(1)} does not check out onchain (not the agent). Not paid.`), "claim_invalid");
+  assert.equal(reasonCode("the Lokal tag memo does not match this transfer"), "bad_memo");
+  assert.equal(reasonCode("the transfer looks like a Lokal tag payment, but its memo is not a valid one"), "bad_memo");
+  assert.equal(reasonCode("below the Lokal tag minimum of 1"), "below_minimum");
+  assert.equal(reasonCode("token not accepted for Lokal tag payments"), "token_not_accepted");
   assert.equal(reasonCode("something new"), "other");
   const failed = ev(1, { status: "failed" });
   assert.equal(failed.reason, "payout_error");

@@ -655,7 +655,7 @@ async function downloadImage(slip, qr) {
     await document.fonts.ready;
     await Promise.all(["300 56px", "400 15px", "500 14px", "600 16px"].map((f) => document.fonts.load(`${f} "General Sans"`).catch(() => null)));
   }
-  const logo = await loadImg("logo.png");
+  const logo = await loadImg("logo.png?v=lokal2");
   const W = 640, S = 2;
   const probe = document.createElement("canvas");
   probe.width = W; probe.height = 10;

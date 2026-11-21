@@ -1,30 +1,30 @@
-# Lokal (formerly Naira Payout): install the `ntag` command on Windows.
+# Lokal (formerly Naira Payout): install the `lokal` command on Windows (`ntag` keeps working as another name for it).
 #
 #   irm https://lokalpay.vercel.app/install.ps1 | iex
 #
 # You can read this whole file before running it. What it does:
 #   1. Checks that Node.js 20 or newer is installed. If not, it tells you how to get it and stops.
 #      It never installs system software for you.
-#   2. Downloads the ntag code from GitHub (github.com/deeeko/celo-naira-payout-agent) as a zip.
+#   2. Downloads the Lokal code from GitHub (github.com/deeeko/lokal) as a zip.
 #   3. Installs the libraries the command line needs with npm, at the exact versions in package-lock.json
 #      (no install scripts are run; libraries only the website uses are skipped).
 #   4. Puts the code in  %LOCALAPPDATA%\lokal\app  (replacing an older copy in one step)
-#      and a small launcher in  %LOCALAPPDATA%\lokal\bin\ntag.cmd
-#   5. Adds that bin folder to YOUR user PATH, so `ntag` works in any new terminal.
+#      and two small launchers in  %LOCALAPPDATA%\lokal\bin: lokal.cmd, and ntag.cmd (the old name, same command)
+#   5. Adds that bin folder to YOUR user PATH, so `lokal` (and `ntag`) work in any new terminal.
 #   6. Cleans up an install from before the rename to Lokal: removes %LOCALAPPDATA%\naira-payout\app and \bin
 #      and takes that old bin folder out of your user PATH.
 #
 # What it never does:
 #   - It never needs administrator rights.
 #   - It never creates, reads, moves or deletes your wallet. The wallet is a separate file,
-#     %USERPROFILE%\.lokal\wallet.json, so updating or uninstalling ntag keeps it. A wallet made before the
-#     rename stays at %USERPROFILE%\.naira-payout\wallet.json and ntag keeps using it there.
+#     %USERPROFILE%\.lokal\wallet.json, so updating or uninstalling lokal keeps it. A wallet made before the
+#     rename stays at %USERPROFILE%\.naira-payout\wallet.json and lokal keeps using it there.
 #   - It never sends any transaction.
 #
 # Options (set before running; they are environment variables because `irm | iex` cannot take arguments):
 #   $env:NTAG_REF = "v1.0.0"   install a specific branch, tag or commit instead of "main"
 #   $env:NTAG_NO_PATH = "1"    do not change your PATH; print what to add instead
-#   $env:NTAG_UNINSTALL = "1"  remove ntag (the app and bin folders and the PATH entry; never the wallet)
+#   $env:NTAG_UNINSTALL = "1"  remove lokal (the app and bin folders and the PATH entry; never the wallet)
 #
 # Update: run the same one-liner again. Uninstall:
 #   $env:NTAG_UNINSTALL = "1"; irm https://lokalpay.vercel.app/install.ps1 | iex
@@ -39,7 +39,7 @@
   # ---------------------------------------------------------------------------------------------
   # Settings
   # ---------------------------------------------------------------------------------------------
-  $Repo    = 'deeeko/celo-naira-payout-agent'
+  $Repo    = 'deeeko/lokal'
   $Ref     = if ($env:NTAG_REF) { $env:NTAG_REF.Trim() } else { 'main' }
   $MinNode = 20
   $SiteUrl = 'https://lokalpay.vercel.app'
@@ -124,13 +124,14 @@
   $Root       = Join-Path $env:LOCALAPPDATA 'lokal'
   $App        = Join-Path $Root 'app'
   $Bin        = Join-Path $Root 'bin'
-  $Shim       = Join-Path $Bin 'ntag.cmd'
+  $Shim       = Join-Path $Bin 'lokal.cmd'
+  $AliasShim  = Join-Path $Bin 'ntag.cmd'    # the command's name before the rename; runs the same thing
   # Where installs went before the rename to Lokal. Cleaned up on install, update and uninstall.
   $OldRoot    = Join-Path $env:LOCALAPPDATA 'naira-payout'
   $OldApp     = Join-Path $OldRoot 'app'
   $OldBin     = Join-Path $OldRoot 'bin'
   # Shown in messages only. USERPROFILE can be unset (some service accounts); never let that stop the script here.
-  # ntag uses %USERPROFILE%\.lokal\wallet.json, or the wallet from before the rename if only that one exists.
+  # lokal uses %USERPROFILE%\.lokal\wallet.json, or the wallet from before the rename if only that one exists.
   $WalletFile = '%USERPROFILE%\.lokal\wallet.json'
   if ($env:USERPROFILE) {
     $WalletFile = Join-Path $env:USERPROFILE '.lokal\wallet.json'
@@ -178,7 +179,7 @@
   # Uninstall ($env:NTAG_UNINSTALL = "1")
   # ---------------------------------------------------------------------------------------------
   if ($Uninstall) {
-    Say 'Lokal: uninstalling the ntag command' White
+    Say 'Lokal: uninstalling the lokal command (and its other name, ntag)' White
     Say "This removes $App, $Bin and the PATH entry. Your wallet file is not touched."
     Say ''
     try {
@@ -186,7 +187,7 @@
       # Remove the app, the launcher, and any leftovers from an interrupted install.
       foreach ($dir in @($App, $Bin) + @(Get-Leftovers)) {
         if (-not (Test-Path -LiteralPath $dir)) { continue }
-        if (Remove-Folder $dir) { Step "Removed $dir" } else { $ok = $false; Say "  Could not remove $dir. Close any window running ntag and run the uninstall again." Yellow }
+        if (Remove-Folder $dir) { Step "Removed $dir" } else { $ok = $false; Say "  Could not remove $dir. Close any window running lokal or ntag and run the uninstall again." Yellow }
       }
       # Remove the lokal folder itself if nothing else is left in it.
       if ((Test-Path -LiteralPath $Root) -and -not (Get-ChildItem -LiteralPath $Root -Force)) { Remove-Item -LiteralPath $Root -Force }
@@ -205,7 +206,7 @@
       $null = Remove-OldInstall
 
       Say ''
-      if ($ok) { Say 'ntag is uninstalled.' Green } else { Say 'ntag is partly uninstalled (see above).' Yellow }
+      if ($ok) { Say 'lokal is uninstalled.' Green } else { Say 'lokal is partly uninstalled (see above).' Yellow }
       Say "Your wallet is still at $WalletFile (if you created one)."
       Say 'Keep it, or back it up before deleting it: without that file and its send password the money in it is lost.'
       Say ''
@@ -218,15 +219,15 @@
   # ---------------------------------------------------------------------------------------------
   # Install
   # ---------------------------------------------------------------------------------------------
-  Say 'Lokal: installing the ntag command' White
-  Say "  1. Check Node.js $MinNode or newer      2. Download ntag ($Ref) from GitHub"
-  Say '  3. Install its libraries with npm    4. Add "ntag" to your PATH'
+  Say 'Lokal: installing the lokal command' White
+  Say "  1. Check Node.js $MinNode or newer      2. Download Lokal ($Ref) from GitHub"
+  Say '  3. Install its libraries with npm    4. Add "lokal" (and "ntag") to your PATH'
   Say "Into $Root. No admin rights needed; your wallet is never touched."
   Say ''
 
   try {
     # --- Step 1: Node.js ---------------------------------------------------------------------
-    # ntag is a Node.js program. We only check for it: installing Node is your choice.
+    # lokal is a Node.js program. We only check for it: installing Node is your choice.
     $node = Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     $nodeVersion = $null
     if ($node) {
@@ -234,8 +235,8 @@
       if ($r.Code -eq 0 -and $r.Output -match 'v(\d+)\.(\d+)\.(\d+)') { $nodeVersion = [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])" }
     }
     if (-not $nodeVersion -or $nodeVersion.Major -lt $MinNode) {
-      if ($nodeVersion) { Say "ntag needs Node.js $MinNode or newer. You have $nodeVersion." Yellow }
-      else { Say "ntag needs Node.js $MinNode or newer, and it is not installed (or not on your PATH)." Yellow }
+      if ($nodeVersion) { Say "lokal needs Node.js $MinNode or newer. You have $nodeVersion." Yellow }
+      else { Say "lokal needs Node.js $MinNode or newer, and it is not installed (or not on your PATH)." Yellow }
       Say ''
       Say 'Install it one of these ways, then open a NEW PowerShell window and run this installer again:'
       Say '  winget install OpenJS.NodeJS.LTS' White
@@ -265,19 +266,19 @@
     # Everything new is built in a staging folder next to app\, so the final swap is a quick rename.
     $Stage = Join-Path $Root ('.new-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
     $null = New-Item -ItemType Directory -Path $Stage
-    $zip = Join-Path $Stage 'ntag.zip'
+    $zip = Join-Path $Stage 'lokal.zip'
     try {
       Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing -TimeoutSec 180
     } catch {
       $status = 0
       try { $status = [int]$_.Exception.Response.StatusCode } catch { }
       if ($status -eq 404) { Fail "GitHub has no branch, tag or commit called `"$Ref`" in $Repo. Check NTAG_REF, or clear it to install main: Remove-Item Env:NTAG_REF" }
-      if ($status -gt 0) { Fail "GitHub answered with error $status while downloading ntag. Try again in a few minutes." }
-      Fail "Could not download ntag from GitHub. Check your internet connection (and any proxy or firewall), then try again. Details: $($_.Exception.Message)"
+      if ($status -gt 0) { Fail "GitHub answered with error $status while downloading Lokal. Try again in a few minutes." }
+      Fail "Could not download Lokal from GitHub. Check your internet connection (and any proxy or firewall), then try again. Details: $($_.Exception.Message)"
     }
     Step "Downloaded $Repo ($Ref)"
 
-    # Unpack. The zip holds one top folder (for example celo-naira-payout-agent-main).
+    # Unpack. The zip holds one top folder (for example lokal-main).
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $unzipped = Join-Path $Stage 'src'
     try { [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $unzipped) }
@@ -285,7 +286,7 @@
     Remove-Item -LiteralPath $zip -Force
     $top = @(Get-ChildItem -LiteralPath $unzipped -Directory)
     if ($top.Count -ne 1 -or -not (Test-Path -LiteralPath (Join-Path $top[0].FullName 'src\ntag.mjs')) -or -not (Test-Path -LiteralPath (Join-Path $top[0].FullName 'package-lock.json'))) {
-      Fail "The download for `"$Ref`" does not contain the ntag command (src\ntag.mjs). Use a newer NTAG_REF, or clear it to install main."
+      Fail "The download for `"$Ref`" does not contain the lokal command (src\ntag.mjs). Use a newer NTAG_REF, or clear it to install main."
     }
     $NewApp = $top[0].FullName
 
@@ -303,7 +304,7 @@
 
     # Make sure the new copy actually runs before it replaces the old one.
     $r = Invoke-Native $node.Source @((Join-Path $NewApp 'src\ntag.mjs'), 'help')
-    if ($r.Code -ne 0) { Fail "The downloaded ntag did not start (exit code $($r.Code)). Your previous install, if any, was kept. Output:`n$($r.Output)" }
+    if ($r.Code -ne 0) { Fail "The downloaded lokal did not start (exit code $($r.Code)). Your previous install, if any, was kept. Output:`n$($r.Output)" }
 
     # --- Step 4: put it in place -----------------------------------------------------------------
     # Swap: old app -> .old-xxxx, new app -> app, then delete the old one. If the second rename
@@ -312,40 +313,42 @@
     if (Test-Path -LiteralPath $App) {
       $Old = Join-Path $Root ('.old-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
       try { Move-Folder $App $Old }
-      catch { Fail "Could not replace the installed ntag in $App. Close any window that is running ntag (or has that folder open) and run the installer again." }
+      catch { Fail "Could not replace the installed lokal in $App. Close any window that is running lokal or ntag (or has that folder open) and run the installer again." }
     }
     try { Move-Folder $NewApp $App }
     catch {
       if ($Old) { try { Move-Folder $Old $App } catch { } }
-      Fail "Could not move the new ntag into $App. Details: $($_.Exception.Message)"
+      Fail "Could not move the new lokal into $App. Details: $($_.Exception.Message)"
     }
     if ($Old -and -not (Remove-Folder $Old)) { Say "  (Could not delete the old copy in $Old yet; the next run cleans it up.)" DarkGray }
     $null = Remove-Folder $Stage
     $Stage = $null
     Step "Installed in $App"
 
-    # The launcher: a two-line .cmd file that runs node on app\src\ntag.mjs with all your arguments.
-    # (A .cmd file, not a .ps1, so it works even where PowerShell scripts are disabled.)
+    # The launchers: small .cmd files that run node on app\src\ntag.mjs with all your arguments.
+    # lokal.cmd is the command; ntag.cmd is the same launcher under the old name, so older notes keep working.
+    # (.cmd files, not .ps1, so they work even where PowerShell scripts are disabled.)
     $null = New-Item -ItemType Directory -Force -Path $Bin
     $shimText = @(
       '@echo off',
-      'rem ntag launcher, written by https://lokalpay.vercel.app/install.ps1',
-      'rem Runs the ntag command from the app folder next to this one. Your wallet is not stored here.',
-      'where node >nul 2>nul || (echo ntag needs Node.js 20 or newer: https://nodejs.org 1>&2 & exit /b 1)',
+      'rem Lokal launcher, written by https://lokalpay.vercel.app/install.ps1',
+      'rem Runs the lokal command (also called ntag) from the app folder next to this one. Your wallet is not stored here.',
+      'where node >nul 2>nul || (echo lokal needs Node.js 20 or newer: https://nodejs.org 1>&2 & exit /b 1)',
       'node "%~dp0..\app\src\ntag.mjs" %*'
     ) -join "`r`n"
     [System.IO.File]::WriteAllText($Shim, $shimText + "`r`n", [System.Text.Encoding]::ASCII)
-    Step "Created $Shim"
+    [System.IO.File]::WriteAllText($AliasShim, $shimText + "`r`n", [System.Text.Encoding]::ASCII)
+    Step "Created $Shim (and $AliasShim, the old name)"
 
     # --- Step 5: PATH --------------------------------------------------------------------------
     if ($NoPath) {
-      Step 'Left your PATH alone (NTAG_NO_PATH is set). To use "ntag" by name, add this folder to your PATH:'
+      Step 'Left your PATH alone (NTAG_NO_PATH is set). To use "lokal" by name, add this folder to your PATH:'
       Say "      $Bin"
     } else {
       $userPath = Get-UserPath
       if (-not (Test-PathEntry $userPath $Bin)) { Set-UserPath (Add-PathEntry $userPath $Bin); Step 'Added the bin folder to your user PATH' }
       else { Step 'The bin folder is already on your user PATH' }
-      # This window too, so you can use ntag right away.
+      # This window too, so you can use lokal right away.
       $env:Path = Add-PathEntry $env:Path $Bin
     }
 
@@ -355,12 +358,14 @@
 
     # Final check, through the launcher itself.
     $r = Invoke-Native $Shim @('help')
-    if ($r.Code -ne 0) { Fail "ntag was installed but did not start through $Shim (exit code $($r.Code)). Output:`n$($r.Output)" }
+    if ($r.Code -ne 0) { Fail "lokal was installed but did not start through $Shim (exit code $($r.Code)). Output:`n$($r.Output)" }
 
-    # Warn if another "ntag" (for example from `npm link` in a checkout) comes first on the PATH.
-    $first = Get-Command ntag -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($first -and -not $NoPath -and ((Format-PathEntry (Split-Path -Parent $first.Source)) -ne (Format-PathEntry $Bin))) {
-      Say "  Note: another ntag comes first on your PATH: $($first.Source). Remove it (npm unlink -g) to use this one." Yellow
+    # Warn if another "lokal" or "ntag" (for example from `npm link` in a checkout) comes first on the PATH.
+    foreach ($name in @('lokal', 'ntag')) {
+      $first = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($first -and -not $NoPath -and ((Format-PathEntry (Split-Path -Parent $first.Source)) -ne (Format-PathEntry $Bin))) {
+        Say "  Note: another $name comes first on your PATH: $($first.Source). Remove it (npm unlink -g) to use this one." Yellow
+      }
     }
   } catch {
     Say ''
@@ -376,19 +381,20 @@
   # Done: next steps
   # ---------------------------------------------------------------------------------------------
   Say ''
-  Say 'ntag is installed.' Green
+  Say 'lokal is installed.' Green
   Say ''
   Say 'Next steps (in PowerShell, leave out the @ or put the tag in quotes: ada or ''@ada''):' White
-  Say '  ntag wallet new          create your wallet, protected by a send password you choose'
-  Say '  ntag wallet              shows your address: send it some USDT (Tether on Celo) and a little CELO for fees'
-  Say '  ntag whois ada           who owns @ada'
-  Say '  ntag send ada 10         you send $10 USDT, @ada gets naira'
-  Say '  ntag help                everything else'
+  Say '  lokal wallet new         create your wallet, protected by a send password you choose'
+  Say '  lokal wallet             shows your address: send it some USDT (Tether on Celo) and a little CELO for fees'
+  Say '  lokal whois ada          who owns the Lokal tag @ada'
+  Say '  lokal send ada 10        you send $10 USDT, @ada gets naira'
+  Say '  lokal help               everything else'
+  Say '  The old name still works too: ntag send ada 10 does the same thing.' DarkGray
   Say ''
   Say 'Your wallet' White
   Say "  It lives in $WalletFile (separate from the app; update and uninstall never touch it)."
-  Say '  Back it up after "ntag wallet new", and remember the send password. There is no recovery:'
-  Say "    Copy-Item `"$WalletFile`" `"D:\backup\ntag-wallet.json`""
+  Say '  Back it up after "lokal wallet new", and remember the send password. There is no recovery:'
+  Say "    Copy-Item `"$WalletFile`" `"D:\backup\lokal-wallet.json`""
   Say ''
   Say 'Update: run the same one-liner again.' White
   Say "  $OneLine"
@@ -397,5 +403,5 @@
   Say "  or by hand: delete $App and $Bin, and remove $Bin from your user PATH"
   Say '  (Settings > System > About > Advanced system settings > Environment Variables).'
   Say ''
-  if (-not $NoPath) { Say 'Other terminals that were already open need to be restarted before "ntag" works there.' DarkGray; Say '' }
+  if (-not $NoPath) { Say 'Other terminals that were already open need to be restarted before "lokal" works there.' DarkGray; Say '' }
 }

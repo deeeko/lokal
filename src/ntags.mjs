@@ -26,8 +26,8 @@ export const RELEASE_LOCK_DAYS = 30;
 export const NTAG_RESERVED = new Set([
   "agent", "admin", "administrator", "root", "system", "support", "help", "official", "team", "staff", "mod", "moderator",
   "security", "celo", "minipay", "valora", "opera", "textile", "naira", "nairapayout", "payout", "payouts", "ntag", "ntags",
-  "cngn", "usdt", "usdc", "tether", "cusd", "ceur", "wallet", "bank", "cbn", "null", "undefined", "anonymous", "everyone",
-  "me", "you", "test", "demo", "api", "www", "app", "pay", "send", "receive",
+  "lokal", "lokalpay", "cngn", "usdt", "usdc", "tether", "cusd", "ceur", "wallet", "bank", "cbn", "null", "undefined",
+  "anonymous", "everyone", "me", "you", "test", "demo", "api", "www", "app", "pay", "send", "receive",
 ]);
 const NTAG_RESERVED_ERR = "this tag is reserved";
 const NTAG_LOCK_SEC = RELEASE_LOCK_DAYS * 86400;
@@ -57,7 +57,7 @@ export function ntagNameError(n) {
 }
 /** Validates a decoded nTag op body: claim {t[,n]} or release {t:""}. Error string or null. */
 export function ntagOpError(op) {
-  if (!op || typeof op !== "object" || Array.isArray(op)) return "not an nTag op";
+  if (!op || typeof op !== "object" || Array.isArray(op)) return "not a Lokal tag op";
   const keys = Object.keys(op);
   if (keys.some((k) => k !== "t" && k !== "n")) return "unexpected field";
   if (typeof op.t !== "string") return "invalid tag";
@@ -277,8 +277,8 @@ async function scanAgentTxs({ agent, api, fetchImpl, maxPages, floor = null }) {
     if (!next || older) return { ops, head };
   }
   throw new Error(floor == null
-    ? `More than ${maxPages} pages of transactions to the agent; refusing to work from a partial nTag list.`
-    : `More than ${maxPages} pages of new transactions to the agent since the last refresh; refusing to work from a partial nTag list.`);
+    ? `More than ${maxPages} pages of transactions to the agent; refusing to work from a partial Lokal tag list.`
+    : `More than ${maxPages} pages of new transactions to the agent since the last refresh; refusing to work from a partial Lokal tag list.`);
 }
 
 /**
@@ -319,7 +319,7 @@ export async function discoverNtagOps({ agent = AGENT, api = EXPLORER_API, fetch
  */
 export async function verifyNtagOpOnchain(pub, op, agent = AGENT) {
   const [tx, rc] = await Promise.all([pub.getTransaction({ hash: op.hash }), pub.getTransactionReceipt({ hash: op.hash })]);
-  const bad = (why) => refusal(`nTag claim ${op.hash} does not check out onchain (${why}). Not paid.`);
+  const bad = (why) => refusal(`Lokal tag claim ${op.hash} does not check out onchain (${why}). Not paid.`);
   if (rc.status !== "success") throw bad("failed transaction");
   if (String(tx.to ?? "").toLowerCase() !== String(agent).toLowerCase()) throw bad("not sent to the agent");
   if (String(tx.from).toLowerCase() !== String(op.from ?? "").toLowerCase()) throw bad("different sender");
@@ -363,7 +363,7 @@ const TX_HASH_RE = /0x[0-9a-fA-F]{64}/;
  * none), and nothing may have been sent for it yet.
  */
 export function refusedRetryBlocker(r) {
-  if (!r) return "No nTag payment with that id.";
+  if (!r) return "No Lokal tag payment with that id.";
   if (r.status !== "refused") return `${r.id} was not refused by autopilot; retry it without --force-refused.`;
   if (r.paidAt) return `${r.id} is already paid.`;
   if (r.retrying) return `${r.id} has a retry marked in progress since ${r.retrying}. Check its transactions on Celoscan before touching it.`;

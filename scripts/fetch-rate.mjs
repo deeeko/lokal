@@ -5,7 +5,7 @@ import path from "node:path";
 import { buildRate } from "../lib/rate.mjs";
 
 const out = process.argv[2] ?? "site/rate.json";
-const result = await buildRate({ timeoutMs: 30_000, carryForwardUrl: "https://deeeko.github.io/celo-naira-payout-agent/rate.json" });
+const result = await buildRate({ timeoutMs: 30_000, carryForwardUrl: "https://deeeko.github.io/lokal/rate.json" });
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result));

@@ -106,7 +106,7 @@ export function greeting(date = new Date()) {
 
 /** The WhatsApp share link for a tag. */
 export function whatsappUrl(tag, url = ntagUrl(tag)) {
-  return "https://wa.me/?text=" + encodeURIComponent(`You can pay me in dollars or naira on Celo with my nTag @${tag}: ${url}`);
+  return "https://wa.me/?text=" + encodeURIComponent(`You can pay me in dollars or naira on Celo with my Lokal tag @${tag}: ${url}`);
 }
 
 // ---------- payments to a tag: values, eligibility, matching deposits to payouts (pure, tested) ----------
@@ -245,15 +245,15 @@ const STATUS_RANK = { received: 0, failed: 1, refused: 2, paid: 3 };
 const has = (o, k) => o != null && Object.prototype.hasOwnProperty.call(o, k); // not Object.hasOwn: older phones
 const finite = (v) => typeof v === "number" && Number.isFinite(v);
 const REASON_TEXT = {
-  unknown_tag: "Nobody held this nTag when the payment arrived",
+  unknown_tag: "Nobody held this Lokal tag when the payment arrived",
   bad_memo: "The @tag note on the payment couldn't be read",
-  token_not_accepted: "This token isn't accepted for nTag payments",
+  token_not_accepted: "This token isn't accepted for Lokal tag payments",
   below_minimum: "The payment was below the minimum",
   over_payment_cap: `The payment was over the $${CAP} limit for one payment`,
   over_wallet_cap: `It would have taken this person over $${LIMITS.perPersonDay} in 24 hours`,
   self_payment: "It was sent from the same wallet it pays",
   recipient_blocked: "The agent can't pay this wallet",
-  claim_invalid: "The nTag's claim didn't check out on Celo",
+  claim_invalid: "The Lokal tag's claim didn't check out on Celo",
   registration_invalid: "The payment link didn't check out on Celo",
   other: "The agent couldn't pay it automatically",
 };
@@ -418,7 +418,7 @@ export function ntagCard(props = {}) {
   const stamp = el("span", { class: "ntag-stamp", "aria-hidden": "true" }, stampCheck, stampText);
   const front = el("div", { class: "ntag-face ntag-front" },
     el("span", { class: "ntag-guilloche" }),
-    el("div", { class: "ntag-top" }, el("span", { class: "ntag-brand" }, ringMark(), "nTag"), el("span", { class: "ntag-net" }, "Celo")),
+    el("div", { class: "ntag-top" }, el("span", { class: "ntag-brand" }, ringMark(), "Lokal tag"), el("span", { class: "ntag-net" }, "Celo")),
     el("div", { class: "ntag-main" }, handle, name),
     el("div", { class: "ntag-bottom" }, addr, since),
     el("span", { class: "ntag-sheen" }), el("span", { class: "ntag-glare" }));
@@ -449,7 +449,7 @@ export function ntagCard(props = {}) {
     stampText.textContent = props.stamp ?? "";
     stampCheck.style.display = kind === "ghost" ? "none" : ""; // "Unclaimed", "Reserved", "On hold": no tick
     card.classList.toggle("is-stamped", Boolean(props.stamp));
-    if (as !== "div") card.setAttribute("aria-label", props.label ?? `nTag @${shown}${nm ? ", " + nm : ""}`);
+    if (as !== "div") card.setAttribute("aria-label", props.label ?? `Lokal tag @${shown}${nm ? ", " + nm : ""}`);
     return card;
   };
   card.update();
@@ -628,7 +628,7 @@ export async function loadNtagStateFresh(maxPages = 200) {
       return { ops, state: resolveNtags(ops) };
     }
   }
-  throw new Error("partial nTag list");
+  throw new Error("partial Lokal tag list");
 }
 
 /** Blockscout token-transfer item -> { hash, logIndex, block, ts (ms), from, to, token "USDT"|"CNGN"|null, units }, or null. */
@@ -841,7 +841,7 @@ export function ntagFinder(opts = {}) {
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && best) location.href = best; });
   if (opts.value) { input.value = cleanTagInput(opts.value); setTimeout(run, 0); }
   return el("div", { class: "nt-find", role: "search" },
-    el("label", { class: "nt-find-label", for: id }, icon("search"), opts.label ?? "Find an nTag"),
+    el("label", { class: "nt-find-label", for: id }, icon("search"), opts.label ?? "Find a Lokal tag"),
     el("div", { class: "nt-taginput sm" }, el("span", { class: "nt-at", "aria-hidden": "true" }, "@"), input),
     out);
 }

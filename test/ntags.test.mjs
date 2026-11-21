@@ -48,8 +48,8 @@ test("rules: valid, invalid, reserved, normalisation", () => {
   assert.match(site.ntagError("x".repeat(21)), /20/);
   assert.match(site.ntagError("ada__ng"), /__/);
   assert.match(site.ntagError("ada_"), /end with _/);
-  for (const t of ["agent", "admin", "celo", "naira", "ntags", "pay", "receive", "www", "undefined"]) assert.match(site.ntagError(t), /reserved/, t);
-  assert.equal(site.NTAG_RESERVED.size, 47); // the spec list, all lower-case
+  for (const t of ["agent", "admin", "celo", "naira", "ntags", "lokal", "lokalpay", "pay", "receive", "www", "undefined"]) assert.match(site.ntagError(t), /reserved/, t);
+  assert.equal(site.NTAG_RESERVED.size, 49); // the spec list, all lower-case
   assert.equal(site.normalizeNtag("  @Ada_NG "), "ada_ng");
   assert.equal(site.normalizeNtag("@@ada"), "@ada"); // only one @ is stripped
   assert.equal(site.normalizeNtag(null), "");
@@ -397,5 +397,5 @@ test("force-paying a refused nTag deposit: only with a known owner, claim and am
     assert.match(node.refusedRetryBlocker({ ...good, [missing]: undefined }), /nobody to pay/, missing);
   }
   assert.match(node.refusedRetryBlocker({ ...good, tag: null, reason: "unknown nTag" }), /unknown nTag/);
-  assert.match(node.refusedRetryBlocker(undefined), /No nTag payment/);
+  assert.match(node.refusedRetryBlocker(undefined), /No Lokal tag payment/);
 });

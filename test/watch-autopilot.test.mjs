@@ -141,7 +141,7 @@ test("an unknown tag is refused and recorded once (no owner, so it can never be 
   const w = world({ deposits });
   await run(w);
   assert.equal(w.mem.ntag[key(1)].status, "refused");
-  assert.equal(w.mem.ntag[key(1)].reason, "unknown nTag");
+  assert.equal(w.mem.ntag[key(1)].reason, "unknown Lokal tag");
   w.mem.state = { cursor: "900" };
   await run(w);
   assert.equal(w.mem.log.filter((e) => e.type === "refused_deposit").length, 1);
@@ -230,7 +230,7 @@ test("nTag list unavailable: requests before it are paid, the nTag deposit waits
     over: {
       now: () => clock,
       loadNtagOpsCache: async () => {
-        if (++loads === 1) throw new Error("More than 2000 pages of transactions to the agent; refusing to work from a partial nTag list.");
+        if (++loads === 1) throw new Error("More than 2000 pages of transactions to the agent; refusing to work from a partial Lokal tag list.");
         return { ops: [ADA_CLAIM], head: { block: 999, position: 0 } };
       },
       sleep: async () => { clock += 10 * 60_000; },
@@ -239,7 +239,7 @@ test("nTag list unavailable: requests before it are paid, the nTag deposit waits
   await run(w, { polls: 1 });
   assert.deepEqual(w.calls.map((c) => c.requestId ?? c.ntag), ["r_aaaaaaaa"]);
   assert.equal(w.mem.state.cursor, "900", "cursor pinned before the waiting nTag deposit");
-  assert.ok(w.out.some((l) => /waits: the nTag list is not loaded/.test(l)));
+  assert.ok(w.out.some((l) => /waits: the Lokal tag list is not loaded/.test(l)));
   assert.equal(w.mem.log.filter((e) => e.type === "ntag_held").length, 1);
   assert.equal(w.mem.ntag[key(2)], undefined, "neither paid nor refused");
 
@@ -269,7 +269,7 @@ test("a refresh failure makes nTag deposits above the last good height wait", as
   await run(w, { polls: 2 });
   assert.equal(w.calls.length, 0, "deposit above the last good height waits");
   assert.equal(w.mem.state.cursor, "1000");
-  assert.ok(w.out.some((l) => /Could not refresh the nTag list/.test(l)));
+  assert.ok(w.out.some((l) => /Could not refresh the Lokal tag list/.test(l)));
 });
 
 test("a cap broken only by the firm quote is a permanent refusal: recorded, autopilot carries on", async () => {

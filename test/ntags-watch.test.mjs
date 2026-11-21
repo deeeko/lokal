@@ -62,23 +62,23 @@ test("a recorded deposit is never handled twice", () => {
   const ops = [op(1, ADA, 50, 0, { t: "ada" })];
   const d = dep();
   assert.deepEqual(classifyNtagDeposit(d, ops, { [d.key]: { tag: "ada" } }, AGENT_ADDRESS), { action: "handled", record: { tag: "ada" } });
-  const refused = { status: "refused", reason: "unknown nTag" };
+  const refused = { status: "refused", reason: "unknown Lokal tag" };
   assert.deepEqual(classifyNtagDeposit(d, ops, { [d.key]: refused }, AGENT_ADDRESS), { action: "handled", record: refused });
 });
 
 test("owner is resolved strictly before the deposit's (block, position)", () => {
   // Claimed in the same block AFTER the deposit: unknown at deposit time.
-  assert.deepEqual(classifyNtagDeposit(dep(), [op(1, ADA, 100, 4, { t: "ada" })], {}, AGENT_ADDRESS), { action: "refuse", reason: "unknown nTag" });
+  assert.deepEqual(classifyNtagDeposit(dep(), [op(1, ADA, 100, 4, { t: "ada" })], {}, AGENT_ADDRESS), { action: "refuse", reason: "unknown Lokal tag" });
   // Same tx position is not "before".
   assert.equal(classifyNtagDeposit(dep(), [op(1, ADA, 100, 3, { t: "ada" })], {}, AGENT_ADDRESS).action, "refuse");
   // Earlier in the same block: known.
   assert.equal(classifyNtagDeposit(dep(), [op(1, ADA, 100, 2, { t: "ada" })], {}, AGENT_ADDRESS).action, "pay");
   // Released before the deposit: unknown. Released after: still Ada's at deposit time.
   const claim = op(1, ADA, 50, 0, { t: "ada" });
-  assert.equal(classifyNtagDeposit(dep(), [claim, op(2, ADA, 99, 0, { t: "" })], {}, AGENT_ADDRESS).reason, "unknown nTag");
+  assert.equal(classifyNtagDeposit(dep(), [claim, op(2, ADA, 99, 0, { t: "" })], {}, AGENT_ADDRESS).reason, "unknown Lokal tag");
   assert.equal(classifyNtagDeposit(dep(), [claim, op(2, ADA, 101, 0, { t: "" })], {}, AGENT_ADDRESS).entry.owner, ADA.toLowerCase());
   // Ada moved to another tag before the deposit: "ada" has no owner.
-  assert.equal(classifyNtagDeposit(dep(), [claim, op(2, ADA, 70, 0, { t: "ada_ng" })], {}, AGENT_ADDRESS).reason, "unknown nTag");
+  assert.equal(classifyNtagDeposit(dep(), [claim, op(2, ADA, 70, 0, { t: "ada_ng" })], {}, AGENT_ADDRESS).reason, "unknown Lokal tag");
   // A later claim by someone else (taken) never changes the owner.
   const d = classifyNtagDeposit(dep(), [claim, op(2, BOB, 60, 0, { t: "ada" })], {}, AGENT_ADDRESS);
   assert.equal(d.entry.owner, ADA.toLowerCase());
@@ -93,15 +93,15 @@ test("a rename keeps paying the original claim's owner and points at the origina
 });
 
 test("no ops at all, or only invalid ones: unknown nTag, never paid", () => {
-  assert.equal(classifyNtagDeposit(dep(), [], {}, AGENT_ADDRESS).reason, "unknown nTag");
+  assert.equal(classifyNtagDeposit(dep(), [], {}, AGENT_ADDRESS).reason, "unknown Lokal tag");
   const bad = [op(1, ADA, 50, 0, { t: "Ada" }), { ...op(2, ADA, 51, 0, { t: "ada" }), value: "1" }, op(3, AGENT_ADDRESS, 52, 0, { t: "ada" })];
-  assert.equal(classifyNtagDeposit(dep(), bad, {}, AGENT_ADDRESS).reason, "unknown nTag");
+  assert.equal(classifyNtagDeposit(dep(), bad, {}, AGENT_ADDRESS).reason, "unknown Lokal tag");
 });
 
 test("the memo must describe this very transfer", () => {
   const ops = [op(1, ADA, 50, 0, { t: "ada" })];
   const good = dep();
-  const mismatch = { action: "refuse", reason: "the nTag memo does not match this transfer" };
+  const mismatch = { action: "refuse", reason: "the Lokal tag memo does not match this transfer" };
   // tx sent to some other contract, not the token that emitted the Transfer
   assert.deepEqual(classifyNtagDeposit({ ...good, tx: { ...good.tx, to: ADA } }, ops, {}, AGENT_ADDRESS), mismatch);
   // memo transfer amount differs from the deposit
@@ -113,7 +113,7 @@ test("the memo must describe this very transfer", () => {
   // junk input
   assert.deepEqual(classifyNtagDeposit({ ...good, tx: { ...good.tx, input: "0x" } }, ops, {}, AGENT_ADDRESS), mismatch);
   // unknown token
-  assert.equal(classifyNtagDeposit({ ...good, token: ADA, tx: { ...good.tx, to: ADA } }, ops, {}, AGENT_ADDRESS).reason, "token not accepted for nTag payments");
+  assert.equal(classifyNtagDeposit({ ...good, token: ADA, tx: { ...good.tx, to: ADA } }, ops, {}, AGENT_ADDRESS).reason, "token not accepted for Lokal tag payments");
 });
 
 test("deposits below the minimum are refused, not paid", () => {
@@ -175,7 +175,7 @@ test("a memo that does not decode is refused before anything else; a missing nTa
   const ops = [op(1, ADA, 50, 0, { t: "ada" })];
   assert.deepEqual(classifyNtagDeposit(({ ...dep(), tag: null }), ops, {}, AGENT_ADDRESS), { action: "refuse", reason: NTAG_BAD_MEMO });
   assert.deepEqual(classifyNtagDeposit(({ ...dep(), tag: null }), null, {}, AGENT_ADDRESS), { action: "refuse", reason: NTAG_BAD_MEMO });
-  // Valid memo, list not loaded: hold (never "unknown nTag", which would be recorded as refused).
+  // Valid memo, list not loaded: hold (never "unknown Lokal tag", which would be recorded as refused).
   assert.deepEqual(classifyNtagDeposit(dep(), null, {}, AGENT_ADDRESS), { action: "hold" });
   // Refusals that need no list still happen without it.
   assert.equal(classifyNtagDeposit(dep({ units: 1n }), null, {}, AGENT_ADDRESS).action, "refuse");

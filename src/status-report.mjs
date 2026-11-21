@@ -47,8 +47,8 @@ export function reasonCode(message) {
   if (/self-payment/i.test(m)) return "self_payment";
   if (/per-wallet cap/i.test(m)) return "over_wallet_cap";
   if (/per-payout cap/i.test(m)) return "over_payment_cap";
-  if (/unknown nTag|nTag claim not found/i.test(m)) return "unknown_tag";
-  if (/nTag claim .* does not check out/i.test(m)) return "claim_invalid";
+  if (/unknown (?:nTag|Lokal tag)|(?:nTag|Lokal tag) claim not found/i.test(m)) return "unknown_tag"; // nTag: records written before the rename
+  if (/(?:nTag|Lokal tag) claim .* does not check out/i.test(m)) return "claim_invalid";
   if (/Registration .* does not check out/i.test(m)) return "registration_invalid";
   if (/memo/i.test(m)) return "bad_memo";
   if (/token not accepted/i.test(m)) return "token_not_accepted";

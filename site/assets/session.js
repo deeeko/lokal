@@ -261,7 +261,7 @@ export function avatar(address, cls = "") {
 }
 
 let chipBusy = false;
-let lookupNow = null; // set by initUserChip: looks up the signed-in wallet's nTag right away
+let lookupNow = null; // set by initUserChip: looks up the signed-in wallet's Lokal tag right away
 async function chipSignIn(btn) {
   const eth = injectedWallet();
   if (!eth) { location.href = "account.html"; return; } // the account page explains how to open it in a wallet
@@ -270,7 +270,7 @@ async function chipSignIn(btn) {
   btn?.setAttribute("aria-busy", "true");
   try {
     await signIn(eth);
-    toast("Signed in"); // stay on this page; the chip menu offers the account (or "Claim your nTag")
+    toast("Signed in"); // stay on this page; the chip menu offers the account (or "Claim your Lokal tag")
     lookupNow?.();
   } catch (e) {
     toast(e?.code === "NO_WALLET" || e?.plain ? e.message : explainWalletError(e));
@@ -297,11 +297,11 @@ const BODY_FACE = "font-family:var(--sans);font-style:normal;font-weight:600;fon
 /** info: undefined (still looking up), { tag: null } or { tag, name }. */
 function userMenu(id, s, info) {
   const tag = info?.tag ?? null;
-  const who = tag ? el("b", {}, "@" + tag) : el("b", { style: BODY_FACE }, info === undefined ? "Signed in" : "No nTag yet");
+  const who = tag ? el("b", {}, "@" + tag) : el("b", { style: BODY_FACE }, info === undefined ? "Signed in" : "No Lokal tag yet");
   const items = [
     el("div", { class: "np-menu-head" }, avatar(s.address, "lg"),
       el("div", { class: "np-menu-who" }, who, el("span", { class: "mono", title: s.address }, short(s.address)))),
-    el("a", { class: "np-menu-item", href: "account.html" }, icon("user"), tag || info === undefined ? "Your account" : "Claim your nTag"),
+    el("a", { class: "np-menu-item", href: "account.html" }, icon("user"), tag || info === undefined ? "Your account" : "Claim your Lokal tag"),
     el("button", { class: "np-menu-item", type: "button", dataset: { copy: s.address, copyLabel: "Address copied" } }, icon("copy"), "Copy wallet address"),
   ];
   const out = el("button", { class: "np-menu-item", type: "button" }, icon("logout"), "Sign out");
@@ -338,7 +338,7 @@ function renderSidebarChip(slot, s, info) {
     avatar(s.address),
     el("span", { class: "sb-user-text sb-label" },
       el("b", { class: tag ? "np-tagname" : "mono" }, label),
-      el("span", {}, info === undefined ? "Signed in" : tag ? (info.name ? el("bdi", {}, info.name) : "Signed in") : "Claim your nTag")),
+      el("span", {}, info === undefined ? "Signed in" : tag ? (info.name ? el("bdi", {}, info.name) : "Signed in") : "Claim your Lokal tag")),
     icon("updown", "i sb-user-more sb-label"));
   const menu = userMenu("sb-user-menu", s, info);
   wireMenu(trigger, menu);

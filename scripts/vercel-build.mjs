@@ -12,7 +12,7 @@ run("node scripts/fetch-rate.mjs site/rate.json"); // static fallback behind the
 // The site never ships the build spec / harness files.
 fs.rmSync("site/_spec", { recursive: true, force: true });
 
-// 404.html uses absolute URLs for GitHub Pages' /celo-naira-payout-agent/ prefix; on Vercel the site is at the root.
+// 404.html uses absolute URLs for GitHub Pages' /lokal/ prefix; on Vercel the site is at the root.
 const f = "site/404.html";
-fs.writeFileSync(f, fs.readFileSync(f, "utf8").replaceAll("/celo-naira-payout-agent/", "/"));
+fs.writeFileSync(f, fs.readFileSync(f, "utf8").replaceAll("/lokal/", "/"));
 console.log("\nVercel build ready: tests and site check passed.");

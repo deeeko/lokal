@@ -37,7 +37,7 @@ export const SEL = {
   readAllFeedback: "0xd9d84224", // readAllFeedback(uint256,address[],string,string,bool) -> (address[],uint64[],int128[],uint8[],string[],string[],bool[])
   transfer: "0xa9059cbb",
 };
-export const REPO = "https://github.com/deeeko/celo-naira-payout-agent";
+export const REPO = "https://github.com/deeeko/lokal";
 export const celoscanTx = (h) => `https://celoscan.io/tx/${h}`;
 export const celoscanAddr = (a) => `https://celoscan.io/address/${a}`;
 const MARKER = "80218021802180218021802180218021"; // ERC-8021 suffix marker
@@ -322,8 +322,8 @@ export const RELEASE_LOCK_DAYS = 30;
 export const NTAG_RESERVED = new Set([
   "agent", "admin", "administrator", "root", "system", "support", "help", "official", "team", "staff", "mod", "moderator",
   "security", "celo", "minipay", "valora", "opera", "textile", "naira", "nairapayout", "payout", "payouts", "ntag", "ntags",
-  "cngn", "usdt", "usdc", "tether", "cusd", "ceur", "wallet", "bank", "cbn", "null", "undefined", "anonymous", "everyone",
-  "me", "you", "test", "demo", "api", "www", "app", "pay", "send", "receive",
+  "lokal", "lokalpay", "cngn", "usdt", "usdc", "tether", "cusd", "ceur", "wallet", "bank", "cbn", "null", "undefined",
+  "anonymous", "everyone", "me", "you", "test", "demo", "api", "www", "app", "pay", "send", "receive",
 ]);
 const NTAG_RESERVED_ERR = "this tag is reserved";
 const NTAG_LOCK_SEC = RELEASE_LOCK_DAYS * 86400;
@@ -353,7 +353,7 @@ export function ntagNameError(n) {
 }
 /** Validates a decoded nTag op body: claim {t[,n]} or release {t:""}. Error string or null. */
 export function ntagOpError(op) {
-  if (!op || typeof op !== "object" || Array.isArray(op)) return "not an nTag op";
+  if (!op || typeof op !== "object" || Array.isArray(op)) return "not a Lokal tag op";
   const keys = Object.keys(op);
   if (keys.some((k) => k !== "t" && k !== "n")) return "unexpected field";
   if (typeof op.t !== "string") return "invalid tag";
@@ -502,7 +502,7 @@ export async function loadNtagOps(maxPages = 200, opts = {}) {
       next = d.next_page_params ?? null;
       if (!next) return ops.sort((x, y) => x.block - y.block || x.position - y.position);
     }
-    throw new Error("partial nTag list");
+    throw new Error("partial Lokal tag list");
   })();
   ntagCache = { promise };
   try {

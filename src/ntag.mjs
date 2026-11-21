@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// ntag: send money to an nTag (@ada) from your own terminal, with your own wallet.
+// lokal (also installed as ntag, its name before the rename): send money to a Lokal tag (@ada) from your own terminal,
+// with your own wallet.
 //
-//   node src/ntag.mjs <command>      npm run ntag -- <command>      ntag <command>   (after `npm link`)
+//   node src/ntag.mjs <command>      npm run lokal -- <command>      lokal <command>   (after `npm link`; `ntag` works too)
 //
 // Paying @ada is an ordinary USD₮ (or cNGN) transfer to the agent with "NTP:ada" appended to the calldata (see
 // site/_spec/NTAGS.md). The agent then pays @ada's wallet in naira (or dollars). This tool uses YOUR wallet only:
@@ -51,8 +52,8 @@ const markLegacyNoticeShown = () => fs.writeFileSync(LEGACY_NOTICE_FILE, new Dat
 export function legacyWalletNotice({ env = process.env, exists = fs.existsSync, markShown = markLegacyNoticeShown } = {}) {
   if (!usesLegacyWallet(env, exists) || exists(LEGACY_NOTICE_FILE)) return null;
   try { markShown(); } catch { /* shown again next time */ }
-  return `Naira Payout is now Lokal. Your wallet stays where it was, ${LEGACY_WALLET_FILE}, and ntag keeps using it there. `
-    + `New wallets go to ${DEFAULT_WALLET_FILE}. To move yours, close ntag and move the file there (keep a backup); nothing else changes.`;
+  return `Naira Payout is now Lokal. Your wallet stays where it was, ${LEGACY_WALLET_FILE}, and lokal keeps using it there. `
+    + `New wallets go to ${DEFAULT_WALLET_FILE}. To move yours, close lokal and move the file there (keep a backup); nothing else changes.`;
 }
 
 const USDT = TOKENS.USDT;
@@ -117,7 +118,7 @@ export function parseArgs(argv) {
       continue;
     }
     // "-5" is never an amount here; any other dash-word is an unknown option. A lone "@" tag or number is positional.
-    if (/^--?[a-z]/i.test(a)) throw new UsageError(`Unknown option ${a}. Run "ntag help" for the list.`);
+    if (/^--?[a-z]/i.test(a)) throw new UsageError(`Unknown option ${a}. Run "lokal help" for the list.`);
     pos.push(a);
   }
   if (flags.dollars && flags.naira) throw new UsageError("Pick one: --dollars or --naira (the default).");
@@ -129,10 +130,10 @@ export function parseArgs(argv) {
 
 /** "@Ada" -> "ada". Throws UsageError with the exact rule broken. */
 export function parseTag(input) {
-  if (input == null || String(input).trim() === "") throw new UsageError("Which nTag? For example: @ada");
+  if (input == null || String(input).trim() === "") throw new UsageError("Which Lokal tag? For example: ada (in PowerShell leave out the @, or write '@ada' in quotes)");
   const t = normalizeNtag(input);
   const err = ntagError(t);
-  if (err) throw new UsageError(`@${t || String(input).trim()} is not a valid nTag: ${err}.`);
+  if (err) throw new UsageError(`@${t || String(input).trim()} is not a valid Lokal tag: ${err}.`);
   return t;
 }
 
@@ -308,14 +309,14 @@ export function encryptKey(privateKey, password, { n = scryptN() } = {}) {
 /** Checks the keystore's shape (not the password). Throws CliError for plaintext or damaged files. */
 export function assertKeystore(ks, file = "the wallet file") {
   if (ks && typeof ks === "object" && "privateKey" in ks) {
-    throw new CliError(`${file} holds an unencrypted key, which ntag no longer accepts. Move it somewhere safe, then run "ntag wallet import" to store the key encrypted with a send password.`);
+    throw new CliError(`${file} holds an unencrypted key, which lokal no longer accepts. Move it somewhere safe, then run "lokal wallet import" to store the key encrypted with a send password.`);
   }
   const cr = ks?.crypto, kp = cr?.kdfparams;
   const hex = (s, len) => typeof s === "string" && /^[0-9a-f]+$/i.test(s) && (len == null || s.length === len);
   const good = ks?.version === 3 && isAddress(String(ks.address ?? "")) && cr?.cipher === "aes-256-gcm" && cr?.kdf === "scrypt"
     && hex(cr.ciphertext, 64) && hex(cr.cipherparams?.iv, 24) && hex(cr.mac, 32) && hex(kp?.salt, 64) && kp.dklen === 32
     && Number.isInteger(kp.n) && kp.n >= 2 && kp.n <= 2 ** 20 && (kp.n & (kp.n - 1)) === 0 && kp.r === 8 && kp.p === 1;
-  if (!good) throw new CliError(`${file} is damaged or not an ntag wallet. Not using it.`);
+  if (!good) throw new CliError(`${file} is damaged or not an lokal wallet. Not using it.`);
   return ks;
 }
 
@@ -341,7 +342,7 @@ const WEAK = new Set([
   "password", "password1", "password12", "password123", "passw0rd", "p@ssw0rd", "p@ssword", "12345678", "123456789", "1234567890",
   "87654321", "11111111", "00000000", "qwerty12", "qwerty123", "qwertyuiop", "asdfghjk", "asdfghjkl", "zxcvbnm1", "iloveyou",
   "abcdefgh", "abc12345", "abcd1234", "letmein1", "letmein123", "welcome1", "welcome123", "admin123", "changeme", "trustno1",
-  "football", "sunshine", "princess", "naira123", "ntag1234", "celo1234", "wallet123", "mywallet", "secret12", "monkey123",
+  "football", "sunshine", "princess", "naira123", "ntag1234", "lokal123", "lokal1234", "celo1234", "wallet123", "mywallet", "secret12", "monkey123",
 ]);
 /** Why a send password is too weak, or null. `tag` / `address` are refused as passwords too. */
 export function passwordProblem(pw, { tag, address } = {}) {
@@ -354,7 +355,7 @@ export function passwordProblem(pw, { tag, address } = {}) {
   const digits = "01234567890", rev = "09876543210", abc = "abcdefghijklmnopqrstuvwxyz";
   if (digits.includes(l) || rev.includes(l) || abc.includes(l)) return "don't use a simple sequence";
   const t = tag ? normalizeNtag(tag) : "";
-  if (t && (l === t || l === `@${t}` || l.replace(/[^a-z0-9]/g, "") === t.replace(/_/g, ""))) return "don't use your nTag as your password";
+  if (t && (l === t || l === `@${t}` || l.replace(/[^a-z0-9]/g, "") === t.replace(/_/g, ""))) return "don't use your Lokal tag as your password";
   if (address && l.replace(/^0x/, "") === String(address).toLowerCase().replace(/^0x/, "")) return "don't use your wallet address";
   return null;
 }
@@ -395,10 +396,10 @@ const samePath = (a, b) => {
 /** Aborts if `keyPath` is the agent's key file or `address` is the agent. This tool is for people's own wallets only. */
 export function assertNotAgentKey({ keyPath, address } = {}, { agentKeyFile = KEY_FILE, agents = [AGENT, AGENT_ADDRESS] } = {}) {
   if (keyPath && samePath(keyPath, agentKeyFile)) {
-    throw new CliError("That file is the payout agent's own key. ntag only works with your personal wallet. Set NTAG_WALLET_FILE to a different file.");
+    throw new CliError("That file is the payout agent's own key. lokal only works with your personal wallet. Set NTAG_WALLET_FILE to a different file.");
   }
   if (address && agents.some((a) => String(a).toLowerCase() === String(address).toLowerCase())) {
-    throw new CliError("That key belongs to the payout agent. ntag only works with your personal wallet.");
+    throw new CliError("That key belongs to the payout agent. lokal only works with your personal wallet.");
   }
 }
 
@@ -424,7 +425,7 @@ export function saveWallet(privateKey, password, file = walletFile(), { n } = {}
   assertNotAgentKey({ address });
   const weak = passwordProblem(password, { address });
   if (weak) throw new UsageError(`Send password: ${weak}.`);
-  if (fs.existsSync(file)) throw new CliError(`A wallet already exists at ${file}. ntag never overwrites a wallet. Move that file away first if you really mean to replace it.`);
+  if (fs.existsSync(file)) throw new CliError(`A wallet already exists at ${file}. lokal never overwrites a wallet. Move that file away first if you really mean to replace it.`);
   const ks = encryptKey(key, password, n ? { n } : {});
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   fs.writeFileSync(file, JSON.stringify(ks, null, 2) + "\n", { mode: 0o600, flag: "wx" }); // "wx": fails if the file appeared meanwhile
@@ -450,7 +451,7 @@ export function changePassword(file, oldPassword, newPassword, { n, tag } = {}) 
 /** Reads and checks the (encrypted) wallet file. Refuses the agent's key path before reading anything. */
 export function readKeystore(file = walletFile()) {
   assertNotAgentKey({ keyPath: file });
-  if (!fs.existsSync(file)) throw new CliError(`No wallet yet. Create one with "ntag wallet new" or bring yours with "ntag wallet import".`);
+  if (!fs.existsSync(file)) throw new CliError(`No wallet yet. Create one with "lokal wallet new" or bring yours with "lokal wallet import".`);
   let j;
   try { j = JSON.parse(fs.readFileSync(file, "utf8")); } catch { throw new CliError(`The wallet file ${file} is damaged (not valid JSON).`); }
   assertKeystore(j, file);
@@ -641,7 +642,7 @@ async function discoverOps() {
     opsCache = opsCache ? await refreshNtagOpsCache(opsCache, { agent: AGENT }) : await loadNtagOpsCache({ agent: AGENT });
     return opsCache.ops;
   } catch (e) {
-    throw new CliError(`Could not load the nTag list from Blockscout (${e.message}). Check your connection and try again.`);
+    throw new CliError(`Could not load the Lokal tag list from Blockscout (${e.message}). Check your connection and try again.`);
   }
 }
 
@@ -871,27 +872,29 @@ const ok = (s) => out(`${c.green("✓")} ${s}`);
 const warn = (s) => out(`${c.yellow("!")} ${s}`);
 
 function cmdHelp() {
-  out(`${c.bold("ntag")}: send money to an nTag (@handle) on Celo, from your own wallet. Lokal: pay anyone in their local money.
+  out(`${c.bold("lokal")}: send money to a Lokal tag (@handle) on Celo, from your own wallet. Lokal: pay anyone in their local money.
+(The old name, ntag, runs the same command.)
 
 ${c.bold("Get started")}
-  ntag wallet new                 create your wallet (key encrypted with a send password)
-  ntag wallet import              use a wallet you already have (key typed hidden, or NTAG_PRIVATE_KEY)
-  ntag wallet                     address, CELO / USD₮ / cNGN balances and your nTag
+  lokal wallet new                  create your wallet (key encrypted with a send password)
+  lokal wallet import               use a wallet you already have (key typed hidden, or NTAG_PRIVATE_KEY)
+  lokal wallet                      address, CELO / USD₮ / cNGN balances and your Lokal tag
 
 ${c.bold("Pay someone")}
-  ntag whois @ada                 who owns @ada
-  ntag send @ada 10               you send $10 USD₮, @ada gets naira
-  ntag send @ada 14000 --dollars  you send ₦14,000 cNGN, @ada gets dollars (USD₮)
-  ntag status 0x<txhash>          is that payment confirmed and paid out?
+  lokal whois ada                   who owns the Lokal tag @ada
+  lokal send ada 10                 you send $10 USD₮, @ada gets naira
+  lokal send ada 14000 --dollars    you send ₦14,000 cNGN, @ada gets dollars (USD₮)
+  lokal status 0x<txhash>           is that payment confirmed and paid out?
+  In PowerShell a leading @ is special: write ada, or put it in quotes ('@ada').
 
 ${c.bold("Your own tag")}
-  ntag claim ada --name "Ada Obi" claim @ada for your wallet (public and permanent)
-  ntag release                    give up your tag (locked for you for ${RELEASE_LOCK_DAYS} days)
+  lokal claim ada --name "Ada Obi"  claim @ada for your wallet (public and permanent)
+  lokal release                     give up your tag (locked for you for ${RELEASE_LOCK_DAYS} days)
 
 ${c.bold("Send password")}
   Your key is stored encrypted. send, claim and release ask for your send password after you confirm,
   before anything is signed. 3 tries per command; 5 wrong in 10 minutes locks the wallet for 5 minutes.
-  ntag wallet password            change it (asks for the old one, then the new one twice)
+  lokal wallet password             change it (asks for the old one, then the new one twice)
   There is no recovery: if you forget it, re-import your own key backup with a new password.
 
 ${c.bold("Options")}
@@ -903,14 +906,14 @@ ${c.bold("Options")}
 
 ${c.bold("Limits")}  ${LIMITS_TEXT}.
   USD₮: $1.00 to $${CAP_USD.toFixed(2)} per payment. cNGN: worth at least $1, and ${CNGN_LIMIT_TEXT}.
-  At most 2 decimals. "ntag whois @ada" and "ntag send" show how much more @ada can receive today.
+  At most 2 decimals. "lokal whois ada" and "lokal send" show how much more @ada can receive today.
 ${c.bold("Gas")}     every send needs a little CELO in your wallet for the network fee.
 
 ${c.bold("PowerShell examples")}
-  PS> npm run ntag -- send @ada 10 --wait
-  PS> node src/ntag.mjs send @ada 5.50 --dry-run
-  PS> node src/ntag.mjs wallet import          # paste the key at the hidden prompt, then pick a send password
-  PS> $env:NTAG_WALLET_FILE = "D:\\keys\\ntag.json"; ntag wallet
+  PS> lokal send ada 10 --wait
+  PS> npm run lokal -- send ada 5.50 --dry-run   # from a checkout, without npm link
+  PS> node src/ntag.mjs wallet import            # paste the key at the hidden prompt, then pick a send password
+  PS> $env:NTAG_WALLET_FILE = "D:\\keys\\lokal.json"; lokal wallet
 
 ${c.bold("Settings")}  NTAG_WALLET_FILE (default ${DEFAULT_WALLET_FILE}; a wallet made before the rename,
   in ${LEGACY_WALLET_FILE}, keeps being used there), CELO_RPC_URL (default Forno).
@@ -924,8 +927,8 @@ async function cmdWallet(args, flags) {
   if (sub === "new") return walletNew();
   if (sub === "import") return walletImport();
   if (sub === "password") return walletPassword();
-  if (sub === "export") throw new UsageError("ntag does not export keys. Keep your own backup of the key you imported.");
-  if (sub && sub !== "show") throw new UsageError(`Unknown wallet command "${args[0]}". Use: ntag wallet, ntag wallet new, ntag wallet import, ntag wallet password.`);
+  if (sub === "export") throw new UsageError("lokal does not export keys. Keep your own backup of the key you imported.");
+  if (sub && sub !== "show") throw new UsageError(`Unknown wallet command "${args[0]}". Use: lokal wallet, lokal wallet new, lokal wallet import, lokal wallet password.`);
   return walletShow(flags);
 }
 
@@ -934,19 +937,19 @@ const NO_RECOVERY = "There is no password recovery. If you forget the send passw
 async function walletNew() {
   const file = walletFile();
   assertNotAgentKey({ keyPath: file });
-  if (fs.existsSync(file)) throw new CliError(`You already have a wallet at ${file}. ntag never overwrites a wallet.`);
+  if (fs.existsSync(file)) throw new CliError(`You already have a wallet at ${file}. lokal never overwrites a wallet.`);
   const password = await chooseNewPassword();
   const address = saveWallet(generatePrivateKey(), password, file);
   ok(`New wallet created: ${c.bold(address)}`);
   out(`  Saved, encrypted with your send password, to ${file}`);
-  warn(`Back up that file now (a USB stick or password manager) and remember the password. You need BOTH to spend. ${NO_RECOVERY} ntag never shows or exports the key.`);
-  out(`  Next: send a little CELO (for fees) and some USD₮ to ${address}, then run "ntag wallet".`);
+  warn(`Back up that file now (a USB stick or password manager) and remember the password. You need BOTH to spend. ${NO_RECOVERY} lokal never shows or exports the key.`);
+  out(`  Next: send a little CELO (for fees) and some USD₮ to ${address}, then run "lokal wallet".`);
 }
 
 async function walletImport() {
   const file = walletFile();
   assertNotAgentKey({ keyPath: file });
-  if (fs.existsSync(file)) throw new CliError(`You already have a wallet at ${file}. ntag never overwrites a wallet.`);
+  if (fs.existsSync(file)) throw new CliError(`You already have a wallet at ${file}. lokal never overwrites a wallet.`);
   let raw = process.env.NTAG_PRIVATE_KEY;
   if (raw) out("Using the key from NTAG_PRIVATE_KEY.");
   else raw = await readLine("Paste your private key (hidden), then press Enter: ", { hidden: true });
@@ -996,24 +999,24 @@ async function walletShow() {
     ["CELO", fmtCelo(celoBal)],
     ["USD₮", fmtUsd(usdt)],
     ["cNGN", fmtNgn(cngn)],
-    ["nTag", tag ? `@${tag}` : tag === null ? `none yet (ntag claim <name>)` : "could not load"],
+    ["Lokal tag", tag ? `@${tag}` : tag === null ? `none yet (lokal claim <name>)` : "could not load"],
   ], { color: useColor() }));
   if (celoBal === 0n) warn("You have no CELO, so you can't pay network fees yet. Add a little CELO first.");
 }
 
 async function cmdWhois(args) {
-  if (!args[0]) throw new UsageError("Usage: ntag whois @ada");
+  if (!args[0]) throw new UsageError("Usage: lokal whois ada");
   const pub = makePublic();
   if (isAddress(args[0])) {
     const tag = ntagOf(resolveNtags(await discoverOps()), args[0]);
-    out(tag ? `${getAddress(args[0])} is @${tag}` : `${getAddress(args[0])} has no nTag.`);
+    out(tag ? `${getAddress(args[0])} is @${tag}` : `${getAddress(args[0])} has no Lokal tag.`);
     return;
   }
   const tag = parseTag(args[0]);
   const { entry, state } = await resolveVerified(pub, tag);
   if (!entry) {
     const a = ntagAvailability(state, tag, null);
-    const why = { reserved: "It is reserved and can't be claimed.", locked: "It was released recently and is locked for its previous owner for now.", free: `Anyone can claim it: ntag claim ${tag}` }[a] ?? "";
+    const why = { reserved: "It is reserved and can't be claimed.", locked: "It was released recently and is locked for its previous owner for now.", free: `Anyone can claim it: lokal claim ${tag}` }[a] ?? "";
     out(`@${tag} is not claimed. ${why}`.trim());
     process.exitCode = 1;
     return;
@@ -1031,8 +1034,8 @@ async function cmdWhois(args) {
 }
 
 async function cmdSend(args, flags) {
-  if (args.length < 2) throw new UsageError("Usage: ntag send @ada 10   (add --dollars to pay in cNGN)");
-  if (args.length > 2) throw new UsageError(`Too many values: ${args.slice(2).join(" ")}. Usage: ntag send @ada 10`);
+  if (args.length < 2) throw new UsageError("Usage: lokal send ada 10   (add --dollars to pay in cNGN)");
+  if (args.length > 2) throw new UsageError(`Too many values: ${args.slice(2).join(" ")}. Usage: lokal send ada 10`);
   const tag = parseTag(args[0]);
   const token = flags.dollars ? "CNGN" : "USDT";
   const units = parseAmountUnits(args[1]);
@@ -1104,12 +1107,12 @@ async function cmdSend(args, flags) {
   out(`Sent. Waiting for confirmation… ${c.dim(hash)}`);
   let rc;
   try { rc = await pub.waitForTransactionReceipt({ hash, timeout: 180_000 }); } catch (e) {
-    throw new CliError(`Sent, but not confirmed yet (${explainError(e)}). Check it later with: ntag status ${hash}`);
+    throw new CliError(`Sent, but not confirmed yet (${explainError(e)}). Check it later with: lokal status ${hash}`);
   }
   if (rc.status !== "success") throw new CliError(`The transfer failed onchain and no tokens moved. See ${celoscanTx(hash)}`);
   ok(`Confirmed in block ${rc.blockNumber}. ${celoscanTx(hash)}`);
   if (!flags.wait) {
-    out(`  @${tag} is paid when the agent's autopilot runs. Follow it with: ntag status ${hash}`);
+    out(`  @${tag} is paid when the agent's autopilot runs. Follow it with: lokal status ${hash}`);
     return;
   }
   const dep = depositFromReceipt(rc, tok.address) ?? { hash, block: Number(rc.blockNumber), logIndex: 0, units, payer: account.address };
@@ -1168,11 +1171,11 @@ async function waitForPayout(pub, { owner, token, tag, dep, claimBlock, rate }) 
   if (process.stdout.isTTY) process.stdout.write("\n");
   if (last?.status === "maybe") { warn(`A payout to @${tag} was sent at ${new Date(last.payout.time * 1000).toISOString()}; it may be for another payment. ${celoscanTx(last.payout.hash)}`); return; }
   if (last?.status === "ineligible") { warn(`The agent does not pay this deposit automatically: ${last.reason}.`); return; }
-  warn(`No payout seen yet. Your deposit is confirmed; the agent pays when autopilot next runs. Check later with ntag status ${dep.hash}.`);
+  warn(`No payout seen yet. Your deposit is confirmed; the agent pays when autopilot next runs. Check later with lokal status ${dep.hash}.`);
 }
 
 async function cmdClaim(args, flags) {
-  if (!args[0]) throw new UsageError('Usage: ntag claim ada [--name "Ada Obi"]');
+  if (!args[0]) throw new UsageError('Usage: lokal claim ada [--name "Ada Obi"]');
   if (args.length > 1) throw new UsageError(`Unexpected "${args.slice(1).join(" ")}". Put a display name in quotes after --name.`);
   const tag = parseTag(args[0]);
   if (flags.name != null) {
@@ -1210,30 +1213,30 @@ async function cmdClaim(args, flags) {
       const now = resolveNtags(st.ops);
       if (ntagOf(now, account.address) === tag) {
         const e = ownerOf(now, tag);
-        ok(`@${tag} is yours${e?.name ? ` (${e.name})` : ""}. People can now pay you with: ntag send @${tag} 10`);
+        ok(`@${tag} is yours${e?.name ? ` (${e.name})` : ""}. People can now pay you with: lokal send ${tag} 10`);
         return;
       }
       const s = st.status;
       if (s === "taken") throw new CliError(`Someone claimed @${tag} a moment before you, so it is not yours. Your transaction only cost a network fee. Try another tag.`);
       if (s === "locked") throw new CliError(`@${tag} is locked for its previous owner, so the claim did not count.`);
-      throw new CliError(`The claim was recorded but did not take effect (${s ?? "unknown"}). Run "ntag whois @${tag}".`);
+      throw new CliError(`The claim was recorded but did not take effect (${s ?? "unknown"}). Run "lokal whois @${tag}".`);
     },
   });
 }
 
 async function cmdRelease(args, flags) {
-  if (args.length) throw new UsageError("Usage: ntag release   (releases your current tag)");
+  if (args.length) throw new UsageError("Usage: lokal release   (releases your current tag)");
   const account = loadWallet();
   const pub = makePublic();
   const state = resolveNtags(await discoverOps());
   const tag = ntagOf(state, account.address);
-  if (!tag) { out("This wallet has no nTag, so there is nothing to release."); return; }
+  if (!tag) { out("This wallet has no Lokal tag, so there is nothing to release."); return; }
   out(`Your tag is @${tag}.`);
   await sendOp(pub, account, encodeNtagRelease(), flags, {
     notice: `Releasing @${tag} stops payments to it. It stays locked for you for ${RELEASE_LOCK_DAYS} days, then anyone can claim it. The release is public and permanent onchain.`,
     confirmWord: tag,
     after: (st) => {
-      if (ntagOf(resolveNtags(st.ops), account.address)) throw new CliError(`The release was recorded but you still hold a tag. Run "ntag wallet".`);
+      if (ntagOf(resolveNtags(st.ops), account.address)) throw new CliError(`The release was recorded but you still hold a tag. Run "lokal wallet".`);
       ok(`@${tag} released.`);
     },
   });
@@ -1259,7 +1262,7 @@ async function sendOp(pub, account, data, flags, { notice, confirmWord, after })
   }
   const hash = await signAndSend(account.file, tx);
   out(`Sent. Waiting for confirmation… ${c.dim(hash)}`);
-  const rc = await pub.waitForTransactionReceipt({ hash, timeout: 180_000 }).catch((e) => { throw new CliError(`Not confirmed yet (${explainError(e)}). Check later: ntag status ${hash}`); });
+  const rc = await pub.waitForTransactionReceipt({ hash, timeout: 180_000 }).catch((e) => { throw new CliError(`Not confirmed yet (${explainError(e)}). Check later: lokal status ${hash}`); });
   if (rc.status !== "success") throw new CliError(`The transaction failed onchain. ${celoscanTx(hash)}`);
   ok(`Confirmed. ${celoscanTx(hash)}`);
   out(c.dim("Waiting for the explorer to index it…"));
@@ -1274,12 +1277,12 @@ async function sendOp(pub, account, data, flags, { notice, confirmWord, after })
     } catch { /* retry */ }
     await sleep(8_000);
   }
-  warn(`Confirmed onchain, but the explorer has not shown it yet. Check in a minute with "ntag wallet".`);
+  warn(`Confirmed onchain, but the explorer has not shown it yet. Check in a minute with "lokal wallet".`);
 }
 
 async function cmdStatus(args) {
   const hash = args[0];
-  if (!/^0x[0-9a-fA-F]{64}$/.test(String(hash ?? ""))) throw new UsageError("Usage: ntag status 0x<64 hex transaction hash>");
+  if (!/^0x[0-9a-fA-F]{64}$/.test(String(hash ?? ""))) throw new UsageError("Usage: lokal status 0x<64 hex transaction hash>");
   const pub = makePublic();
   let tx;
   try { tx = await pub.getTransaction({ hash }); } catch (e) {
@@ -1292,7 +1295,7 @@ async function cmdStatus(args) {
 
   if (to === AGENT.toLowerCase() && decodeNtagOp(tx.input)) {
     const op = decodeNtagOp(tx.input);
-    out(formatBox("nTag " + (op?.t ? "claim" : "release"), [["Tag", op?.t ? `@${op.t}` : "(release)"], ["From", tx.from], ["Status", confirmed], ["Link", celoscanTx(hash)]], { color: useColor() }));
+    out(formatBox("Lokal tag " + (op?.t ? "claim" : "release"), [["Tag", op?.t ? `@${op.t}` : "(release)"], ["From", tx.from], ["Status", confirmed], ["Link", celoscanTx(hash)]], { color: useColor() }));
     if (rc?.status === "success") {
       const ops = await discoverOps();
       const found = ops.find((o) => o.hash.toLowerCase() === hash.toLowerCase());
@@ -1305,7 +1308,7 @@ async function cmdStatus(args) {
   const tr = parseTransferCalldata(tx.input);
   const token = to === USDT.address.toLowerCase() ? "USDT" : to === CNGN.address.toLowerCase() ? "CNGN" : null;
   if (!tag || !tr || !token || tr.to.toLowerCase() !== AGENT.toLowerCase()) {
-    out("This is not an nTag payment (no tag memo on a USD₮ / cNGN transfer to the agent).");
+    out("This is not a Lokal tag payment (no tag memo on a USD₮ / cNGN transfer to the agent).");
     process.exitCode = 1;
     return;
   }
@@ -1326,7 +1329,7 @@ async function cmdStatus(args) {
     try { r = await checkNtagPayout(pub, { tag, owner, token, dep, claimBlock: Number(e.block), rate: await loadRate() }); } catch { /* shown as unknown */ }
     rows.push(...(r ? payoutRows(tag, r, token === "CNGN" ? "USDT" : "CNGN") : [["Payout", c.yellow("could not check right now")]]));
   }
-  out(formatBox("nTag payment", rows, { color: useColor() }));
+  out(formatBox("Lokal tag payment", rows, { color: useColor() }));
 }
 
 // ---------- main ----------
@@ -1339,7 +1342,7 @@ export async function main(argv = process.argv.slice(2)) {
     const note = process.env.NODE_TEST_CONTEXT ? null : legacyWalletNotice(); // tests never touch a real home folder
     if (note) console.error(`${c.yellow("!")} ${note}`);
     const run = { wallet: cmdWallet, whois: cmdWhois, send: cmdSend, pay: cmdSend, claim: cmdClaim, release: cmdRelease, status: cmdStatus }[cmd];
-    if (!run) throw new UsageError(`Unknown command "${cmd}". Run "ntag help".`);
+    if (!run) throw new UsageError(`Unknown command "${cmd}". Run "lokal help".`);
     await run(args, flags);
     return process.exitCode ?? 0;
   } catch (e) {

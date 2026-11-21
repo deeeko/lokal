@@ -27,7 +27,7 @@
     },
     {
       "source": "/(logo.svg|logo.png|favicon.svg|apple-touch-icon.png|og.png)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }]
     },
     {
       "source": "/install.ps1",

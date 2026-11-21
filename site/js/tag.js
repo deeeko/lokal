@@ -53,7 +53,7 @@ function readTag() {
 function finderCard(heading, value) {
   return el("section", { class: "card" }, el("div", { class: "card-b stack" },
     heading ? el("h2", { class: "section-title", style: "font-size:20px" }, heading) : null,
-    ntagFinder({ id: "tag-find", label: "Find an nTag", value, address: () => getSession()?.address })));
+    ntagFinder({ id: "tag-find", label: "Find a Lokal tag", value, address: () => getSession()?.address })));
 }
 
 // ---------- page ----------
@@ -70,17 +70,17 @@ async function render() {
   const tag = readTag();
   shownTag = tag;
   if (!tag) {
-    document.title = "Pay by nTag · Lokal";
-    title.replaceChildren("Find an ", el("em", {}, "nTag"));
-    lead.textContent = "An nTag is a short name tied to a Celo wallet. Pay the tag and the agent pays that wallet in naira or dollars.";
+    document.title = "Pay by Lokal tag · Lokal";
+    title.replaceChildren("Find a ", el("em", {}, "Lokal tag"));
+    lead.textContent = "A Lokal tag is a short name tied to a Celo wallet. Pay the tag and the agent pays that wallet in naira or dollars.";
     root.replaceChildren(finderCard(null));
     return;
   }
   const err = ntagError(tag);
   if (err && !/reserved/.test(err)) {
-    title.replaceChildren("Pay by ", el("em", {}, "nTag"));
+    title.replaceChildren("Pay by ", el("em", {}, "Lokal tag"));
     root.replaceChildren(el("div", { class: "stack" },
-      alertBox("warn", "alert", el("p", {}, el("b", {}, `@${tag} isn't a valid nTag. `), `It ${err.replace(/^use /, "should use ").replace(/^must /, "must ").replace(/^can't /, "can't ")}. Check the link with whoever sent it.`)),
+      alertBox("warn", "alert", el("p", {}, el("b", {}, `@${tag} isn't a valid Lokal tag. `), `It ${err.replace(/^use /, "should use ").replace(/^must /, "must ").replace(/^can't /, "can't ")}. Check the link with whoever sent it.`)),
       finderCard("Look someone up", tag)));
     return;
   }
@@ -133,13 +133,13 @@ function renderUnclaimed(tag, state) {
 function renderProfile(tag, entry) {
   if (entry.name) lead.replaceChildren(nameText(entry.name), " gets paid in naira or dollars on Celo. You send USD₮ or cNGN; the agent converts it and pays their wallet.");
   else lead.textContent = "You send USD₮ or cNGN; the agent converts it and pays this tag's wallet in naira or dollars.";
-  const card = ntagCard({ tag, name: entry.name, address: entry.owner, since: entry.since, as: "button", label: `nTag @${tag}. Copy the link to this page` });
+  const card = ntagCard({ tag, name: entry.name, address: entry.owner, since: entry.since, as: "button", label: `Lokal tag @${tag}. Copy the link to this page` });
   card.dataset.copy = ntagUrl(tag);
   card.dataset.copyLabel = "Link copied";
   const details = el("section", { class: "card", "aria-labelledby": "who-h" },
     el("div", { class: "card-h" }, el("h2", { id: "who-h" }, "Who you're paying"), badge("Registered onchain", "neutral")),
     el("div", { class: "card-b" }, el("ul", { class: "kv-list" },
-      el("li", {}, el("span", {}, "nTag"), el("span", { class: "np-tagname", style: "font-size:17px;color:var(--celo)" }, "@" + tag)),
+      el("li", {}, el("span", {}, "Lokal tag"), el("span", { class: "np-tagname", style: "font-size:17px;color:var(--celo)" }, "@" + tag)),
       entry.name ? el("li", {}, el("span", {}, "Name"), el("span", { class: "nt-namecell" }, nameText(entry.name), el("small", { class: "micro muted" }, "Name set by the owner"))) : null,
       el("li", {}, el("span", {}, "Wallet"), el("a", { class: "mono link", href: celoscanAddr(entry.owner), title: entry.owner }, short(entry.owner), " ", icon("ext"))),
       el("li", {}, el("span", {}, "Since"), el("span", {}, dayMonthYear(entry.since))),

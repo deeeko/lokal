@@ -2,7 +2,8 @@
 //
 //   node scripts/brand.mjs a        (or b, or c; see docs/brand/preview.png)
 //
-// 1. copies docs/brand/lokal-mark-<v>.svg to site/logo.svg and docs/brand/lokal-favicon-<v>.svg to site/favicon.svg;
+// 1. copies docs/brand/lokal-mark-<v>.svg to site/logo.svg and docs/brand/lokal-favicon-<v>.svg to site/favicon.svg,
+//    and gives every reference to the brand images a new ?v= (scripts/asset-version.mjs; BRAND_VERSION sets it);
 // 2. renders site/logo.png and docs/assets/logo.png (512 px), site/apple-touch-icon.png (180 px), transparent corners;
 // 3. renders the social card site/og.png (1200 x 630) from the Overview hero, with the site's own CSS and fonts;
 // 4. renders docs/brand/preview.png (every variant at 256, 64 and 32 px, favicons at 32 and 16, on dark and light).
@@ -14,6 +15,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { setAssetVersion } from "./asset-version.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SITE = path.join(ROOT, "site");
@@ -30,6 +32,10 @@ catch { console.error('playwright-core not found. Set PLAYWRIGHT_CORE to a folde
 fs.copyFileSync(path.join(BRAND, `lokal-mark-${variant}.svg`), path.join(SITE, "logo.svg"));
 fs.copyFileSync(path.join(BRAND, `lokal-favicon-${variant}.svg`), path.join(SITE, "favicon.svg"));
 console.log(`Variant ${variant.toUpperCase()}: site/logo.svg and site/favicon.svg updated.`);
+// New images need a new ?v= on every reference, or browsers and the CDN keep showing the old ones (vercel.json caches them).
+const assetVersion = process.env.BRAND_VERSION ?? `lokal-${variant}-${Date.now().toString(36)}`;
+const versioned = setAssetVersion(assetVersion);
+console.log(`Brand images now load as ?v=${assetVersion} (${versioned.length} file(s) updated).`);
 
 // a tiny static server for site/ and docs/brand/ (the CSP on the pages wants http, not file://)
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json" };

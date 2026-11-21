@@ -30,7 +30,7 @@ for (const page of pages) {
     if (/^(https?:|mailto:|tel:|data:|#|ethereum:)/i.test(ref)) continue;
     ref = ref.split("#")[0].split("?")[0];
     if (!ref) continue;
-    if (ref.startsWith("/celo-naira-payout-agent/")) ref = ref.slice("/celo-naira-payout-agent/".length) || "index.html";
+    if (ref.startsWith("/lokal/")) ref = ref.slice("/lokal/".length) || "index.html";
     else if (ref.startsWith("/")) { fail(`${page}: root-absolute link "${m[1]}" will break on GitHub Pages`); continue; }
     if (ref.endsWith("/")) ref += "index.html";
     if (ref === "rate.json") continue; // generated at deploy time
@@ -63,7 +63,7 @@ for (const page of pages) {
     if (!/\sid="sb-user"/.test(html)) fail(`${page}: sidebar is missing the user chip slot (id="sb-user")`);
     if (!/\sid="nav-user"/.test(html)) fail(`${page}: top bar is missing the sign-in button slot (id="nav-user")`);
     const footProduct = (html.match(/<h4>Product<\/h4>\s*<ul>.*?<\/ul>/) || [""])[0];
-    if (!/href="account\.html"/.test(footProduct)) fail(`${page}: footer Product list is missing the nTag page (account.html)`);
+    if (!/href="account\.html"/.test(footProduct)) fail(`${page}: footer Product list is missing the Lokal tag page (account.html)`);
     for (const id of ["user", "logout", "updown", "copy"]) if (!new RegExp(`<symbol id="i-${id}"`).test(html)) fail(`${page}: icon sprite is missing i-${id} (used by the user menu)`);
   }
 
@@ -74,7 +74,7 @@ for (const page of pages) {
 }
 
 // the chrome (sidebar, top bar, footer) is the same markup on every page, 404.html included
-// (404.html uses absolute /celo-naira-payout-agent/ URLs because it is served for any missing path).
+// (404.html uses absolute /lokal/ URLs because it is served for any missing path).
 // Icon sprites may differ, since a page can add its own icons; the anchor check above makes sure every icon used exists.
 const CHROME = {
   sidebar: /<aside class="sidebar"[^]*?<\/aside>/,
@@ -82,7 +82,7 @@ const CHROME = {
   footer: /<footer class="site-footer">[^]*?<\/footer>/,
 };
 const chromeOf = (page) => {
-  const html = fs.readFileSync(path.join(SITE, page), "utf8").replaceAll("/celo-naira-payout-agent/", "");
+  const html = fs.readFileSync(path.join(SITE, page), "utf8").replaceAll("/lokal/", "");
   return Object.fromEntries(Object.entries(CHROME).map(([k, re]) => [k, (html.match(re) || [null])[0]]));
 };
 const refChrome = chromeOf("index.html");

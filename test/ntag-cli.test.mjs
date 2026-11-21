@@ -236,8 +236,8 @@ test("weak passwords are rejected", () => {
   for (const bad of ["", "short", "password", "Password1", "12345678", "87654321", "11111111", "aaaaaaaa", "abcdefgh", "qwerty123", "passw0rd99"]) {
     assert.ok(passwordProblem(bad), `should reject ${JSON.stringify(bad)}`);
   }
-  assert.match(passwordProblem("adaobi_ng", { tag: "adaobi_ng" }), /nTag/);
-  assert.match(passwordProblem("@AdaObi_NG", { tag: "adaobi_ng" }), /nTag/);
+  assert.match(passwordProblem("adaobi_ng", { tag: "adaobi_ng" }), /Lokal tag/);
+  assert.match(passwordProblem("@AdaObi_NG", { tag: "adaobi_ng" }), /Lokal tag/);
   const addr = "0x1111111111111111111111111111111111111111";
   assert.match(passwordProblem(addr, { address: addr }), /address/);
   assert.equal(passwordProblem("correct horse battery", { tag: "ada" }), null);
@@ -376,7 +376,7 @@ test("exit codes: 2 for bad usage, 0 for help (no network)", async () => {
     assert.equal(await main(["wallet", "export"]), 2);
     assert.equal(await main(["help"]), 0);
   } finally { console.error = e; console.log = l; }
-  assert.ok(logs.join("\n").includes("ntag send @ada 10"));
+  assert.ok(logs.join("\n").includes("lokal send ada 10"));
   assert.ok(logs.join("\n").includes("$25 per payment, $25 per person per day, $100 per day overall"));
   assert.ok(errs.every((x) => !/0x[0-9a-f]{64}/i.test(x)));
 });

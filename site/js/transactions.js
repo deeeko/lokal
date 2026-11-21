@@ -295,7 +295,7 @@ async function loadMine(force = false) {
         const tag = tx ? decodeNtagMemo(tx.raw_input) : null;
         rows.push({ hash, time: t.timestamp, kind: "sent", status: ["Success", "ok"], tagged: tx ? isTagged(tx) : null,
           label: tag ? `You paid @${tag} ${fmtToken(sym, v)}` : `You sent ${fmtToken(sym, v)} to the agent`,
-          sub: tag ? "nTag payment" : "Payment link or direct payment" });
+          sub: tag ? "Lokal tag payment" : "Payment link or direct payment" });
       } else if (sameAddr(t.from?.hash, AGENT) && sameAddr(t.to?.hash, s.address)) {
         rows.push({ hash, time: t.timestamp, kind: "payout", status: ["Success", "ok"], tagged: null,
           label: `The agent paid you ${fmtToken(sym, v)}`, sub: "Payout" });
@@ -308,10 +308,10 @@ async function loadMine(force = false) {
       const reg = op ? null : decodeRegistration(t.raw_input);
       if (!op && !reg) continue;
       const label = op
-        ? (op.t === "" ? "You released your nTag" : `You claimed @${op.t}${op.n ? ` (${op.n})` : ""}`)
+        ? (op.t === "" ? "You released your Lokal tag" : `You claimed @${op.t}${op.n ? ` (${op.n})` : ""}`)
         : `You made a payment link for ${reg.a} ${CORRIDORS[reg.d]?.sell === "cNGN" ? "cNGN" : "USD₮"}`;
       rows.push({ hash, time: t.timestamp, kind: op ? "ntag" : "link", status: txStatus(t), tagged: isTagged(t),
-        label, sub: op ? "nTag" : "Get paid", link: reg && t.status === "ok" ? `pay.html#tx=${hash}` : null });
+        label, sub: op ? "Lokal tag" : "Get paid", link: reg && t.status === "ok" ? `pay.html#tx=${hash}` : null });
     }
     rows.sort((a, b) => Date.parse(b.time ?? 0) - Date.parse(a.time ?? 0));
     Object.assign(mine, { rows, more: tt.more || txs.more });
