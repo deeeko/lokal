@@ -53,7 +53,8 @@ test("refunded events: refundTx required and checked, refundNo must match, no pa
   for (const [e, err] of bad) assert.equal(validateEvent(e, NOW).error, err, JSON.stringify(e));
   // a refund goes back in the deposit's own token: any token Lokal knows, but only for refunds
   assert.equal(validateEvent(of("refunded", { token: "IDRX", kind: "deposit", tag: undefined, recipient: undefined }), NOW).error, undefined);
-  assert.equal(validateEvent(of("received", { token: "IDRX" }), NOW).error, "bad token");
+  assert.equal(validateEvent(of("received", { token: "DOGE" }), NOW).error, "bad token");
+  assert.equal(validateEvent(of("received", { token: "IDRX" }), NOW).error, undefined); // contract payments can arrive in a local token
 });
 
 test("merge: every pair of statuses; refunded beats received/failed/refused, nothing beats paid, paid + refunded never merge", () => {
