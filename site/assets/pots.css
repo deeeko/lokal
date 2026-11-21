@@ -1,0 +1,169 @@
+/* =====================================================================
+   Pots: the public pot page (pot.html) and "Your pots" on the dashboard.
+   Builds on styles.css and ntags.css. The signature is the Spray Wall:
+   each spray is a small note, tilted as if it just landed on the floor,
+   that drops in and settles when it arrives (a cross-fade with reduced
+   motion). Mint is live money; yellow stays for the one primary action.
+   ===================================================================== */
+
+/* ---------- the pot page ---------- */
+.pot-head .eyebrow .np-tagname, .pot-head .eyebrow .mono { text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--celo); }
+.pot-head .page-title { overflow-wrap: anywhere; }
+.pot-head .lead .np-tagname { color: var(--text); }
+.pot-layout {
+  display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 22px; align-items: start;
+  grid-template-areas: "sum spray" "wall spray";
+}
+.pot-summary { grid-area: sum; }
+.pot-spray { grid-area: spray; position: sticky; top: 24px; }
+.pot-wall { grid-area: wall; }
+.pot-summary, .pot-spray, .pot-wall { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-raise); }
+.pot-spray .card-h h2 .np-tagname { color: var(--celo); font-size: 18px; }
+
+/* the total, large and light, over a bar that fills as sprays land */
+.pot-meter { display: grid; min-width: 0; }
+.pot-sum { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.pot-total { display: inline-block; transform-origin: left bottom; font-variant-numeric: tabular-nums; }
+.pot-meter.lg .pot-total { font-size: clamp(48px, 6.4vw, 76px); font-weight: 300; line-height: .95; letter-spacing: -0.04em; }
+.pot-meter.lg .pot-cap { font-size: clamp(16px, 1.6vw, 19px); color: var(--text-3); }
+.pot-bar { display: block; height: 10px; margin-top: 18px; border-radius: var(--r-pill); overflow: hidden; background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px var(--line); }
+.pot-bar-fill { display: block; height: 100%; border-radius: inherit; transform-origin: left center; transform: scaleX(0); background: linear-gradient(90deg, var(--green), var(--mint)); transition: transform .9s var(--calm); }
+.pot-meter.sm .pot-total { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+.pot-meter.sm .pot-cap { font-size: var(--fs-small); color: var(--text-3); }
+.pot-meter.sm .pot-bar { height: 6px; margin-top: 8px; }
+.pot-total.bump { animation: pot-bump .7s var(--calm); }
+@keyframes pot-bump { 40% { transform: scale(1.035); color: var(--mint); } }
+
+.pot-stats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.pot-stats li { display: grid; gap: 3px; min-width: 0; padding: 12px 14px; border-radius: var(--r-md); background: rgba(0, 0, 0, .22); border: 1px solid var(--line); }
+.pot-stats b { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.pot-share-f { display: grid; gap: 10px; justify-content: stretch; }
+.pot-share-f .nt-share { width: 100%; }
+
+/* ---------- the Spray Wall ---------- */
+.pot-wall .card-h h2 em { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 1.12em; color: var(--celo); letter-spacing: -0.005em; }
+.pot-live { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-micro); font-weight: 500; color: var(--mint); }
+.pot-live .live-dot { width: 8px; height: 8px; margin: 0 5px 0 3px; }
+.pot-wall-b { position: relative; overflow: hidden; min-height: 150px; }
+.pot-notes { list-style: none; margin: 0; padding: 4px 2px 6px; display: grid; grid-template-columns: repeat(auto-fill, minmax(164px, 1fr)); gap: 16px 12px; }
+.pot-note {
+  position: relative; display: grid; align-content: start; gap: 7px; min-width: 0; min-height: 96px; padding: 14px 16px 12px;
+  border-radius: 12px; border: 1px solid rgba(111, 240, 176, .2);
+  background: linear-gradient(135deg, rgba(111, 240, 176, .14), rgba(0, 81, 47, .24) 58%, rgba(111, 240, 176, .05)), var(--frame);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .06);
+  transform: rotate(var(--tilt, 0deg));
+}
+.pot-note::before { /* the note's printed frame */
+  content: ""; position: absolute; inset: 5px; border-radius: 8px; border: 1px dashed rgba(217, 247, 232, .13); pointer-events: none;
+}
+.pot-note::after { /* a small engraved seal, like the one on a banknote */
+  content: ""; position: absolute; right: 11px; top: 11px; width: 24px; height: 24px; border-radius: 50%;
+  background: repeating-radial-gradient(circle, rgba(217, 247, 232, .18) 0 1px, transparent 1px 3.5px); pointer-events: none;
+}
+.pot-note.pay-cngn { border-color: rgba(0, 168, 98, .38); background: linear-gradient(135deg, rgba(0, 135, 81, .34), rgba(0, 81, 47, .26) 58%, rgba(255, 255, 255, .04)), var(--frame); }
+.pot-note-amt { font-size: 30px; font-weight: 300; line-height: 1.05; letter-spacing: -0.03em; color: var(--text); padding-right: 28px; }
+.pot-note-meta { display: flex; align-items: flex-start; gap: 7px; min-width: 0; font-size: 12.5px; line-height: 1.35; color: var(--text-2); }
+.pot-note-meta .cur-flag { margin-top: 2px; }
+.pot-note-meta > span:last-child { min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.pot-note-time { color: var(--text-3); }
+/* a spray that just landed drops in, settles at its tilt, and glows once */
+.pot-note.is-fresh { animation: pot-land .95s var(--calm) both, pot-glow 2.6s ease-out .2s both; }
+@keyframes pot-land {
+  from { opacity: 0; transform: translateY(-38px) rotate(calc(var(--tilt, 0deg) * -4)) scale(.96); }
+  55% { opacity: 1; }
+  to { opacity: 1; transform: rotate(var(--tilt, 0deg)); }
+}
+@keyframes pot-glow {
+  from { box-shadow: 0 0 0 1px rgba(252, 255, 82, .5), 0 0 28px rgba(252, 255, 82, .22), 0 10px 24px rgba(0, 0, 0, .3); }
+  to { box-shadow: 0 10px 24px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .06); }
+}
+/* the celebration: a handful of small notes flutter down over the wall, then the layer is removed */
+.pot-flutter { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+.pot-flutter span {
+  position: absolute; top: -20px; left: var(--x); width: 18px; height: 10px; border-radius: 2px; opacity: 0;
+  background: linear-gradient(135deg, var(--mint), var(--green));
+  animation: pot-flutter 1.9s var(--calm) var(--d) forwards;
+}
+.pot-flutter span:nth-child(4n) { background: linear-gradient(135deg, var(--celo), #d9dc2a); }
+@keyframes pot-flutter {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(0deg); }
+  15% { opacity: .95; }
+  100% { opacity: 0; transform: translate3d(calc(var(--r) * .8px), 210px, 0) rotate(calc(var(--r) * 6deg)); }
+}
+.pot-empty { padding: 18px 0; }
+
+/* ---------- spraying ---------- */
+.pot-form .segmented .cur-chip { padding: 8px 13px 8px 10px; }
+.money .pot-cur { font: 300 34px/1 var(--sans); color: var(--text-3); margin-right: 2px; }
+.money.sm { border-radius: var(--r-md); padding: 0 14px; }
+.money.sm input { font-size: 24px; padding: 11px 0; }
+.money.sm .pot-cur { font-size: 24px; }
+.pot-quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.pot-quick:empty { display: none; }
+.pot-quick-btn {
+  font: 500 13.5px/1 var(--sans); color: var(--text); padding: 9px 14px; border-radius: var(--r-pill); cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--line); font-variant-numeric: tabular-nums;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.pot-quick-btn:hover { background: var(--surface-3); border-color: var(--line-strong); }
+.pot-quick-btn:active { transform: scale(.97); transition: transform var(--t-press) ease-out; }
+.pot-estimate { min-height: 1.5em; }
+.pot-form #spray-hint:empty { display: none; }
+
+/* ---------- the dashboard: your pots ---------- */
+.dash-pots { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-raise); }
+.dash-pots .card-h { align-items: flex-start; }
+.pot-sub { margin-top: 4px; }
+.pot-new { padding: 20px; border-radius: var(--r-lg); background: rgba(0, 0, 0, .22); border: 1px solid var(--line); }
+.pot-caps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.pot-caps .field, .pot-form-new .field { min-width: 0; }
+.pot-closes { max-width: 100%; }
+.pot-new-sum { min-height: 1.5em; }
+.pot-new-sum b { color: var(--text); font-weight: 500; }
+.pot-rows { list-style: none; margin: 0; padding: 0; }
+.pot-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 20px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.pot-row:first-child { padding-top: 0; }
+.pot-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.pot-row > :nth-child(n + 3) { grid-column: 1 / -1; }
+.pot-row > :nth-child(n + 3):empty { display: none; }
+.pot-row-main { display: grid; gap: 8px; min-width: 0; }
+.pot-row-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
+.pot-row-title .dash-list-label { font-size: 16px; font-weight: 500; }
+.pot-row-title .dash-list-label:hover { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 4px; }
+.pot-row .pot-meter.sm { max-width: 440px; }
+.pot-row .dash-list-end { flex-wrap: wrap; justify-content: flex-end; }
+.pot-close.is-armed { color: var(--err); box-shadow: inset 0 0 0 1px rgba(255, 143, 128, .35); }
+.pot-made { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: center; }
+.pot-made-copy { display: grid; gap: 12px; min-width: 0; }
+.pot-made .dash-h2 { overflow-wrap: anywhere; }
+.nt-qr.pot-qr.lg { width: 220px; justify-self: start; }
+
+@media (max-width: 960px) {
+  .pot-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "sum" "spray" "wall"; }
+  .pot-spray { position: static; }
+  .pot-made { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .pot-stats { gap: 8px; }
+  .pot-stats li { padding: 10px 11px; }
+  .pot-stats b { font-size: 16px; }
+  .pot-caps { grid-template-columns: minmax(0, 1fr); }
+  .pot-closes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; border-radius: 18px; }
+  .pot-closes button { border-radius: 14px; min-width: 0; padding-left: 8px; padding-right: 8px; }
+  .pot-closes button:last-child { grid-column: span 2; }
+  .pot-row { grid-template-columns: minmax(0, 1fr); }
+  .pot-row .dash-list-end { justify-content: flex-start; }
+  .pot-notes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
+  .pot-note { padding: 12px 12px 10px; min-height: 88px; }
+  .pot-note-amt { font-size: 25px; }
+  .pot-new { padding: 16px; }
+  .nt-qr.pot-qr.lg { width: 200px; justify-self: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pot-bar-fill { transition: none; }
+  .pot-total.bump { animation: none; }
+  .pot-note.is-fresh { animation: pot-fade .4s ease both; }
+  .pot-flutter { display: none; }
+  .pot-quick-btn:active { transform: none; }
+}
+@keyframes pot-fade { from { opacity: 0; } to { opacity: 1; } }

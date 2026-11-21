@@ -45,6 +45,17 @@ export const FN = {
   payPot: "0xe64b323d", // payPot(uint256,address,uint256,bytes32,address)
   potInfo: "0x3f6833be", // potInfo(uint256) -> (address,string,uint256,bool,uint256,uint256,uint256,uint256)
   usdValue: "0xef610d8d", // usdValue(address,uint256) -> uint256
+  createPot: "0xd7d3b938", // createPot(string,uint64,uint256,uint256) -> uint256
+  closePot: "0x69254a0b", // closePot(uint256)
+  potCount: "0xcf72f230", // potCount() -> uint256
+  remaining: "0xbc8dbd9f", // remaining(uint256,address) -> (uint256,uint256,uint256,uint256)
+  paidBy: "0xa75561bb", // paidBy(uint256,address) -> uint256
+  validatePotPayment: "0x765b5cb3", // validatePotPayment(uint256,address,uint256,address) -> uint256
+  unitsPerUsd: "0x350fed97", // unitsPerUsd(address) -> uint256
+  maxPotCapUsd6: "0x3f754c35", // maxPotCapUsd6() -> uint64
+  maxPerPayerCapUsd6: "0xc50b0257", // maxPerPayerCapUsd6() -> uint64
+  maxPerHostDailyUsd6: "0x837a2632", // maxPerHostDailyUsd6() -> uint64
+  maxDailyUsd6: "0x09b185f5", // maxDailyUsd6() -> uint64
   // ERC-20 / EIP-2612
   approve: "0x095ea7b3", // approve(address,uint256)
   allowance: "0xdd62ed3e", // allowance(address,address) -> uint256
@@ -59,7 +70,12 @@ export const TOPIC = {
   TagClaimed: "0xa18f42c7ad94b182292b8f65d73bb99d36d9cac8bedaa606d1c8a680ae5a891e",
   TagReleased: "0x50f69538f3553ef026fd76d9331b67c3a95369c0b3b3f2ffb9c00c4a7483293d",
   NameChanged: "0xd2aff0024ac43f9a1c17c8d39d017a0313852d5d08731e280698408d3a5ffe67",
+  PotCreated: "0x76b849f6a4d8c6927d1edf825a1fd7c70cb411a0a741979e2ebf9dcf57918f7e",
+  PotClosed: "0x37546cf716a0cade9e7d470fd119123e1b55b07faebab008b0ad40a2840d1ca0",
 };
+/** LokalPots constants MAX_OPEN_TIME and MAX_TITLE_BYTES (contracts/tests/SiteCalldata.spec.ts checks they match). */
+export const POT_MAX_OPEN_SECONDS = 14 * 86_400;
+export const POT_TITLE_MAX_BYTES = 60;
 
 /** USD₮ on Celo implements EIP-2612 with this domain (DOMAIN_SEPARATOR checked live before signing). */
 export const USDT_PERMIT_DOMAIN = { name: "Tether USD", version: "1", chainId: 42220, verifyingContract: USDT_ADDRESS };
@@ -99,9 +115,24 @@ export function payTagWithPermitData({ tag, token, amount, ref = ZERO_REF, expec
 }
 /** payPot(potId, token, amount, ref, expectedPayout). */
 export function payPotData({ potId, token, amount, ref = ZERO_REF, expectedPayout = PAYOUT_WALLET }) {
+  // the payer approves LokalPots (not LokalTags) for exactly `amount` first: LokalPots has no permit variant
   if (!isAddr(token)) throw new Error("invalid token address");
-  return withSuffix(FN.payPot, ["uint256", "address", "uint256", "bytes32", "address"], [BigInt(potId), token, amountOk(amount), ref, expectedPayout]);
+  return withSuffix(FN.payPot, ["uint256", "address", "uint256", "bytes32", "address"], [potIdOk(potId), token, amountOk(amount), ref, expectedPayout]);
 }
+function potIdOk(v) { const b = BigInt(v); if (b <= 0n || b >= 1n << 256n) throw new Error("invalid pot id"); return b; }
+/**
+ * createPot(title, closesAt, potCapUsd6, perPayerCapUsd6): opens a pot hosted by the sender, who must hold a tag.
+ * Dollar amounts are usd6 (6 decimals); closesAt is unix seconds, at most 14 days away.
+ */
+export function createPotData({ title, closesAt, potCapUsd6, perPayerCapUsd6 }) {
+  const t = String(title ?? "");
+  if (!t) throw new Error("invalid title");
+  const close = BigInt(closesAt);
+  if (close <= 0n || close >= 1n << 64n) throw new Error("invalid closing time");
+  return withSuffix(FN.createPot, ["string", "uint64", "uint256", "uint256"], [t, close, amountOk(potCapUsd6), amountOk(perPayerCapUsd6)]);
+}
+/** closePot(potId): stops a pot taking payments (host only). */
+export const closePotData = (potId) => withSuffix(FN.closePot, ["uint256"], [potIdOk(potId)]);
 /** approve(spender, amount) on a token: exactly the payment, never "unlimited". */
 export function approveData(spender, amount) {
   if (!isAddr(spender)) throw new Error("invalid spender");
@@ -231,6 +262,22 @@ export function decodePotPaid(log) {
   };
 }
 
+const POT_INFO_OUT = ["address", "string", "uint256", "bool", "uint256", "uint256", "uint256", "uint256"];
+/** potInfo() return data -> { host, title, closesAt (sec), open, capUsd6, perPayerCapUsd6, totalUsd6, payerCount }. */
+export function decodePotInfo(hex) {
+  const [host, title, closesAt, open, capUsd6, perPayerCapUsd6, totalUsd6, payerCount] = abiDecode(POT_INFO_OUT, hex);
+  return { host, title, closesAt: Number(closesAt), open, capUsd6, perPayerCapUsd6, totalUsd6, payerCount: Number(payerCount) };
+}
+/** A PotCreated log -> { potId, host, title, closesAt, capUsd6, perPayerCapUsd6, hash, block }, or null. */
+export function decodePotCreated(log) {
+  if (lc(log?.topics?.[0]) !== TOPIC.PotCreated || (log.topics?.length ?? 0) < 3) return null;
+  const [title, closesAt, capUsd6, perPayerCapUsd6] = abiDecode(["string", "uint256", "uint256", "uint256"], log.data);
+  return {
+    potId: BigInt(log.topics[1]), host: "0x" + log.topics[2].slice(26), title, closesAt: Number(closesAt), capUsd6, perPayerCapUsd6,
+    hash: log.transactionHash ?? log.transaction_hash, block: Number(log.blockNumber ?? log.block_number ?? 0),
+  };
+}
+
 /** A transaction's input -> { fn, tag, token, amount } when it is payTag / payTagWithPermit (suffix ignored), else null. */
 export function decodePayTagCall(input) {
   const h = lc(input);
@@ -258,7 +305,8 @@ export const ERRORS = {
   "0xa11f2e88": ["HostNotEligible", ["address"]], "0x8c5f16db": ["PotExpired", ["uint256", "uint256"]],
   "0x8cf3a8eb": ["PotFull", ["uint256", "uint256"]], "0x6885efe1": ["PotIsClosed", ["uint256"]], "0x30e4a782": ["PotNotFound", ["uint256"]],
   "0xd28809c3": ["OverPayerCap", ["uint256", "uint256"]], "0xd99ccc4b": ["OverHostDailyLimit", ["uint256", "uint256"]],
-  "0x8ff4f0c9": ["NotHost", []],
+  "0x8ff4f0c9": ["NotHost", []], "0x31196de8": ["InvalidTitle", []], "0x56a026a3": ["InvalidCloseTime", ["uint256", "uint256"]],
+  "0x8baee5ba": ["InvalidPotCaps", []],
   // OpenZeppelin v5 ERC-20 (a token without enough balance or allowance)
   "0xe450d38c": ["ERC20InsufficientBalance", ["address", "uint256", "uint256"]],
   "0xfb8f41b2": ["ERC20InsufficientAllowance", ["address", "uint256", "uint256"]],
@@ -332,8 +380,13 @@ export function explainRevert(data, ctx = {}) {
     case "PotFull": return say(`This pot is nearly full: it can take ${usd6Text(b)} more. Send less. Nothing was sent.`);
     case "OverPayerCap": return say(`You can put ${usd6Text(b)} more into this pot. Send less. Nothing was sent.`);
     case "OverHostDailyLimit": return say(`The host's pots can take ${usd6Text(b)} more today. Send less, or try again tomorrow (UTC). Nothing was sent.`);
-    case "HostNotEligible": return say("The pot's host can't be paid right now (they no longer hold a tag). Nothing was sent.");
+    case "HostNotEligible": return say(ctx.creating
+      ? "Only a wallet that holds a Lokal tag can open a pot. Claim your tag first. Nothing was sent."
+      : "The pot's host can't be paid right now (they no longer hold a tag). Nothing was sent.");
     case "NotHost": return say("Only the pot's host can do that.");
+    case "InvalidTitle": return say("That title isn't allowed: 1-60 characters (an emoji counts as two), no control or invisible characters, and no spaces at either end. Nothing was sent.");
+    case "InvalidCloseTime": return say(`The closing time must be in the future and no later than ${dateText(b)}. Pick it again. Nothing was sent.`);
+    case "InvalidPotCaps": return say("The caps don't fit: the per-guest cap must be more than $0 and no more than the pot's cap, and both within the contract's maximums. Nothing was sent.");
     case "Error": return say(/exceeds balance|insufficient balance/i.test(a) ? `This wallet doesn't hold enough ${sym}. Nothing was sent.`
       : /allowance/i.test(a) ? `The ${sym} approval doesn't cover this amount. Nothing was sent.` : `The transaction would fail (${a}). Nothing was sent.`);
     default: return say(`The contract refused this transaction (${d.name}). Nothing was sent.`);
@@ -445,3 +498,47 @@ export async function permitDomainOk(token = USDT_ADDRESS, opts) {
 }
 /** TOKENS entry for a token address (symbol + decimals), or null. */
 export const tokenInfo = (addr) => Object.values(TOKENS).find((t) => lc(t.address) === lc(addr)) ?? null;
+
+// ---------- LokalPots reads ----------
+/** Everything a pot page needs (see decodePotInfo). An unknown id throws with `.revert` (PotNotFound). */
+export async function readPotInfo(potId, opts) {
+  return decodePotInfo(await mustCall({ to: LOKAL_POTS, data: enc(FN.potInfo, ["uint256"], [BigInt(potId)]) }, opts));
+}
+/** Number of pots created (ids run from 1 to potCount). */
+export async function readPotCount(opts) {
+  return abiDecode(["uint256"], await mustCall({ to: LOKAL_POTS, data: FN.potCount }, opts))[0];
+}
+/** The maxima a host may choose and the daily totals, read from the contract (usd6). */
+export async function readPotLimits(opts) {
+  const one = async (sel) => abiDecode(["uint64"], await mustCall({ to: LOKAL_POTS, data: sel }, opts))[0];
+  const [maxPotCapUsd6, maxPerPayerCapUsd6, maxPerHostDailyUsd6, maxDailyUsd6] = await Promise.all(
+    [FN.maxPotCapUsd6, FN.maxPerPayerCapUsd6, FN.maxPerHostDailyUsd6, FN.maxDailyUsd6].map(one));
+  return { maxPotCapUsd6, maxPerPayerCapUsd6, maxPerHostDailyUsd6, maxDailyUsd6 };
+}
+/** Room left (usd6) for `payer` in pot `potId`: { forPayer, forPot, forHost, forToday }. */
+export async function readPotRemaining(potId, payer, opts) {
+  const [forPayer, forPot, forHost, forToday] = abiDecode(["uint256", "uint256", "uint256", "uint256"],
+    await mustCall({ to: LOKAL_POTS, data: enc(FN.remaining, ["uint256", "address"], [BigInt(potId), payer ?? ZERO_ADDRESS]) }, opts));
+  return { forPayer, forPot, forHost, forToday };
+}
+/** Base units of `token` per US dollar on LokalPots (0n: pots don't take it). */
+export async function readUnitsPerUsd(token, opts) {
+  return abiDecode(["uint256"], await mustCall({ to: LOKAL_POTS, data: enc(FN.unitsPerUsd, ["address"], [token]) }, opts))[0];
+}
+/**
+ * The contract's dry run of a pot payment (every rule except balance and allowance): { ok: true, amountUsd6 } or
+ * { ok: false, name, message } in plain English.
+ */
+export async function checkPotPayment({ potId, token, amount, payer }, opts) {
+  const data = enc(FN.validatePotPayment, ["uint256", "address", "uint256", "address"], [BigInt(potId), token, BigInt(amount), payer]);
+  const r = await ethCall({ to: LOKAL_POTS, data }, "latest", opts);
+  if (r.ok) return { ok: true, amountUsd6: abiDecode(["uint256"], r.result)[0] };
+  return { ok: false, ...explainRevert(r.revert, { potId, token }) };
+}
+/** The usd6 value LokalPots gives `amount` of a token at `unitsPerUsd`, rounded UP, exactly like the contract's usdValue. */
+export function potUsdValue(amount, unitsPerUsd) {
+  const a = BigInt(amount), r = BigInt(unitsPerUsd);
+  return r === 0n ? 0n : (a * 1_000_000n + r - 1n) / r;
+}
+/** A uint256 or an address as a 32-byte log topic (for eth_getLogs filters). */
+export const topicOf = (v) => "0x" + (isAddr(v) ? lc(v).slice(2) : BigInt(v).toString(16)).padStart(64, "0");

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' https://forno.celo.org https://celo.blockscout.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Pot · Lokal</title>
+<meta name="description" content="A Lokal pot: one link and QR code that many guests spray into, from any Celo wallet. The contract checks every cap before money moves; the host is paid in their local money.">
+<meta name="theme-color" content="#06110c">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Spray into this pot on Lokal">
+<meta property="og:description" content="One link, many guests: spray in dollars or naira on Celo, and the host receives their local money.">
+<meta property="og:image" content="https://lokalpay.vercel.app/og.png?v=lokal2">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg?v=lokal2" type="image/svg+xml">
+<link rel="icon" href="logo.png?v=lokal2" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=lokal2">
+<link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/ntags.css">
+<link rel="stylesheet" href="assets/pots.css">
+<style>[hidden] { display: none !important; }</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-quote" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13"/><path d="m14 4 4 4-4 4"/><path d="M20 16H7"/><path d="m10 12-4 4 4 4"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
+  <symbol id="i-id" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16.2c.6-1.6 1.8-2.4 3.2-2.4s2.6.8 3.2 2.4"/><path d="M15 10h3"/><path d="M15 13.5h3"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v4.5l3 2"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3.5H7a1.5 1.5 0 0 0-1.5 1.5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3.5V8h4.5"/><path d="M9 12.5h6M9 16h6"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3"/><rect x="4" y="8" width="16" height="11" rx="2.5"/><path d="M15.5 13.5h1.5"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h12v17l-2.5-1.6-2 1.6-2-1.6-2 1.6-2-1.6L6 20.5z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20c1-3.6 3.8-5.6 7.2-5.6s6.2 2 7.2 5.6"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="m10 16-4-4 4-4"/><path d="M6 12h10"/></symbol>
+  <symbol id="i-updown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 9 4-4 4 4"/><path d="m16 15-4 4-4-4"/></symbol>
+</svg>
+<div class="sky sky-sm" aria-hidden="true"></div>
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+  <div class="sb-head">
+    <a class="sb-brand" href="index.html"><img src="logo.svg?v=lokal2" alt="" width="34" height="34"><span class="sb-label">Lokal</span></a>
+    <button class="icon-btn sm sb-collapse" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar  [ ]"><svg class="i"><use href="#i-chevron-left"/></svg></button>
+    <button class="icon-btn sm sb-close" type="button" aria-label="Close menu"><svg class="i"><use href="#i-x"/></svg></button>
+  </div>
+  <nav class="sb-nav" aria-label="Sections">
+    <a href="app.html" data-label="Dashboard"><svg class="i"><use href="#i-home"/></svg><span class="sb-label">Dashboard</span></a>
+    <a href="quote.html" data-label="Send" data-also="pay.html tag.html"><svg class="i"><use href="#i-quote"/></svg><span class="sb-label">Send</span></a>
+    <a href="get-paid.html" data-label="Get paid"><svg class="i"><use href="#i-wallet"/></svg><span class="sb-label">Get paid</span></a>
+    <a href="transactions.html" data-label="Activity" data-also="receipt.html verify.html agent.html autopilot.html"><svg class="i"><use href="#i-list"/></svg><span class="sb-label">Activity</span></a>
+    <a href="account.html" data-label="Account"><svg class="i"><use href="#i-user"/></svg><span class="sb-label">Account</span></a>
+    <span class="sb-sep" aria-hidden="true"></span>
+    <a href="docs.html" data-label="Docs" data-also="privacy.html terms.html cash-out.html"><svg class="i"><use href="#i-book"/></svg><span class="sb-label">Docs</span></a>
+  </nav>
+  <div class="sb-foot">
+    <div class="sb-user" id="sb-user"><a class="sb-user-chip signed-out" href="start.html" data-label="Sign in" aria-label="Sign in with your wallet"><span class="np-avatar is-anon" aria-hidden="true"><svg class="i"><use href="#i-user"/></svg></span><span class="sb-user-text sb-label"><b>Sign in</b><span>With your wallet, free</span></span></a></div>
+    <div class="sb-status" title="Celo mainnet">
+      <span class="live-dot" aria-hidden="true"></span>
+      <div><b>Celo mainnet · live</b><span class="sb-label" id="sb-rate" aria-live="polite">Loading rate…</span></div>
+    </div>
+  </div>
+</aside>
+<div class="sb-scrim" aria-hidden="true"></div>
+
+<div class="nav-wrap">
+  <nav class="nav" aria-label="Main">
+    <a class="nav-brand" href="index.html"><img src="logo.svg?v=lokal2" alt="" width="30" height="30"><span>Lokal</span></a>
+    <div class="nav-links">
+      <a href="app.html">Dashboard</a>
+      <a href="quote.html" data-also="pay.html tag.html">Send</a>
+      <a href="get-paid.html">Get paid</a>
+      <a href="transactions.html" data-also="receipt.html verify.html agent.html autopilot.html">Activity</a>
+    </div>
+    <div class="nav-user" id="nav-user"><a class="nav-user-btn signed-out" href="start.html" aria-label="Sign in with your wallet"><svg class="i"><use href="#i-user"/></svg><span>Sign in</span></a></div>
+    <button class="icon-btn menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar"><svg class="i"><use href="#i-menu"/></svg></button>
+  </nav>
+</div>
+<main>
+  <header class="page-head container pot-head">
+    <span class="eyebrow" id="pot-eyebrow">Pot</span>
+    <h1 class="page-title" id="pot-title">A <em>pot</em> for many guests</h1>
+    <p class="lead" id="pot-lead">One link and QR code that many guests spray into, from any Celo wallet, without an account.</p>
+  </header>
+
+  <div class="container stack">
+    <div id="pot-root" aria-live="polite"><p class="small muted">Reading the pot from Celo…</p></div>
+  </div>
+</main>
+<footer class="site-footer">
+  <div class="container">
+    <div class="cols">
+      <div>
+        <div class="foot-brand"><img src="logo.svg?v=lokal2" alt="" width="28" height="28">Lokal</div>
+        <p class="small soft" style="max-width:40ch">Send dollars on Celo. They receive their local money: naira, rupiah or pesos, in their own wallet.</p>
+        <p class="small mt-16"><a href="index.html?about">About Lokal</a></p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul><li><a href="app.html">Dashboard</a></li><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Your activity</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="cash-out.html">Cash out</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
+      </div>
+      <div>
+        <h4>Resources</h4>
+        <ul><li><a href="docs.html">Docs</a></li><li><a href="https://github.com/deeeko/lokal">Source code</a></li><li><a href="https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e">Agent on Celoscan</a></li><li><a href="https://fx-docs.textilecredit.com">Textile FX docs</a></li></ul>
+      </div>
+    </div>
+    <div class="base"><span>Built for Agents Open for Business on Celo · Track 3: Stablecoin Corridors</span><span class="foot-legal"><a href="privacy.html">Privacy policy</a> · <a href="terms.html">Terms</a> · <button class="linklike" type="button" data-consent-open>Privacy choices</button></span><span>Data: Celo Forno RPC · Blockscout · Textile FX</span></div>
+  </div>
+</footer>
+<script src="assets/vendor/qrcode.js"></script>
+<script nomodule src="assets/legacy.js"></script>
+<noscript><p style="position:fixed;left:12px;right:12px;bottom:12px;padding:14px 16px;border-radius:14px;background:#fcff52;color:#0b0f00;font:500 15px/1.45 system-ui,sans-serif">Turn on JavaScript (or use Chrome, Safari or Firefox) to see the live data on this page.</p></noscript>
+<script type="module" src="js/pot.js"></script>
+</body>
+</html>

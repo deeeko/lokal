@@ -18,10 +18,10 @@ safety path. All four are built and tested; none has had a real mainnet payout y
 >   [The contract has the final say](#the-contract-has-the-final-say)). No real user payout yet.
 > - **Built, not yet used on mainnet:** payouts in naira, rupiah and pesos (plus naira → dollars), the currency
 >   picker, Lokal tags, **paying and claiming through the contracts** (site, `lokal` command and autopilot), payment
->   links, Get paid, autopilot, refunds, the `lokal` command, receipts and reviews, the
->   [cash-out guide](https://lokalpay.vercel.app/cash-out.html), the sign-up gateway, the dashboard, "Add to wallet",
->   the ["Who am I paying?"](#who-am-i-paying) card and the [Proof page](#proof).
-> - **Planned:** Pots on the site, Pay with CELO for payers, "Pay for me" (a payment link
+>   links, Get paid, [pots and the Spray Wall](#pots-one-link-many-guests), autopilot, refunds, the `lokal` command,
+>   receipts and reviews, the [cash-out guide](https://lokalpay.vercel.app/cash-out.html), the sign-up gateway, the
+>   dashboard, "Add to wallet", the ["Who am I paying?"](#who-am-i-paying) card and the [Proof page](#proof).
+> - **Planned:** Pay with CELO for payers, "Pay for me" (a payment link
 >   with a title, note and share message, for someone else to pay), MiniPay mode.
 
 ![The Lokal landing page: "Send dollars. They receive their lokal money." with the live converter](docs/assets/landing.jpg)
@@ -233,6 +233,21 @@ agent and can be sent back to the wallet you paid from", and later **"Refunded �
 page reload. A tag claimed with the older memo protocol before the cutover (and not held on the contract) is still
 paid the old way: one ERC-20 transfer to the agent with `hex("NTP:" + tag)` after the standard 68 bytes, plus the
 attribution suffix (see [Lokal tag rules](#lokal-tag-rules)).
+
+### Pots: one link, many guests
+
+A pot is one link and QR code that many guests pay into: a wedding where guests "spray" the couple, a birthday, a
+group gift. Built, not yet used on mainnet.
+
+- **Open one** on the dashboard ("Your pots"), from a wallet that holds a tag: a title, when it closes (up to 14 days)
+  and two caps read live from LokalPots (up to $100 a pot, $5 a guest). The page simulates `createPot` first and shows
+  the link (`pot.html?id=N`) and QR code. The host can `closePot` early from the same card.
+- **Spray** (`pot.html?id=N`, public, no account): connect a wallet, pick an amount in USD₮ or cNGN, choose what the
+  host receives. The contract's dry run (`validatePotPayment`) explains any refusal first; then an exact `approve`
+  for LokalPots (it has no permit) and `payPot(id, token, amount, "cur:<code>", payout wallet)`, both attribution-tagged.
+- **The Spray Wall** shows the pot's `PotPaid` events (explorer log API, else `eth_getLogs` on Forno, polled every
+  15 s): amounts and times, never who paid. A new spray drops onto the wall; with reduced motion it fades in.
+- Autopilot already pays `PotPaid` in the guest's chosen currency ([how](#payments-through-the-contracts-tagpaid-potpaid)).
 
 ### Payment links ("Get paid")
 
@@ -452,7 +467,7 @@ flowchart TB
     direction TB
     P1["Pay a Lokal tag<br/>/@ada · picks the currency<br/>they receive"]
     P2["Pay a link<br/>exact amount, made by<br/>the recipient"]
-    P3["Pot / Spray Wall<br/>one QR, many guests<br/>(planned)"]
+    P3["Pot / Spray Wall<br/>one QR, many guests<br/>(built)"]
   end
 
   %% ---------- checks before money moves ----------
@@ -1189,6 +1204,14 @@ node scripts/check-site.mjs       # static site check
 
 Newest first.
 
+### 2026-11-21: Pots and the Spray Wall on the site
+
+- **Pots on the site** ([Pots](#pots-one-link-many-guests)): open, share and close a pot from the dashboard; guests
+  spray from `pot.html?id=N` with no account, every refusal explained before the wallet opens.
+- **The Spray Wall**: the pot's `PotPaid` events, live, amounts and times only.
+- Tests: 310 (`test/pots-site.test.mjs`), plus `contracts/tests/SitePots.spec.ts` sending the site's pot calldata to
+  the real LokalPots (135 contract tests).
+
 ### 2026-11-21: "Who am I paying?" and the Proof page
 
 - Tag pages show the tag's age, payments received and owner, with one-line warnings (first-time payee, new tag,
@@ -1453,7 +1476,6 @@ The operator steps for these are in [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 **Next**
 
-- **Pots on the site.** LokalPots is live and autopilot already pays `PotPaid`; the pages to open and pay a pot come next.
 - **Dollar subscriptions paid in local money.** Local cards are often declined or capped for dollar subscriptions (X
   Premium, ChatGPT, Canva, app stores). The naira → dollar corridor already converts cNGN to USD₮ on Textile FX; pairing
   it with a stablecoin-funded virtual card or gift-card partner lets people pay those subscriptions in naira, and in
