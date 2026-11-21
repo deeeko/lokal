@@ -633,7 +633,7 @@ the site enforces it.
 | LokalTags | [`0xFF2f8ADC0c97B6E40b201848d378C11325bC7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) · [Blockscout](https://celo.blockscout.com/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187?tab=contract) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) |
 | LokalPots | [`0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF`](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) · [Blockscout](https://celo.blockscout.com/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF?tab=contract) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) |
 | ABIs and addresses | [`contracts/deployments/`](contracts/deployments/) (`LokalTags.json`, `LokalPots.json`, constructor arguments, deploy record) |
-| Admin | [`0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070`](https://celoscan.io/address/0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070) (two-step ownership transfer, [sent](https://celoscan.io/tx/0xd22cf761f5c768dad0b432fa27d0bea927db04ce344de10f3ce26af8dde66bda); the admin accepts it from their own wallet. Never the agent's key) |
+| Admin | [`0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070`](https://celoscan.io/address/0xc2808B63906F48C1BaCaa1E2Ad2e1Cb2A363A070) (two-step transfer: [offered](https://celoscan.io/tx/0xd22cf761f5c768dad0b432fa27d0bea927db04ce344de10f3ce26af8dde66bda) by the deployer, [accepted](https://celoscan.io/tx/0xbee2dd85e15c4fb664397f06e1a0a932214c6c6a65aaa3aa99e599905c2ec3a6) from the admin's own wallet. The agent's key is not an admin) |
 | Payout wallet | the agent, [`0x8a695cf54CB44753c8b784EB36d266f748617a1e`](https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e) |
 
 ---
@@ -891,7 +891,7 @@ Newest first.
 ### 2026-11-22: the contracts: LokalTags and LokalPots, live on Celo mainnet
 
 - **Deployed** on Celo mainnet: LokalTags [`0xFF2f8ADC0c97B6E40b201848d378C11325bC7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187), LokalPots [`0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF`](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF), both source-verified
-  (Sourcify exact match), every transaction attribution-tagged. Admin handed to a separate wallet (two-step).
+  (Sourcify exact match), every transaction attribution-tagged. Admin handed to a separate wallet (two-step, accepted the same evening).
 - **`contracts/`** (Solidity 0.8.30, OpenZeppelin 5.6.1, Hardhat + TypeScript): `LokalTags` (tag registry and payment
   router with per-token limits) and `LokalPots` (one link, many payers). Neither holds money. See
   [The contract has the final say](#the-contract-has-the-final-say).
