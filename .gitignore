@@ -15,3 +15,4 @@ registrations-state.json
 ntag-payments.json
 status-outbox*
 status-secret
+.claude/

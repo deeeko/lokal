@@ -5,9 +5,9 @@ Formerly Naira Payout.
 Send dollars, they receive their local money: an agent on Celo that converts USD₮ to a local stablecoin on Textile FX
 and pays the recipient's own wallet, by Lokal tag, payment link or command line, with every limit enforced in code.
 
-Multi-currency by design: **naira** (cNGN, Nigeria) payouts are built and tested; **rupiah** (IDRX, Indonesia) and
-**pesos** (wARS, Argentina; wCOP, Colombia) are planned: Textile FX priced them on 21 Nov and their payout code is being
-built. See [Currencies](#currencies) for the exact status of each.
+Multi-currency by design: the payer chooses what the recipient gets, **naira** (cNGN, Nigeria), **rupiah** (IDRX,
+Indonesia) or **pesos** (wARS, Argentina; wCOP, Colombia), and the agent pays out in that currency through the same
+safety path. All four are built and tested; none has had a real mainnet payout yet. See [Currencies](#currencies).
 
 > **Status today.** Every feature carries one of three labels, used the same way on the site:
 > **Live** (used with real money on Celo mainnet, with a transaction link) ·
@@ -16,10 +16,11 @@ built. See [Currencies](#currencies) for the exact status of each.
 >
 > - **Live:** the LokalTags and LokalPots contracts are deployed and verified on mainnet (see
 >   [The contract has the final say](#the-contract-has-the-final-say)). No real user payout yet.
-> - **Built, not yet used on mainnet:** naira payouts (USD₮ → cNGN and back), Lokal tags, payment links, Get paid,
->   autopilot, the `lokal` command, receipts and reviews.
-> - **Planned:** rupiah and peso payouts, paying through the contracts from the site, Pots on the site, the
->   "Who am I paying?" card, Pay with CELO for payers, the cash-out guide, MiniPay mode.
+> - **Built, not yet used on mainnet:** payouts in naira, rupiah and pesos (plus naira → dollars), the currency
+>   picker, Lokal tags, payment links, Get paid, autopilot, the `lokal` command, receipts and reviews, and the
+>   [cash-out guide](https://lokalpay.vercel.app/cash-out.html).
+> - **Planned:** paying through the contracts from the site, Pots on the site, the "Who am I paying?" card, Pay with
+>   CELO for payers, MiniPay mode.
 
 **[Live app](https://lokalpay.vercel.app)** ·
 **[Agent on Celoscan](https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e)** ·
@@ -74,9 +75,9 @@ the recipient's own Celo wallet. It is built for families and freelancers across
 Colombia**: @ada can receive naira; @budi will receive rupiah once the rupiah payouts ship (see
 [Currencies](#currencies)).
 
-Today the agent pays out end to end in **cNGN** (the naira stablecoin). The naira corridor also runs the other way
+The agent pays out end to end in **cNGN** (naira), **IDRX** (rupiah), **wARS** and **wCOP** (pesos). The naira corridor also runs the other way
 (naira in, dollars out), and the operator can pay out in naira from the agent's CELO. The corridors below are the ones
-the agent runs today; rupiah and peso corridors are added next.
+the agent runs.
 
 - **Senders** pay from any Celo wallet: to a **Lokal tag** (a short handle), through a **payment link**, from the site,
   or from the **`lokal` command line** in PowerShell.
@@ -92,6 +93,9 @@ wallet. The agent holds only what it is converting at that moment.
 |---|---|---|---|---|
 | `usdt-cngn` (default) | USD₮ | cNGN | USD₮ | Lokal tags, payment links, Get paid, CLI, operator |
 | `cngn-usdt` | cNGN | USD₮ | naira (cNGN) | Lokal tags, payment links, Get paid, CLI, operator |
+| `usdt-idrx` | USD₮ | IDRX | USD₮ | Lokal tags, payment links, Get paid, CLI, operator |
+| `usdt-wars` | USD₮ | wARS | USD₮ | Lokal tags, payment links, Get paid, CLI, operator |
+| `usdt-wcop` | USD₮ | wCOP | USD₮ | Lokal tags, payment links, Get paid, CLI, operator |
 | `celo-cngn` | CELO (from the agent wallet) | cNGN | CELO | operator `pay` and `quote` only |
 
 ---
@@ -99,14 +103,14 @@ wallet. The agent holds only what it is converting at that moment.
 ## Currencies
 
 Lokal is multi-currency by design. Every local stablecoin below is on Celo mainnet and is priced by Textile FX against
-USD₮. Naira payouts are built, not yet used on mainnet; rupiah and pesos are planned.
+USD₮. The payer picks the currency; all four are built, not yet used on mainnet.
 
 | Country | Token | Issuer | Decimals | Today's rate (5 USD₮) | Status |
 |---|---|---|---|---|---|
 | 🇳🇬 Nigeria | [cNGN](https://celoscan.io/address/0xF6829D7393dAe24509eb1E52eE8e572e2E271a4f) (naira) | — | 6 | ₦7,205.67 | **Built, not yet used on mainnet** (USD₮ → cNGN, cNGN → USD₮, and CELO → cNGN for the operator) |
-| 🇮🇩 Indonesia | [IDRX](https://celoscan.io/address/0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22) (rupiah) | — | 2 | Rp 92,035.51 | **Planned** (Textile gave a price on 21 Nov; payout code in progress) |
-| 🇦🇷 Argentina | [wARS](https://celoscan.io/address/0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D) (peso) | Ripio | 18 | ARS 8,826.31 | **Planned** (Textile gave a price on 21 Nov; payout code in progress) |
-| 🇨🇴 Colombia | [wCOP](https://celoscan.io/address/0x8a1D45e102e886510e891d2Ec656a708991e2D76) (peso) | Ripio | 18 | COP 17,277.91 | **Planned** (Textile gave a price on 21 Nov; payout code in progress) |
+| 🇮🇩 Indonesia | [IDRX](https://celoscan.io/address/0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22) (rupiah) | — | 2 | Rp 92,035.51 | **Built, not yet used on mainnet** (`usdt-idrx`) |
+| 🇦🇷 Argentina | [wARS](https://celoscan.io/address/0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D) (peso) | Ripio | 18 | ARS 8,826.31 | **Built, not yet used on mainnet** (`usdt-wars`) |
+| 🇨🇴 Colombia | [wCOP](https://celoscan.io/address/0x8a1D45e102e886510e891d2Ec656a708991e2D76) (peso) | Ripio | 18 | COP 17,277.91 | **Built, not yet used on mainnet** (`usdt-wcop`; thin market: Textile could fill only about $6.71 on 21 Nov, so larger payments are refused, never switched) |
 
 - **Rates** are live Textile FX previews for 5 USD₮ taken on 21 Nov 2026. They are free previews, not firm quotes, and
   they move; every payment gets its own firm quote at the time it is paid.
@@ -114,10 +118,15 @@ USD₮. Naira payouts are built, not yet used on mainnet; rupiah and pesos are p
   agent (by hand or on autopilot) in cNGN, plus the reverse corridor that pays USD₮. The flow is built and tested against
   live Textile quotes; the first real mainnet payout to a user is still pending and will be linked here with its
   transactions. No payout in IDRX, wARS or wCOP has been made yet.
-- **What "Planned" means here.** Textile FX returned a price for these tokens when checked on 21 Nov, and the LokalTags
-  and LokalPots contracts (live on mainnet) already accept them, with per-token limits worked out from the same dollar
-  caps. The agent's payouts in these tokens and the site's currency picker ("Choose what they receive") are not
-  released yet.
+- **How the currency is chosen.** On the site and in the `lokal` command the payer picks it ("They receive"). A Lokal
+  tag payment carries it in its memo, `NTP:<tag>:<code>` (`idrx`, `wars`, `wcop`; plain `NTP:<tag>` still means
+  naira, so existing payers keep working), and a tag owner can set a preferred currency that pay pages pre-select.
+  Payment links and Get paid fix the currency in the link. Every amount uses the token's own decimals (IDRX 2, cNGN 6,
+  wARS and wCOP 18) and is shown rounded down. If a currency has no Textile quote when the payment is handled, the
+  payment is refused (`currency_unavailable`) and never paid in another currency.
+- **Getting it to a bank.** The [cash-out guide](https://lokalpay.vercel.app/cash-out.html)
+  ([docs/CASH-OUT.md](docs/CASH-OUT.md)) gives each currency's checked route as of 21 Nov 2026. MiniPay only shows
+  USDT, USDC and USDm, so recipients who cash out through MiniPay should take dollars.
 - **Not yet supported.** Textile also lists wBRL (Brazil) and wMXN (Mexico), but neither returned a quote on 21 Nov, so
   Lokal does not offer them.
 
@@ -159,8 +168,8 @@ A Lokal tag is a handle like `@ada` tied to one Celo wallet. People pay the tag;
    with receipt links. You can change your tag or release it (`{"t":""}`) from the same page.
 
 **Paying a tag** (`tag.html`, or `/@ada` on Vercel): the public tag page shows the owner's name, short address and
-"since" date. The payer picks **"They get naira"** (send USD₮) or **"They get dollars"** (send cNGN); these are the
-naira corridor's two buttons today, and rupiah and peso options join them with the currency picker. They type an amount
+"since" date. The payer picks what the owner receives: **naira, rupiah, Argentine peso or Colombian peso** (send
+USD₮), or **dollars** (send cNGN). The owner's preferred currency, if set, is pre-selected. They type an amount
 (a live estimate is shown, plus how much more the owner can receive today), connect a wallet and confirm. The page
 checks the balance and that the payer is not the owner, then sends **one** ordinary ERC-20 transfer to the token
 contract:
@@ -200,9 +209,8 @@ others show **amount in use** and are never paid.
 
 ### Quotes ("Send")
 
-`quote.html` gives a free live Textile FX price for all three corridors the agent runs today (USD₮ → naira, naira → USD₮,
-and "From CELO", which is a two-swap estimate and marked as operator-only). Rupiah and peso quotes join the page with the
-currency picker (the rupiah and peso rates in [Currencies](#currencies) are Textile previews from 21 Nov). The rate comes from `/api/rate` (Textile, cached for 60 s at
+`quote.html` gives a free live Textile FX price for every corridor: USD₮ → naira, rupiah, Argentine or Colombian
+pesos (pick one under "They receive"), naira → USD₮, and "From CELO" (a two-swap estimate, operator-only). The rate comes from `/api/rate` (Textile, cached for 60 s at
 the edge), with a static `rate.json` fallback refreshed every 30 minutes.
 
 ### Activity, receipts and reviews
@@ -297,8 +305,8 @@ remember the password; if you forget it, re-import your own key backup with a ne
 
 **Pay someone**
 
-Today `send` pays in the naira corridor: the owner gets naira, or dollars with `--dollars`. Rupiah and peso options
-come with the per-currency payouts (see [Currencies](#currencies)).
+`send` pays in the tag owner's preferred currency, or naira if they have none. Choose another with `--to`
+(`lokal send ada 10 --to rupiah`; names, codes and ISO codes all work), or dollars with `--dollars`.
 
 In PowerShell, `@` at the start of an argument is special. Leave it out (`ada`) or quote it (`'@ada'`).
 
@@ -409,8 +417,8 @@ flowchart TB
   subgraph RECIPIENT["Recipient's OWN wallet"]
     direction TB
     R1["🇳🇬 cNGN (naira) · ready today"]
-    R2["🇮🇩 IDRX (rupiah) · planned"]
-    R3["🇦🇷 wARS · 🇨🇴 wCOP (pesos) · planned"]
+    R2["🇮🇩 IDRX (rupiah)"]
+    R3["🇦🇷 wARS · 🇨🇴 wCOP (pesos)"]
   end
 
   %% ---------- after ----------
@@ -418,7 +426,7 @@ flowchart TB
     direction TB
     X1["Keep it: savings in<br/>their own currency"]
     X2["Send it on Celo<br/>instantly, fraction of a cent"]
-    X3["Cash out to a bank<br/>via a supported exchange<br/>(cash-out guide: planned)"]
+    X3["Cash out to a bank<br/>via a supported exchange<br/>(see the cash-out guide)"]
   end
 
   %% ---------- proof ----------
@@ -486,7 +494,7 @@ sequenceDiagram
     Status-->>Site: Tracker shows "Paid · NP-XXXX-XXXX"
     Chain-->>Ada: ₦ arrives in her own wallet
   end
-  Ada->>Ada: Keep it, send it on, or cash out to her bank (cash-out guide planned)
+  Ada->>Ada: Keep it, send it on, or cash out to her bank (cash-out guide)
 ```
 
 ---
@@ -751,7 +759,7 @@ HTML, CSS and ES modules.
 | `scripts/serve.mjs` | local preview server (`node scripts/serve.mjs`, port 4173) |
 | `contracts/` | Solidity contracts (`LokalTags`, `LokalPots`, `LokalText`), Hardhat + TypeScript tests, the one-command demo, the deploy script and ABIs (see [The contract has the final say](#the-contract-has-the-final-say)) |
 | `docs/WHO-ENFORCES-WHAT.md` | every rule, and whether the contract, the agent or the site enforces it |
-| `test/` | 177 unit and integration tests (`node --test`) |
+| `test/` | 197 unit and integration tests (`node --test`) |
 | `.github/workflows/ci.yml` | tests, a syntax check of every script, and the site check on every push and pull request |
 | `.github/workflows/contracts.yml` | compiles and tests the contracts and runs the demo (every row asserted) whenever the contracts or the site's tag rules change |
 | `.github/workflows/pages.yml` | GitHub Pages mirror: deploys only after tests and the site check pass; refreshes the rate every 30 min (read-only, no secrets) |
@@ -901,6 +909,19 @@ node scripts/check-site.mjs       # static site check
 
 Newest first.
 
+### 2026-11-21: rupiah and pesos, the currency picker and the cash-out guide
+
+- **Four currencies.** The payer picks naira, rupiah, Argentine peso or Colombian peso on every payment screen
+  (Overview, Send, tag pages, Get paid, Account, payment links) and with `lokal send ada 10 --to rupiah`. New corridors
+  `usdt-idrx`, `usdt-wars` and `usdt-wcop` run through the same firm quote, exact approval, measured payout and
+  attribution check as naira. One currency list (`src/currencies.mjs`) is shared byte for byte with the site.
+- **All four rates** in the sidebar; limits shown in dollars and in the chosen currency.
+- **Tag owners can prefer a currency**, and Lokal tag memos can name one (`NTP:<tag>:<code>`).
+- **[Cash-out guide](https://lokalpay.vercel.app/cash-out.html)** for each currency, with a MiniPay warning.
+- A bug found on the way: two payment links with the same amount in different local currencies would have been
+  ambiguous, since both are paid in USD₮. The one-active-link-per-amount rule now groups by the token the payer sends.
+- 197 tests (20 new, covering 2, 6 and 18 decimals).
+
 ### 2026-11-21: honesty pass, business model and SECURITY.md
 
 - **Three labels, used everywhere:** Live (used with real money on mainnet), Built, not yet used on mainnet, and
@@ -1045,7 +1066,7 @@ their own wallet in seconds.
 
 **Done**
 
-- [x] Agent on Celo mainnet, 177 tests passing
+- [x] Agent on Celo mainnet, 197 tests passing
 - [x] Live Textile price previews for all three corridors
 - [x] ERC-8004 identity registered (agentId 10079)
 - [x] Payment links, Get paid, autopilot, two stablecoin corridors plus CELO, receipts and onchain reviews
@@ -1066,12 +1087,8 @@ The operator steps for these are in [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 **Next**
 
-- **Currency picker and per-currency payouts.** "Choose what they receive" on every payment screen (naira, rupiah or
-  pesos), and the agent and autopilot paying out in IDRX, wARS and wCOP as they pay in cNGN today, each with its own
-  decimals and the same dollar limits.
 - **Pay through the contracts.** Switch the site and the `lokal` command to the live LokalTags and LokalPots contracts,
   so limits are checked before money moves and wallets see a normal contract call.
-- **All rates in the sidebar.** The live Textile rate for every supported currency, not only naira.
 - **Dollar subscriptions paid in local money.** Local cards are often declined or capped for dollar subscriptions (X
   Premium, ChatGPT, Canva, app stores). The naira → dollar corridor already converts cNGN to USD₮ on Textile FX; pairing
   it with a stablecoin-funded virtual card or gift-card partner lets people pay those subscriptions in naira, and in

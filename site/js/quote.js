@@ -33,7 +33,7 @@ const localView = (c) => ({
   corridorHint: `You send USD₮. The recipient gets ${c.plural} (${c.token}).`,
   receiveLabel: "Recipient gets (approx.)",
   route: `USD₮ → ${c.token} on Textile FX`,
-  delivered: `${c.token} on Celo, ${c.code === "cngn" ? "redeemable for naira" : `a ${c.name} stablecoin`}`,
+  delivered: `${c.token} on Celo, ${c.code === "cngn" ? "redeemable for naira" : `${/^[aeiou]/i.test(c.name) ? "an" : "a"} ${c.name} stablecoin`}`,
   emptyHint: "Enter an amount in dollars.",
   badHint: "Enter an amount in dollars, like 10 or 12.50.",
 });
