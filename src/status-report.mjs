@@ -13,10 +13,11 @@
 // estimating from the chain. Only public facts are sent (addresses, hashes, amounts, the tag, the receipt number), plus
 // the status and a reason code.
 import fs from "node:fs";
+import path from "node:path";
 import { formatUnits, parseUnits } from "viem";
 import { AGENT_ADDRESS, CORRIDORS, STATUS_OUTBOX_FILE, STATUS_SECRET_FILE, STATUS_URL, TOKENS } from "./config.mjs";
 import { receiptNo as receiptNoOf } from "./requests.mjs";
-import { MAX_BODY, MAX_EVENTS, RANK, STATUS_VERSION, signReport, validateEvent } from "../lib/status.mjs";
+import { MAX_BODY, MAX_EVENTS, RANK, STATUS_VERSION, refundNo as refundNoOf, signReport, validateEvent, validateHeartbeat } from "../lib/status.mjs";
 
 export const MIN_SECRET_LENGTH = 32;
 export const OUTBOX_MAX = 5000; // queued events kept at most (oldest dropped first)
@@ -112,7 +113,7 @@ const receiptFor = (receipts, payoutTx) => (payoutTx ? (receipts ?? []).find((r)
  * (receipts.jsonl), from `sinceMs` on. A record with a saved payout error is "failed". USD values of paid deposits and
  * missing recipients come from receipts.jsonl. Invalid ones are left out.
  */
-export function eventsFromRecords({ requests = [], registrations = {}, ntagPayments = {}, receipts = [], agent = AGENT_ADDRESS, sinceMs = 0 } = {}) {
+export function eventsFromRecords({ requests = [], registrations = {}, ntagPayments = {}, receipts = [], refunds = {}, agent = AGENT_ADDRESS, sinceMs = 0 } = {}) {
   const byPayout = new Map((receipts ?? []).filter((r) => r?.hashes?.payout).map((r) => [lc(r.hashes.payout), r]));
   const out = [];
   const paidRes = (rec) => {
@@ -154,6 +155,10 @@ export function eventsFromRecords({ requests = [], registrations = {}, ntagPayme
     }));
   }
   for (const e of receipts ?? []) if (isDirectReceipt(e, agent)) out.push(directEvent(e));
+  // a refunded deposit replaces whatever was said about it before (refused, unmatched): "refunded" ranks above those
+  for (const r of Object.values(refunds ?? {})) {
+    if (r?.status === "refunded") { const e = refundEvent(r); if (e) out.push(e); }
+  }
   const now = Date.now();
   return out.filter((e) => !validateEvent(e, now).error && Date.parse(e.at) >= sinceMs);
 }
@@ -174,6 +179,49 @@ export function retryPaidEvent(kind, r, res, receipts = []) {
     recipient: kind === "request" ? (r.recipient ?? fromReceipt ?? res?.recipient) : (r.from ?? fromReceipt),
     token: SELL[corridor], amount, corridor, payer: r.deposit.payer, status: "paid", res, at: new Date().toISOString(),
   });
+}
+
+/**
+ * The "refunded" event for a refunds.json record (status "refunded"): the deposit went back to its sender. The kind is the
+ * record autopilot kept for the deposit ("ntag" with its tag, "registration" with its hash), else "deposit" (unmatched or
+ * ambiguous). Returns null when the record lacks what the server requires.
+ */
+export function refundEvent(r) {
+  if (!r?.refundTx || !r?.id) return null;
+  const kind = r.source?.kind === "ntag" || r.source?.kind === "registration" ? r.source.kind : "deposit";
+  const sym = tokenSymbol(r.token);
+  return clean({
+    id: lc(r.id), kind, tag: kind === "ntag" && r.source?.tag ? r.source.tag : undefined,
+    registration: kind === "registration" ? lc(r.source.registration) : undefined,
+    recipient: kind !== "deposit" && r.source?.recipient ? lc(r.source.recipient) : undefined,
+    token: sym, amount: r.amount == null ? undefined : String(r.amount),
+    usd: r.usd != null && Number.isFinite(Number(r.usd)) ? Number(r.usd) : sym === "USDT" && r.amount != null ? Number(r.amount) : undefined,
+    status: "refunded", refundTx: lc(r.refundTx), refundNo: refundNoOf(lc(r.refundTx)),
+    depositTx: lc(String(r.id).split(":")[0]), payer: r.payer ? lc(r.payer) : undefined, at: r.refundedAt ?? new Date().toISOString(),
+  });
+}
+
+/**
+ * "0.1.0+abc1234": the package version and, when it is cheap to read (.git/HEAD and the ref, no git process), the short
+ * commit hash. Used in heartbeats. Never throws.
+ */
+export function agentVersion(root = path.join(import.meta.dirname, "..")) {
+  let v = "0.0.0";
+  try { v = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version || v; } catch { /* keep the default */ }
+  try {
+    let git = path.join(root, ".git");
+    if (fs.statSync(git).isFile()) git = path.resolve(root, fs.readFileSync(git, "utf8").replace(/^gitdir:\s*/, "").trim()); // a worktree
+    let head = fs.readFileSync(path.join(git, "HEAD"), "utf8").trim();
+    const ref = /^ref:\s*(.+)$/.exec(head)?.[1];
+    if (ref) {
+      const common = fs.existsSync(path.join(git, "commondir")) ? path.resolve(git, fs.readFileSync(path.join(git, "commondir"), "utf8").trim()) : git;
+      try { head = fs.readFileSync(path.join(common, ref), "utf8").trim(); } catch {
+        head = fs.readFileSync(path.join(common, "packed-refs"), "utf8").split("\n").find((l) => l.endsWith(` ${ref}`))?.split(" ")[0] ?? "";
+      }
+    }
+    if (/^[0-9a-f]{40}$/.test(head)) v += `+${head.slice(0, 7)}`;
+  } catch { /* no git: the package version alone */ }
+  return v.replace(/[^0-9A-Za-z._+-]/g, "").slice(0, 40) || "0.0.0";
 }
 
 // ---------- secret ----------
@@ -285,6 +333,7 @@ export function outboxFiles(file = STATUS_OUTBOX_FILE) {
 const DISABLED = Object.freeze({
   enabled: false, report() { return 0; }, syncRecords() { return 0; }, async sendNow() { return { sent: 0, queued: 0 }; },
   async flush() { return { sent: 0, left: 0 }; }, async ping() { return { ok: false }; }, async close() {}, pending() { return 0; },
+  async heartbeat() { return { ok: false }; }, health() { return { failingSince: null }; },
 });
 
 /**
@@ -300,7 +349,7 @@ export function createStatusReporter({
   say = () => {}, debounceMs = 2_000, timeoutMs = 10_000, setTimer = setTimeout, clearTimer = clearTimeout,
 } = {}) {
   const box = outboxFiles(outboxFile);
-  let timer = null, dueAt = 0, inflight = null, failures = 0, failNoted = false, stopped = false;
+  let timer = null, dueAt = 0, inflight = null, failures = 0, failNoted = false, stopped = false, failingSince = null;
   let waiting = []; // events not appended yet because another process held the lock
   let appendTimer = null;
   const noted = new Set();
@@ -388,11 +437,26 @@ export function createStatusReporter({
     } catch { return 0; }
   }
 
-  async function post(events) {
+  /** Records whether the server answered, for health(): when the current streak of failures started. */
+  function noteHealth(r) {
+    if (r.ok) failingSince = null;
+    else if (r.status === 0 || r.status >= 500 || r.status === 401) failingSince ??= now();
+  }
+
+  const post = (events) => postBody((ts) => ({ v: STATUS_VERSION, ts, events }));
+
+  /** Signs and POSTs make(ts). Resolves { status, ok, rejected, error? }; never rejects. */
+  async function postBody(make, ms = timeoutMs) {
+    const r = await postRaw(make, ms);
+    noteHealth(r);
+    return r;
+  }
+
+  async function postRaw(make, ms) {
     const ts = Math.floor(now() / 1000);
-    const body = JSON.stringify({ v: STATUS_VERSION, ts, events });
+    const body = JSON.stringify(make(ts));
     const c = typeof AbortController === "function" ? new AbortController() : null;
-    const t = setTimer(() => c?.abort(), timeoutMs);
+    const t = setTimer(() => c?.abort(), ms);
     t?.unref?.();
     try {
       const r = await fetchImpl(url, {
@@ -532,6 +596,29 @@ export function createStatusReporter({
     return r.ok ? { ok: true } : { ok: false, error: why(r) };
   }
 
+  /**
+   * Sends one signed heartbeat (autopilot is alive) straight away; heartbeats are never queued (an old one is useless).
+   * hb: { at, cursorBlock, chainHead, lagBlocks, celoBalance, lowGas, version, autoRefund }. Resolves { ok, error? };
+   * never rejects. An older server that doesn't know heartbeats answers 400: noted once.
+   */
+  async function heartbeat(hb) {
+    try {
+      if (stopped) return { ok: false, error: "stopped" };
+      const ts = Math.floor(now() / 1000);
+      const v = validateHeartbeat({ v: STATUS_VERSION, ts, heartbeat: hb }, ts);
+      if (v.error) { noteOnce(`hb:${v.error}`, `Status server: a heartbeat was not sent (${v.error}).`); return { ok: false, error: v.error }; }
+      const r = await postBody(() => ({ v: STATUS_VERSION, ts, heartbeat: v.heartbeat }), Math.min(timeoutMs, 5_000));
+      if (r.ok) return { ok: true };
+      if (r.status === 400) noteOnce("hb:400", "Status server: it does not accept heartbeats yet (deploy the latest site). Payouts are not affected.");
+      return { ok: false, error: why(r) };
+    } catch (e) {
+      return { ok: false, error: e?.message ?? "heartbeat failed" };
+    }
+  }
+
+  /** { failingSince: ms | null }: since when the status server has not answered (network, 5xx or a bad signature). */
+  const health = () => ({ failingSince });
+
   /** Stops the timers and gives waiting / queued reports one last chance (at most `waitMs`). */
   async function close({ waitMs = 5_000 } = {}) {
     stopped = true;
@@ -548,7 +635,7 @@ export function createStatusReporter({
   }
 
   return {
-    enabled: true, report, syncRecords, sendNow, flush, ping, close,
+    enabled: true, report, syncRecords, sendNow, flush, ping, close, heartbeat, health,
     pending: () => { try { return box.readQueue().events.length + waiting.length; } catch { return 0; } },
   };
 }

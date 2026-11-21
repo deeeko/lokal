@@ -11,15 +11,24 @@
 // Nothing here can move funds. Only data that is already public on Celo leaves the server, plus each deposit's status,
 // refusal reason code and receipt number. Without the secret or the Blob store it answers 503 { ok: false,
 // reason: "unavailable" }, and the site falls back to reading the chain.
+//   Heartbeat (autopilot alive): POST { v: 1, ts, heartbeat: { at, cursorBlock, chainHead, lagBlocks, celoBalance, lowGas,
+//        version, autoRefund } }, signed the same way. Strictly validated (lib/status.mjs validateHeartbeat); one older
+//        than the newest known is a replay (409). Kept in its own blob, status/agent.json, never with the deposit
+//        records. To save blob writes it is stored when something changed or the stored one is AGENT_WRITE_MS old.
+//   GET  ?agent=1: { ok, source: "agent", agent: { lastSeen, ageSec, ...heartbeat } | null }.
 import {
-  MAX_BODY, SUMMARY_PATH, checkSignature, emptySummary, mergeEvents, normalizeSummary, parseStatusQuery, pruneSummary,
-  statusView, validateReport,
+  AGENT_PATH, MAX_BODY, SUMMARY_PATH, agentView, checkSignature, emptySummary, mergeEvents, normalizeAgent, normalizeSummary,
+  parseStatusQuery, pruneSummary, statusView, validateHeartbeat, validateReport,
 } from "../lib/status.mjs";
 
 export {
   validateEvent, validateReport, checkSignature, signReport, mergeEvents, pruneSummary, paidLast24h, globalTotals, walletTotals,
-  parseStatusQuery, statusView, normalizeSummary, MAX_BODY, MAX_SKEW_SEC, KEEP_DAYS, KEEP_MAX, RECENT_MAX,
+  parseStatusQuery, statusView, normalizeSummary, MAX_BODY, MAX_SKEW_SEC, KEEP_DAYS, KEEP_MAX, RECENT_MAX, validateHeartbeat,
+  agentView, refundNo, isConflict, RANK,
 } from "../lib/status.mjs";
+
+/** A heartbeat is written to the blob at most this often unless lowGas, autoRefund or version changed. */
+export const AGENT_WRITE_MS = 4 * 60_000;
 
 const GET_CACHE = "public, s-maxage=10, stale-while-revalidate=30";
 const UNAVAILABLE = { ok: false, reason: "unavailable" };
@@ -59,6 +68,13 @@ export function blobStore({ access = process.env.STATUS_BLOB_ACCESS === "public"
         if (!etag && /exist/i.test(String(e?.message ?? ""))) throw new StaleWriteError("created");
         throw e;
       }
+    },
+    /** Overwrites the blob unconditionally (the agent heartbeat: the newest one simply wins). */
+    async replace(data) {
+      const { put } = await blob();
+      await put(path, JSON.stringify(data), {
+        access, contentType: "application/json", addRandomSuffix: false, cacheControlMaxAge: 60, allowOverwrite: true,
+      });
     },
   };
 }
@@ -102,6 +118,43 @@ export function makeHandler(opts = {}) {
   let store = opts.store ?? null;
   const getStore = () => (store ??= blobStore());
   let memo = null; // { at, got }: the last summary this instance read or wrote
+  let agentStore = opts.agentStore ?? null;
+  const getAgentStore = () => (agentStore ??= blobStore({ path: AGENT_PATH }));
+  // the newest heartbeat this instance knows: { readAt, stored ({ heartbeat, lastSeen } | null), latestAt (ms) }
+  let agentMemo = null;
+
+  /** The stored heartbeat, from memory when this instance read or wrote it in the last 10 s (`fresh`: always read). */
+  async function readAgent({ fresh = false } = {}) {
+    const t = now();
+    if (!fresh && agentMemo && t - agentMemo.readAt >= 0 && t - agentMemo.readAt < MEMORY_CACHE_MS) return agentMemo.stored;
+    const got = await getAgentStore().read({ fresh });
+    const stored = got && !got.corrupt ? normalizeAgent(got.data) : null;
+    const latestAt = Math.max(agentMemo?.latestAt ?? 0, stored ? Date.parse(stored.heartbeat.at) : 0);
+    agentMemo = { readAt: t, stored, latestAt };
+    return stored;
+  }
+
+  /** A signed heartbeat: replays refused, stored when it changed something or the stored one is getting old. */
+  async function onHeartbeat(body, ts, t, res) {
+    const v = validateHeartbeat(body, ts);
+    if (v.error) return res.status(400).json({ ok: false, error: v.error });
+    const hb = v.heartbeat;
+    try {
+      // the first heartbeat this instance sees: read what is stored, so a replay can be recognised
+      const stored = agentMemo ? agentMemo.stored : await readAgent({ fresh: true });
+      if (Date.parse(hb.at) <= (agentMemo?.latestAt ?? 0)) return res.status(409).json({ ok: false, error: "old heartbeat" });
+      agentMemo.latestAt = Date.parse(hb.at);
+      const prev = stored?.heartbeat;
+      const changed = !prev || prev.lowGas !== hb.lowGas || prev.autoRefund !== hb.autoRefund || prev.version !== hb.version;
+      if (!changed && t - Date.parse(stored.lastSeen) < AGENT_WRITE_MS) return res.status(200).json({ ok: true, stored: 0 });
+      const record = { v: 1, heartbeat: hb, lastSeen: new Date(t).toISOString() };
+      await getAgentStore().replace(record);
+      agentMemo = { readAt: now(), stored: { heartbeat: hb, lastSeen: record.lastSeen }, latestAt: Date.parse(hb.at) };
+      return res.status(200).json({ ok: true, stored: 1 });
+    } catch {
+      return res.status(503).json(UNAVAILABLE);
+    }
+  }
 
   async function readCached() {
     const t = now();
@@ -119,6 +172,13 @@ export function makeHandler(opts = {}) {
     }
     const { hasBlob } = env();
     const unavailable = () => { res.setHeader("Cache-Control", "no-store"); return res.status(503).json(UNAVAILABLE); };
+    if (q.by === "agent") {
+      if (!hasBlob && !opts.agentStore) return unavailable();
+      let stored;
+      try { stored = await readAgent(); } catch { return unavailable(); }
+      res.setHeader("Cache-Control", GET_CACHE);
+      return res.status(200).json(agentView(stored ? { ...stored } : null, now()));
+    }
     if (!hasBlob && !opts.store) return unavailable();
     let got;
     try { got = await readCached(); } catch { return unavailable(); }
@@ -143,6 +203,10 @@ export function makeHandler(opts = {}) {
     }
     let body;
     try { body = JSON.parse(raw); } catch { return res.status(400).json({ ok: false, error: "invalid body" }); }
+    if (body && typeof body === "object" && !Array.isArray(body) && Object.prototype.hasOwnProperty.call(body, "heartbeat")) {
+      if (!hasBlob && !opts.agentStore) return res.status(503).json(UNAVAILABLE);
+      return onHeartbeat(body, ts, t, res);
+    }
     const v = validateReport(body, ts, t);
     if (v.error) return res.status(400).json({ ok: false, error: v.error });
     // invalid events are named back (rejected) and skipped; the valid ones in the same batch are still stored

@@ -50,6 +50,12 @@ export async function confirm(question) {
   return answer === "yes";
 }
 
+/**
+ * Everything pay() touches outside this file: the wallet, Textile, the attribution check, the prompt and the log.
+ * Tests replace entries (a fake chain, fake quotes) and put them back afterwards; nothing else changes them.
+ */
+export const payDeps = { loadAccount, makeClients, preview, firmQuote, submit, verifyTx, confirm, log: (e) => log(e) };
+
 /** USD values (the caps): always 6-decimal USDT units. */
 const fmt = (units) => formatUnits(units, 6);
 /** An amount of `token` (one of TOKENS) as a decimal string, exact, in that token's own decimals. */
@@ -121,7 +127,7 @@ export async function preflight({ to, amount, corridor = "usdt-cngn", agent, rec
     own,
     blocked: BLOCKED_RECIPIENTS,
   });
-  const pv = await preview(c.sellToken.address, c.buyToken.address, sellAmount.toString());
+  const pv = await payDeps.preview(c.sellToken.address, c.buyToken.address, sellAmount.toString());
   if (pv.status !== "preview") throw notQuoting(c, pv.status, pv.reason);
   // cngn-usdt: the USD value is what we would buy; check it against the caps from the preview, and again on the firm quote.
   if (c.usd === "buy") checkCaps(BigInt(pv.buyAmount));
@@ -138,7 +144,7 @@ async function preflightRegistration({ amount, corridor, agent, recipientAddress
   const sellAmount = parseUnits(amountStr, c.sellToken.decimals);
   const recipient = registrationRecipient(recipientAddress, { agent: agent ?? AGENT_ADDRESS, payer, own: ownWallets() });
   if (c.usd === "sell") registrationCaps(sellAmount, recipient);
-  const pv = await preview(c.sellToken.address, c.buyToken.address, sellAmount.toString());
+  const pv = await payDeps.preview(c.sellToken.address, c.buyToken.address, sellAmount.toString());
   if (pv.status !== "preview") throw notQuoting(c, pv.status, pv.reason);
   if (c.usd === "buy") registrationCaps(BigInt(pv.buyAmount), recipient);
   return { c, amountStr, sellAmount, recipient, pv, wallet: recipient };
@@ -170,7 +176,7 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
     const { payFromCelo } = await import("./celo.mjs");
     return payFromCelo({ to, amount, execute, yes });
   }
-  const account = loadAccount({ required: execute });
+  const account = payDeps.loadAccount({ required: execute });
   const agent = account?.address ?? (recipientAddress != null ? AGENT_ADDRESS : undefined);
   const { c, amountStr, sellAmount, recipient, pv, wallet: capWallet } = await preflight({ to, amount, corridor, agent, recipientAddress, payer });
   const sell = c.sellToken;
@@ -186,7 +192,7 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
     return { dryRun: true, preview: pv, corridor: c.id, buyToken: buy.symbol, buyAmount: fmtToken(pv.buyAmount, buy) };
   }
 
-  const { pub, wallet } = makeClients(account);
+  const { pub, wallet } = payDeps.makeClients(account);
   // Both tokens must really have the decimals the registry says (USDT 6, cNGN 6, IDRX 2, wARS 18, wCOP 18); every
   // amount above is read and written with them.
   for (const t of [sell, buy]) {
@@ -201,7 +207,7 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
   if (sellBal < sellAmount) throw new Error(`Agent wallet holds ${fmtToken(sellBal, sell)} ${sell.symbol}, needs ${amountStr}.`);
   if (celoBal < parseUnits("0.02", 18)) throw new Error("Agent wallet needs ~0.02 CELO for gas.");
 
-  if (!yes && !(await confirm(`About to convert ${amountStr} ${sell.symbol} to ${buy.symbol} and pay ${to} on Celo MAINNET.`))) {
+  if (!yes && !(await payDeps.confirm(`About to convert ${amountStr} ${sell.symbol} to ${buy.symbol} and pay ${to} on Celo MAINNET.`))) {
     console.log("Cancelled. Nothing was sent.");
     return { cancelled: true };
   }
@@ -219,7 +225,7 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
     // 1. Firm quote (signs a no-funds proof of wallet control only if Textile asks).
     let q;
     try {
-      q = await firmQuote(account, sell.address, buy.address, sellAmount.toString());
+      q = await payDeps.firmQuote(account, sell.address, buy.address, sellAmount.toString());
     } catch (e) {
       // Nothing was sent yet: a local currency that stopped quoting is refused (never paid in another currency).
       if (e?.noQuote) throw notQuoting(c, "no_quote", e.reason);
@@ -260,7 +266,7 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
     hashes.swap = await wallet.sendTransaction({ to: s.to, data: s.data, value: BigInt(s.value) });
     const sr = await pub.waitForTransactionReceipt({ hash: hashes.swap });
     if (sr.status !== "success") throw new Error(`Swap reverted (${hashes.swap}).`);
-    await submit(q.rfqId, q.claimToken, hashes.swap).catch(() => {});
+    await payDeps.submit(q.rfqId, q.claimToken, hashes.swap).catch(() => {});
 
     // 4. Pay out exactly what the swap delivered: the measured balance change of the BUY token, never more than
     //    the swap's own Transfer events to the agent (so a deposit landing at the same moment is never paid on).
@@ -276,18 +282,18 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
 
     // 5. Prove every transaction (reset, approval, swap, payout) carries our attribution tag.
     const tags = {};
-    for (const [k, h] of Object.entries(hashes)) tags[k] = (await verifyTx({ client: pub, hash: h }))?.codes ?? null;
+    for (const [k, h] of Object.entries(hashes)) tags[k] = (await payDeps.verifyTx({ client: pub, hash: h }))?.codes ?? null;
     const untagged = Object.keys(hashes).filter((k) => !tags[k]?.includes(ATTRIBUTION_CODE));
     const receiptUrl = receiptLink({ payout: hashes.payout, swap: hashes.swap, requestId });
     const no = receiptNo(hashes.payout);
-    log({
+    payDeps.log({
       corridor: c.id, to, recipient, requestId, ...(registrationId ? { registrationId, payer } : {}), ...(ntag ? { ntag, payer } : {}), receiptNo: no,
       sold: { token: sell.symbol, amount: fmtToken(takerPays, sell) },
       paid: { token: buy.symbol, amount: fmtToken(received, buy) },
       ...(c.currency ? { currency: c.currency } : {}),
       usd: fmt(usdUnits),
       ...(c.id === "usdt-cngn" ? { usdtSpent: fmt(takerPays), cngnPaid: fmt(received) } : {}),
-      hashes, tags, untagged, receiptUrl,
+      hashes, tags, untagged, receiptUrl, reactor, // reactor: refunds never send to it (src/refund.mjs)
     });
     console.log(`Paid ${fmtToken(received, buy)} ${buy.symbol} to ${to}.`);
     for (const [k, h] of Object.entries(hashes)) console.log(`  ${k}: https://celoscan.io/tx/${h}  tag=${JSON.stringify(tags[k])}`);

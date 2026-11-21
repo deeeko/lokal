@@ -1,0 +1,48 @@
+name: agent-watchdog
+
+# Every 15 minutes: is autopilot alive? Reads the site's GET /api/status?agent=1 (the agent's signed heartbeat) and
+# sends a Telegram alert when the last heartbeat is more than 10 minutes old. While it stays down it re-alerts only
+# every 60 minutes, and sends one "back online" message when it returns (scripts/agent-watchdog.mjs). Its memory
+# between runs is a small JSON file in the Actions cache. Holds no key and moves no money.
+# Secrets (optional; without them the alert is only printed in the run log): ALERT_TELEGRAM_TOKEN, ALERT_TELEGRAM_CHAT_ID.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-watchdog
+  cancel-in-progress: false
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Restore the watchdog's memory
+        uses: actions/cache/restore@v4
+        with:
+          path: watchdog-state.json
+          key: agent-watchdog-${{ github.run_id }}
+          restore-keys: agent-watchdog-
+      - name: Check the heartbeat
+        env:
+          SITE_URL: https://lokalpay.vercel.app
+          ALERT_TELEGRAM_TOKEN: ${{ secrets.ALERT_TELEGRAM_TOKEN }}
+          ALERT_TELEGRAM_CHAT_ID: ${{ secrets.ALERT_TELEGRAM_CHAT_ID }}
+        run: node scripts/agent-watchdog.mjs --state watchdog-state.json
+      - name: Save the watchdog's memory
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: watchdog-state.json
+          key: agent-watchdog-${{ github.run_id }}

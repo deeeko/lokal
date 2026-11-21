@@ -136,11 +136,14 @@ export function receiptUsdUnits(entry) {
   return parseUnits(String(v), 6);
 }
 
-/** Sum of USD paid out by executed payouts (entries with a payout hash) in the 24 h before `now`. */
+/**
+ * Sum of USD paid out by executed payouts (entries with a payout hash) in the 24 h before `now`. Refunds
+ * (kind "refund") are never payouts: they have their own cap (refundUsedUnits) and are skipped here.
+ */
 export function dailyUsedUnits(entries, now = Date.now()) {
   let sum = 0n;
   for (const e of entries ?? []) {
-    if (!e?.hashes?.payout) continue;
+    if (!e?.hashes?.payout || e.kind === "refund") continue;
     const t = Date.parse(e.at);
     if (!Number.isFinite(t) || t <= now - DAY_MS || t > now + 60_000) continue;
     sum += receiptUsdUnits(e);
@@ -173,6 +176,29 @@ export function assertWalletCap(usedUnits, addUnits, cap) {
     throw new Error(
       `This payout (${formatUnits(addUnits, 6)} USD) would take this wallet's last 24 h total to ${formatUnits(usedUnits + addUnits, 6)} USD, ` +
       `over the per-wallet cap of ${cap} USD (MAX_WALLET_DAILY_USD). Nothing was sent.`,
+    );
+  }
+}
+
+/** Sum of USD refunded (receipts.jsonl lines with kind "refund" and a refund hash) in the 24 h before `now`. */
+export function refundUsedUnits(entries, now = Date.now()) {
+  let sum = 0n;
+  for (const e of entries ?? []) {
+    if (e?.kind !== "refund" || !e?.hashes?.refund) continue;
+    const t = Date.parse(e.at);
+    if (!Number.isFinite(t) || t <= now - DAY_MS || t > now + 60_000) continue;
+    sum += receiptUsdUnits(e);
+  }
+  return sum;
+}
+
+/** Throws if refunding `addUnits` (6-dp USD) more would take the last 24 h of refunds over `cap` (USD string). */
+export function assertRefundCap(usedUnits, addUnits, cap) {
+  const capUnits = parseUnits(String(cap), 6);
+  if (usedUnits + addUnits > capUnits) {
+    throw new Error(
+      `This refund (${formatUnits(addUnits, 6)} USD) would take the refunds of the last 24 h to ${formatUnits(usedUnits + addUnits, 6)} USD, ` +
+      `over the refund cap of ${cap} USD (MAX_DAILY_REFUND_USD). Nothing was sent.`,
     );
   }
 }

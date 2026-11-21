@@ -420,7 +420,7 @@ test("watch: a paid nTag deposit is reported as received, then paid with its rec
   assert.equal(paid.paidToken, "cNGN");
   for (const e of status.events) assert.equal(validateEvent(e).error, undefined);
   assert.equal(status.synced, 1);
-  assert.deepEqual(Object.keys(status.records).sort(), ["ntagPayments", "receipts", "registrations", "requests"], "all kinds re-checked on start");
+  assert.deepEqual(Object.keys(status.records).sort(), ["ntagPayments", "receipts", "refunds", "registrations", "requests"], "all kinds re-checked on start");
   assert.equal(status.closed, 1);
 });
 

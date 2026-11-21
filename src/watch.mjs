@@ -31,13 +31,26 @@
 //     last 48 h say that the server hasn't confirmed (all kinds, incl. direct owner payouts from receipts.jsonl). Queuing
 //     is a tiny local write; sending happens in the background. A reporting failure is logged once and never stops,
 //     delays or changes a payout.
+//   - One agent at a time (src/lock.mjs): with --execute it takes agent.lock first and refuses to start while another
+//     agent or --execute command holds it. Released on exit, Ctrl+C, SIGTERM and crashes.
+//   - Refunds (src/refund.mjs): a deposit with a refund record is never paid. With --auto-refund, refused Lokal tag and
+//     "Get paid" deposits are refunded right after they are refused (at most 3 per payer per 24 h); a failed refund is
+//     recorded and alerted, and never stops autopilot.
+//   - Alerts (src/alerts.mjs, optional): autopilot stopped, payout failed, refund failed, daily cap reached, CELO low
+//     (checked at most once a minute, re-warned at most hourly), status server unreachable 10+ minutes, deposit refused,
+//     payout paid. They wait in an outbox and never block a payout. With a status secret, a signed heartbeat goes to the
+//     status server about once a minute (fire and forget).
 import fs from "node:fs";
 import { createPublicClient, formatUnits, http, parseAbiItem, parseUnits } from "viem";
-import { AGENT_ADDRESS, CHAIN, CORRIDORS, TOKENS, WATCH_STATE_FILE } from "./config.mjs";
+import { verifyTx } from "@celo/attribution-tags";
+import { AGENT_ADDRESS, ATTRIBUTION_CODE, CHAIN, CORRIDORS, LOW_CELO_WARN, MIN_CELO_RESERVE, TOKENS, WATCH_STATE_FILE } from "./config.mjs";
 import { corridorFor, currencyOf } from "./currencies.mjs";
-import { loadAccount } from "./chain.mjs";
+import { loadAccount, makeClients } from "./chain.mjs";
 import { getCorridor, refusal } from "./guards.mjs";
-import { log, pay, preflight, readReceipts } from "./pay.mjs";
+import { BLOCKED_RECIPIENTS, loadContacts, log, pay, preflight, readReceipts } from "./pay.mjs";
+import { acquireLock, noLock, releaseLock } from "./lock.mjs";
+import { GAS_CHECK_MS, gasAlert, makeAlerter } from "./alerts.mjs";
+import { loadRefunds, refundDeposit, saveRefunds } from "./refund.mjs";
 import { preview } from "./textile.mjs";
 import { formatAmount, loadRequests, matchDeposit, receiptNoLink, requestStatus, saveRequests } from "./requests.mjs";
 import {
@@ -48,9 +61,12 @@ import {
   decodeNtagPayment, loadNtagOpsCache, loadNtagPayments, looksLikeNtagAttempt, ownerOf, refreshNtagOpsCache, resolveNtagsBefore,
   saveNtagPayments, verifyNtagOpOnchain,
 } from "./ntags.mjs";
-import { depositEvent, makeStatusReporter } from "./status-report.mjs";
+import { agentVersion, depositEvent, makeStatusReporter, refundEvent } from "./status-report.mjs";
 
 export const MAX_BLOCK_RANGE = 5000n; // Forno eth_getLogs limit
+export const HEARTBEAT_MS = 60_000;
+/** The status server counts as unreachable (warning alert) after this long without a good answer. */
+export const STATUS_DOWN_ALERT_MS = 10 * 60_000;
 const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 const SYMBOL = { [TOKENS.USDT.address.toLowerCase()]: "USDT", [TOKENS.CNGN.address.toLowerCase()]: "cNGN" };
 const MAX_BACKOFF_MS = 5 * 60_000;
@@ -170,6 +186,20 @@ export function initialFromBlock(latest, requests, now = Date.now(), blockMs = 1
   return from > 0n ? from : 0n;
 }
 
+/** The first sentence of a message (at most 240 characters). */
+export function firstSentence(msg) {
+  const s = String(msg ?? "").split(/(?<=[.!?])\s/)[0].trim();
+  return s.length > 240 ? s.slice(0, 239) + "…" : s;
+}
+
+/** The command that starts autopilot again with the same options. */
+export const resumeCommand = ({ autoRefund = false } = {}) => `node src/agent.mjs watch --execute${autoRefund ? " --auto-refund" : ""}`;
+
+/** The one line autopilot prints last when it stops on an error: what happened and how to restart. */
+export function stopLine(msg, opts = {}) {
+  return `AUTOPILOT STOPPED: ${firstSentence(msg)} Nothing more is paid until you restart it. Fix the cause (details above), then run: ${resumeCommand(opts)}`;
+}
+
 /** Exponential backoff for RPC errors: interval, 2x, 4x ... capped at 5 minutes. */
 export const backoffMs = (intervalMs, failures) => Math.min(intervalMs * 2 ** Math.max(0, failures), MAX_BACKOFF_MS);
 
@@ -197,15 +227,35 @@ const DEFAULT_IO = {
   log, pay, preflight, discoverRegistrations, indexedHeight, loadNtagOpsCache, refreshNtagOpsCache, verifyRegistrationOnchain,
   verifyNtagOpOnchain, ntagUsdFloor, print: (s) => console.log(s), sleep: null, now: () => Date.now(),
   readReceipts, makeStatus: (say) => makeStatusReporter({ say }),
+  loadRefunds, saveRefunds,
+  // the agent lock: off under the test runner (tests pass their own), so a test never touches the real agent.lock
+  acquireLock: (opts) => (process.env.NODE_TEST_CONTEXT ? noLock() : acquireLock(opts)),
+  makeAlerter: (say) => makeAlerter({ say }),
+  /** What an auto-refund needs beyond autopilot's own reads: the attribution-tagged wallet, prices, own_wallets. */
+  refundChain: ({ account }) => ({ wallet: makeClients(account).wallet, verifyTx, preview, own: loadContacts().own }),
+  version: () => agentVersion(),
 };
 
 /**
  * Runs autopilot until Ctrl+C or a StopError. `polls` (tests) stops after that many polls; `io` replaces any of
- * DEFAULT_IO (tests: a fake chain, files in a temp dir, a fake pay()).
+ * DEFAULT_IO (tests: a fake chain, files in a temp dir, a fake pay()). With `execute` it holds the agent lock for the
+ * whole run (clearStaleLock: replace a lock whose process is gone). `autoRefund` (execute only): refund refused tag and
+ * "Get paid" deposits right away.
  */
-export async function watch({ execute = false, interval = 15, polls = Infinity, io: ioOverrides = {} } = {}) {
-  const io = { ...DEFAULT_IO, ...ioOverrides };
+export async function watch(opts = {}) {
+  const io = { ...DEFAULT_IO, ...(opts.io ?? {}) };
+  const lock = opts.execute ? io.acquireLock({ command: "watch --execute", clearStale: Boolean(opts.clearStaleLock) }) : null;
+  try {
+    return await runWatch({ ...opts, io });
+  } finally {
+    releaseLock(lock);
+  }
+}
+
+async function runWatch({ execute = false, interval = 15, polls = Infinity, autoRefund = false, io }) {
   const say = (msg) => io.print(`[${stamp()}] ${msg}`);
+  const autoRefundOn = Boolean(execute && autoRefund);
+  if (autoRefund && !execute) say("--auto-refund only works with --execute; this dry run refunds nothing.");
   const intervalMs = Math.max(5, Number(interval) || 15) * 1000;
   const account = io.loadAccount({ required: execute });
   const agent = account?.address ?? AGENT_ADDRESS;
@@ -238,6 +288,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     wake?.();
   };
   process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigint); // a service manager stopping autopilot: the same clean stop
   const sleep = io.sleep ?? ((ms) => new Promise((res) => { const t = setTimeout(res, ms); wake = () => { clearTimeout(t); res(); }; }));
 
   const requests = () => {
@@ -290,6 +341,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
         say("Status server: reporting each deposit's status to the site in the background.");
         status.syncRecords({
           requests: io.loadRequests(), registrations: io.loadRegState(), ntagPayments: io.loadNtagPayments(), receipts: io.readReceipts(),
+          refunds: io.loadRefunds(),
         }, { agent });
         status.flush().catch(() => {});
       }
@@ -300,6 +352,43 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     if (!status?.enabled) return;
     try { status.report(depositEvent(fields)); } catch { /* reporting is best effort */ }
   };
+
+  // Alerts: execute mode only. Queuing is a tiny local write; sending happens in the background. Never throws.
+  let alerter = null;
+  if (execute) {
+    try {
+      alerter = io.makeAlerter?.(say) ?? null;
+      if (alerter?.enabled) say(`Alerts: on (${alerter.channels.join(" and ")}).`);
+    } catch { alerter = null; }
+  }
+  const alert = (kind, text) => { try { alerter?.alert(kind, text); } catch { /* alerts are best effort */ } };
+  /** A pre-flight that failed on the global daily cap: worth a warning on the operator's phone. */
+  const noteCap = (e) => { if (/MAX_DAILY_USD/.test(String(e?.message))) alert("daily_cap", `Daily cap reached: ${firstSentence(e.message)} Autopilot stops until the rolling 24 h total has room again.`); };
+  if (autoRefundOn) say("Auto-refund: ON. Refused Lokal tag and \"Get paid\" deposits are refunded to their sender (at most 3 per payer per 24 h).");
+
+  /** What refundDeposit needs, built from autopilot's own io (so tests see one consistent world). */
+  let refundChain = null;
+  const refundDeps = () => {
+    refundChain ??= io.refundChain({ account, pub });
+    return {
+      pub, agent, own: refundChain.own ?? [], contracts: BLOCKED_RECIPIENTS, wallet: refundChain.wallet, verifyTx: refundChain.verifyTx,
+      preview: refundChain.preview, attributionCode: ATTRIBUTION_CODE, now: io.now, say,
+      loadRecords: () => ({
+        requests: io.loadRequests(), registrations: io.loadRegState(), ntagPayments: io.loadNtagPayments(), receipts: io.readReceipts(), refunds: io.loadRefunds(),
+      }),
+      loadRefunds: io.loadRefunds, saveRefunds: io.saveRefunds, log: io.log, alert,
+      report: (rec) => { if (status?.enabled) { const ev = refundEvent(rec); if (ev) status.report(ev); } },
+    };
+  };
+  /** --auto-refund: refunds a deposit autopilot just refused. Never throws: a failed refund is recorded and alerted. */
+  async function autoRefundDeposit(key) {
+    if (!autoRefundOn) return;
+    try {
+      await refundDeposit(key, refundDeps(), { execute: true, yes: true, auto: true });
+    } catch (e) {
+      say(e.refundFailed ? e.message : `Auto-refund of ${key} not done: ${e.message}`);
+    }
+  }
 
   let cursor = null; // last fully processed block
   let failures = 0;
@@ -328,6 +417,13 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     const tx = txInfo.get(l.transactionHash);
     if (tx.from.toLowerCase() === agent.toLowerCase()) return;
 
+    // A deposit with a refund record (sending, refunded, failed, too small) is never paid.
+    const refund = io.loadRefunds()[key];
+    if (refund) {
+      say(`Deposit ${l.transactionHash} has a refund record (${refund.status}). It is never paid. Skipping.`);
+      return;
+    }
+
     if (!blockTime.has(l.blockNumber)) blockTime.set(l.blockNumber, Number((await pub.getBlock({ blockNumber: l.blockNumber })).timestamp) * 1000);
     const timeMs = blockTime.get(l.blockNumber);
     const amount = formatAmount(value);
@@ -352,18 +448,18 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     const rm = matchRegistration({ token, value, timeMs }, regs, rstate);
     if (req && rm) {
       say(`Ambiguous deposit: ${amount} ${sym} from ${short(payer)} (tx ${l.transactionHash}) matches request ${req.id} AND registration ${rm.reg.hash}. NOT paid; settle it by hand.`);
-      if (execute) io.log({ type: "ambiguous_deposit", requestId: req.id, registrationId: rm.reg.hash, token: sym, amount, from: payer, tx: l.transactionHash, block: String(l.blockNumber) });
+      if (execute) io.log({ type: "ambiguous_deposit", requestId: req.id, registrationId: rm.reg.hash, token: sym, amount, from: payer, tx: l.transactionHash, logIndex: l.logIndex, block: String(l.blockNumber) });
       return;
     }
     if (rm?.used) {
       say(`Deposit ${amount} ${sym} from ${short(payer)} (tx ${l.transactionHash}) matches registration ${rm.reg.hash}, which was already used (one payout per registration). NOT paid.`);
-      if (execute) io.log({ type: "unmatched_deposit", reason: "registration already used", registrationId: rm.reg.hash, token: sym, amount, from: payer, tx: l.transactionHash, block: String(l.blockNumber) });
+      if (execute) io.log({ type: "unmatched_deposit", reason: "registration already used", registrationId: rm.reg.hash, token: sym, amount, from: payer, tx: l.transactionHash, logIndex: l.logIndex, block: String(l.blockNumber) });
       return;
     }
     if (rm) return handleRegistration(l, key, rm.reg, { sym, amount, payer, timeMs });
     if (!req) {
       say(`Unmatched deposit: ${amount} ${sym} from ${short(payer)} (tx ${l.transactionHash}). No open request has this exact amount and token. NOT paid.`);
-      if (execute) io.log({ type: "unmatched_deposit", token: sym, amount, from: payer, tx: l.transactionHash, block: String(l.blockNumber) });
+      if (execute) io.log({ type: "unmatched_deposit", token: sym, amount, from: payer, tx: l.transactionHash, logIndex: l.logIndex, block: String(l.blockNumber) });
       return;
     }
     const deposit = { payer, tx: l.transactionHash, logIndex: l.logIndex, block: String(l.blockNumber), at: new Date(timeMs).toISOString() };
@@ -387,6 +483,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
       pf = await io.preflight({ to: req.name, amount: req.amount, corridor: req.dir, agent });
     } catch (e) {
       pin();
+      noteCap(e);
       io.log({ type: "preflight_failed", requestId: req.id, token: sym, amount, from: payer, tx: l.transactionHash, block: String(l.blockNumber), error: e.message });
       throw new StopError(
         `Pre-flight failed for ${req.id}: ${e.message}. NOTHING was recorded or paid; the deposit stays in the agent wallet ` +
@@ -414,6 +511,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
         if (e.hashes) failed.hashes = e.hashes;
         io.saveRequests(after);
       });
+      alert("payout_failed", `Payout for request ${r.id} failed: ${firstSentence(e.message)} Retry (dry run first): node src/agent.mjs retry --request ${r.id}`);
       throw new StopError(
         `Payout for ${r.id} failed: ${e.message}. The deposit is recorded on the request; it is not retried automatically. ` +
         `Fix the cause, then "node src/agent.mjs retry --request ${r.id}" (dry run; add --execute to pay). Stopping.`,
@@ -427,6 +525,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     });
     report({ ...ev, status: "paid", res, at: new Date().toISOString() });
     say(`Paid ${r.id}. Receipt ${res.receiptNo}: ${receiptNoLink(res.receiptNo)}`);
+    alert("payout_paid", `Paid request ${r.id} (${r.amount} ${sym} deposit). Receipt ${res.receiptNo}: ${receiptNoLink(res.receiptNo)}`);
     if (res.untagged?.length) throw new StopError(`Payout ${r.id} sent, but ${res.untagged.join(", ")} lack the attribution tag. Stopping to investigate.`);
   }
 
@@ -434,7 +533,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
    * A permanent refusal of a registration deposit: logged, and recorded under the registration's `refused` map, so the
    * deposit counts as handled and a rescan never pays it. The registration itself stays usable for a later deposit.
    */
-  function refuseRegistration(reg, key, deposit, reason, fields) {
+  async function refuseRegistration(reg, key, deposit, reason, fields) {
     say(`Refused deposit ${deposit.tx} for registration ${reg.hash}: ${reason} The deposit stays in the agent wallet (recorded as refused). Continuing.`);
     io.log({ type: "refused_deposit", registrationId: reg.hash, ...fields, error: reason });
     const id = reg.hash.toLowerCase();
@@ -453,6 +552,9 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
       kind: "registration", key, registration: reg.hash, recipient: rec.from ?? reg.from, token: fields.token, amount: fields.amount,
       corridor: reg.req.d, payer: deposit.payer, status: "refused", reason, at: refusedAt,
     });
+    alert("deposit_refused", `Refused ${fields.amount} ${fields.token} from ${deposit.payer} for a "Get paid" link: ${firstSentence(reason)} ` +
+      `It stays in the agent wallet${autoRefundOn ? "; auto-refund is on" : `; refund it with: node src/agent.mjs refund --deposit ${key}`}.`);
+    await autoRefundDeposit(key);
   }
 
   async function handleRegistration(l, key, reg, { sym, amount, payer, timeMs }) {
@@ -484,6 +586,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     } catch (e) {
       if (e.permanent) return refuseRegistration(reg, key, deposit, e.message, where);
       pin();
+      noteCap(e);
       io.log({ type: "preflight_failed", registrationId: reg.hash, ...where, error: e.message });
       throw new StopError(
         `Pre-flight failed for registration ${reg.hash}: ${e.message}. NOTHING was recorded or paid; the deposit stays in the agent wallet. ` +
@@ -514,6 +617,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
         if (e.hashes) after[id].hashes = e.hashes;
         io.saveRegState(after);
       });
+      alert("payout_failed", `Payout for "Get paid" registration ${reg.hash} failed: ${firstSentence(e.message)} Retry (dry run first): node src/agent.mjs retry --registration ${reg.hash}`);
       throw new StopError(
         `Payout for registration ${reg.hash} failed: ${e.message}. The deposit is recorded; it is not retried automatically. ` +
         `Fix the cause, then "node src/agent.mjs retry --registration ${reg.hash}" (dry run; add --execute to pay). Stopping.`,
@@ -526,6 +630,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     });
     report({ ...ev, status: "paid", res, at: new Date().toISOString() });
     say(`Paid registration ${reg.hash}. Receipt ${res.receiptNo}: ${receiptNoLink(res.receiptNo)}`);
+    alert("payout_paid", `Paid "Get paid" link ${reg.hash.slice(0, 10)}… (${amount} ${sym} deposit). Receipt ${res.receiptNo}: ${receiptNoLink(res.receiptNo)}`);
     if (res.untagged?.length) throw new StopError(`Payout for ${reg.hash} sent, but ${res.untagged.join(", ")} lack the attribution tag. Stopping to investigate.`);
   }
 
@@ -533,7 +638,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
    * A permanent refusal of an nTag deposit: logged, and recorded in ntag-payments.json as { status: "refused", reason }
    * so it counts as handled (a rescan never pays it). Dry run: printed only.
    */
-  function refuseNtag(key, reason, fields, where) {
+  async function refuseNtag(key, reason, fields, where) {
     say(`Refused Lokal tag deposit ${where.amount} ${where.token} from ${short(where.from)} (tx ${where.tx})${where.ntag ? ` for @${where.ntag}` : ""}: ${reason}. NOT paid; the deposit stays in the agent wallet${execute ? " (recorded as refused)" : ""}. Continuing.`);
     if (!execute) return;
     io.log({ type: "refused_deposit", reason, ...where });
@@ -544,6 +649,9 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
       kind: "ntag", key, tag: where.ntag ?? undefined, recipient: s[key].from ?? s[key].owner, token: where.token, amount: where.amount,
       corridor: s[key].dir, payer: where.from, status: "refused", reason, at: s[key].refusedAt,
     });
+    alert("deposit_refused", `Refused ${where.amount} ${where.token} from ${where.from}${where.ntag ? ` for @${where.ntag}` : ""}: ${firstSentence(reason)} ` +
+      `It stays in the agent wallet${autoRefundOn ? "; auto-refund is on" : `; refund it with: node src/agent.mjs refund --deposit ${key}`}.`);
+    await autoRefundDeposit(key);
   }
 
   async function handleNtag(l, key, tag, { sym, amount, payer, timeMs, tx, currency = null }) {
@@ -598,6 +706,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     } catch (e) {
       if (e.permanent) return refuseNtag(key, e.message, record(from ?? d.entry.owner), where);
       pin();
+      noteCap(e);
       io.log({ type: "preflight_failed", ...where, error: e.message });
       throw new StopError(
         `Pre-flight failed for the Lokal tag payment to @${tag}: ${e.message}. NOTHING was recorded or paid; the deposit stays in the agent wallet. ` +
@@ -625,6 +734,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
         if (e.hashes) after[key].hashes = e.hashes;
         io.saveNtagPayments(after);
       });
+      alert("payout_failed", `Payout to @${tag} failed: ${firstSentence(e.message)} Retry (dry run first): node src/agent.mjs retry --ntag ${key}`);
       throw new StopError(
         `Payout to @${tag} failed: ${e.message}. The deposit is recorded; it is not retried automatically. ` +
         `Fix the cause, then "node src/agent.mjs retry --ntag ${key}" (dry run; add --execute to pay). Stopping.`,
@@ -637,6 +747,7 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     });
     report({ ...ev, status: "paid", res, at: new Date().toISOString() });
     say(`Paid @${tag}. Receipt ${res.receiptNo}: ${receiptNoLink(res.receiptNo)}`);
+    alert("payout_paid", `Paid @${tag} (${amount} ${sym} deposit). Receipt ${res.receiptNo}: ${receiptNoLink(res.receiptNo)}`);
     if (res.untagged?.length) throw new StopError(`Payout to @${tag} sent, but ${res.untagged.join(", ")} lack the attribution tag. Stopping to investigate.`);
   }
 
@@ -665,12 +776,62 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
     }
   }
 
+  // Low CELO (read at most once a minute) and the heartbeat (execute mode with a status secret, about once a minute).
+  let gasState = {};
+  let lastGasCheck = -Infinity;
+  let celoBalance = null;
+  let lastBeat = -Infinity;
+  let beating = false;
+  let statusDownAlerted = false;
+  const version = (() => { try { return io.version?.() ?? "0.0.0"; } catch { return "0.0.0"; } })();
+  /** Once per poll, outside any payout. Never throws and never waits on the status server. */
+  async function tick(latest) {
+    const t = io.now();
+    if (t - lastGasCheck >= GAS_CHECK_MS) {
+      lastGasCheck = t;
+      try {
+        celoBalance = await pub.getBalance({ address: agent });
+        const g = gasAlert(gasState, { balance: celoBalance, warnUnits: parseUnits(LOW_CELO_WARN, 18), reserveUnits: parseUnits(MIN_CELO_RESERVE, 18), now: t });
+        gasState = g.state;
+        if (g.warn) {
+          const msg = `The agent holds only ${formatUnits(celoBalance, 18)} CELO for gas` + (g.warn === "reserve"
+            ? `, below the hard reserve of ${MIN_CELO_RESERVE} CELO (MIN_CELO_RESERVE). Payouts will start failing: top up the agent wallet ${agent} now.`
+            : `, under the warning level of ${LOW_CELO_WARN} CELO (LOW_CELO_WARN). Top up the agent wallet ${agent} soon.`);
+          say(`WARNING: LOW GAS. ${msg}`);
+          if (execute) alert("celo_low", msg);
+        } else if (g.recovered) say(`CELO for gas is fine again (${formatUnits(celoBalance, 18)} CELO).`);
+      } catch { /* a balance that can't be read never stops autopilot */ }
+    }
+    if (!execute || !status?.enabled) return;
+    if (t - lastBeat >= HEARTBEAT_MS && !beating) {
+      lastBeat = t;
+      beating = true;
+      const lag = cursor != null && latest != null && latest > cursor ? Number(latest - cursor) : 0;
+      Promise.resolve(status.heartbeat?.({
+        at: new Date(t).toISOString(), cursorBlock: cursor != null ? String(cursor) : null, chainHead: latest != null ? String(latest) : null,
+        lagBlocks: cursor != null && latest != null ? lag : null, celoBalance: celoBalance != null ? formatUnits(celoBalance, 18) : null,
+        lowGas: (gasState.level ?? "ok") !== "ok", version, autoRefund: autoRefundOn,
+      })).catch(() => {}).finally(() => { beating = false; });
+    }
+    try {
+      const since = status.health?.()?.failingSince ?? null;
+      if (since == null) statusDownAlerted = false;
+      else if (!statusDownAlerted && t - since >= STATUS_DOWN_ALERT_MS) {
+        statusDownAlerted = true;
+        const msg = `The status server has not answered for ${Math.round((t - since) / 60_000)} minutes. Payouts carry on; the site estimates from Celo until it is back.`;
+        say(`WARNING: ${msg}`);
+        alert("status_unreachable", msg);
+      }
+    } catch { /* never */ }
+  }
+
   try {
     let done = 0;
     while (!stopping && done < polls) {
       done++;
       try {
         const latest = await pub.getBlockNumber();
+        await tick(latest);
         // Blockscout's indexed height FIRST, then the registrations and nTag ops: every one in a block <= that height is
         // in the lists, and deposits are scanned only up to that height.
         const indexed = await io.indexedHeight();
@@ -728,9 +889,20 @@ export async function watch({ execute = false, interval = 15, polls = Infinity, 
       if (!stopping && done < polls) await sleep(intervalMs);
     }
     say("Stopped.");
+  } catch (e) {
+    if (e instanceof StopError) {
+      // What happened (in full), then one clear last line: what stopped it and how to restart.
+      say(e.message);
+      say(stopLine(e.message, { autoRefund: autoRefundOn }));
+      alert("autopilot_stopped", `Autopilot stopped: ${firstSentence(e.message)} Resume after fixing it: ${resumeCommand({ autoRefund: autoRefundOn })}`);
+      e.printed = true;
+    }
+    throw e;
   } finally {
     process.off("SIGINT", onSigint);
-    // one last chance for queued status reports (at most a few seconds; payouts are already done)
+    process.off("SIGTERM", onSigint);
+    // one last chance for queued status reports and alerts (at most a few seconds each; payouts are already done)
     try { await status?.close?.({ waitMs: 5_000 }); } catch { /* best effort */ }
+    try { await alerter?.close?.({ waitMs: 5_000 }); } catch { /* best effort */ }
   }
 }

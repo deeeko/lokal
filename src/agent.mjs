@@ -31,6 +31,14 @@
 //   node src/agent.mjs verify <txHash>                          show the attribution tag on a transaction
 //   node src/agent.mjs status-sync [--backfill]                 send queued reports to the site's status server
 //                                                               (--backfill: re-send every saved deposit record too)
+//   node src/agent.mjs refunds                                  deposits that can be refunded, and every refund so far
+//   node src/agent.mjs refund --deposit TX:LOGINDEX [--execute] [--yes] [--retry]   send a deposit back to its sender
+//                                                               (DRY RUN with a gas estimate unless --execute; docs/REFUNDS.md)
+//   node src/agent.mjs watch --execute --auto-refund            autopilot that also refunds refused tag / Get paid deposits
+//   node src/agent.mjs alert-test                               send a test alert (Telegram and/or ALERT_WEBHOOK_URL)
+//   node src/agent.mjs doctor                                   PASS / WARN / FAIL checks of this setup (never reads the key)
+// One agent at a time: watch --execute and every other command with --execute (pay, ask, retry, register, refund) take
+// agent.lock. A lock left by a crash is never removed automatically: add --clear-stale-lock once you have checked.
 import { createPublicClient, erc20Abi, formatUnits, http, isAddress, parseUnits } from "viem";
 import { verifyTx } from "@celo/attribution-tags";
 import {
@@ -44,7 +52,7 @@ import {
 import { CURRENCIES, corridorFor, currencyOf, currencyOfCorridor, formatCurrencyUnits } from "./currencies.mjs";
 import { celoQuote, describeQuote } from "./celo.mjs";
 import { parseIntent } from "./intent.mjs";
-import { BLOCKED_RECIPIENTS, confirm, loadContacts, pay, preflight, readReceipts } from "./pay.mjs";
+import { BLOCKED_RECIPIENTS, confirm, loadContacts, log, pay, preflight, readReceipts } from "./pay.mjs";
 import { createRequest, loadRequests, receiptNoLink, requestLink, requestStatus, retryBlocker, saveRequests } from "./requests.mjs";
 import {
   discoverRegistrations, listStatus, loadRegState, MAX_REG_HOURS, registrationLink, registrationStatuses, saveRegState,
@@ -56,7 +64,11 @@ import {
   ownerOf, refusedRetryBlocker, resolveNtags, saveNtagPayments, verifyNtagOpOnchain,
 } from "./ntags.mjs";
 import { NTAG_MIN, NTAG_MIN_USD, ntagUsdFloor, watch } from "./watch.mjs";
-import { directEvent, eventsFromRecords, isDirectReceipt, makeStatusReporter, retryPaidEvent } from "./status-report.mjs";
+import { directEvent, eventsFromRecords, isDirectReceipt, makeStatusReporter, refundEvent, retryPaidEvent } from "./status-report.mjs";
+import { acquireLock } from "./lock.mjs";
+import { age, loadRefunds, refundDeposit, refundRows, saveRefunds } from "./refund.mjs";
+import { makeAlerter } from "./alerts.mjs";
+import { runDoctor } from "./doctor.mjs";
 
 const [cmd, ...rest] = process.argv.slice(2);
 const flag = (n) => { const i = rest.indexOf(`--${n}`); return i >= 0 ? rest[i + 1] : undefined; };
@@ -77,7 +89,7 @@ const agentAddress = () => loadAccount({ required: false })?.address ?? AGENT_AD
 const positional = () => {
   const out = [];
   for (let i = 0; i < rest.length; i++) {
-    if (rest[i].startsWith("--")) { if (!["--execute", "--yes"].includes(rest[i])) i++; continue; }
+    if (rest[i].startsWith("--")) { if (!["--execute", "--yes", "--clear-stale-lock", "--auto-refund", "--retry"].includes(rest[i])) i++; continue; }
     out.push(rest[i]);
   }
   return out;
@@ -146,7 +158,24 @@ const directEventsFor = (res) => {
   return readReceipts().filter((e) => String(e?.hashes?.payout ?? "").toLowerCase() === h && isDirectReceipt(e, agentAddress())).map(directEvent);
 };
 
+/** The agent lock for a command that moves money (only with --execute). Released on exit, Ctrl+C, SIGTERM and crashes. */
+const takeLock = (command) => acquireLock({ command, clearStale: has("clear-stale-lock"), signals: true });
+
+/** A refund the operator just made: tell the site's status server (best effort). */
+async function reportRefund(rec) {
+  const ev = refundEvent(rec);
+  if (ev) await reportAfterPayout([ev]);
+}
+
+/** Refuses when a deposit has a refund record: a refunded (or refunding) deposit is never paid. */
+function assertNotRefunded(depositKey) {
+  const r = depositKey ? loadRefunds()[String(depositKey).toLowerCase()] : null;
+  if (r) throw new Error(`Deposit ${depositKey} has a refund record (${r.status}${r.refundTx ? `, ${r.refundTx}` : ""}). A refunded deposit is never paid. Nothing was sent.`);
+}
+
 async function main() {
+  // Every command that can move money takes the agent lock first (dry runs never do). watch and refund take it themselves.
+  if (has("execute") && ["pay", "ask", "retry", "register"].includes(cmd)) takeLock(`${cmd} --execute`);
   switch (cmd) {
     case "keygen": {
       const r = keygen();
@@ -333,6 +362,8 @@ async function main() {
       if (force && !refused) throw new Error(`${what} ${r.id} was not refused by autopilot; retry it without --force-refused.`);
       const blocker = force ? refusedRetryBlocker(r) : retryBlocker(r);
       if (blocker) throw new Error(blocker);
+      const depositKey = r.deposit?.tx != null && r.deposit?.logIndex != null ? `${r.deposit.tx}:${r.deposit.logIndex}` : kind === "ntag" ? r.id : null;
+      assertNotRefunded(depositKey);
       if (force) {
         // The tag's claim must still check out onchain and still belong to the wallet recorded at refusal time.
         const agent = agentAddress();
@@ -358,6 +389,7 @@ async function main() {
       // Mark the retry BEFORE sending (like watch records the deposit first): a crash mid-flow can never lead to a second retry.
       const again = (force ? refusedRetryBlocker : retryBlocker)(target(kind, id));
       if (again) throw new Error(again);
+      assertNotRefunded(depositKey);
       updateTarget(kind, id, (m) => { m.retrying = new Date().toISOString(); });
       let res;
       try {
@@ -538,8 +570,81 @@ async function main() {
       break;
     }
     case "watch":
-      await watch({ execute: has("execute"), interval: flag("interval") ?? 15 });
+      try {
+        await watch({
+          execute: has("execute"), interval: flag("interval") ?? 15, autoRefund: has("auto-refund"), clearStaleLock: has("clear-stale-lock"),
+        });
+      } catch (e) {
+        if (!e?.printed) throw e;
+        process.exitCode = 1; // autopilot already printed what happened and how to restart, as its last line
+      }
       break;
+    case "refunds": {
+      // Refundable deposits (refused, unmatched incl. expired or used links, ambiguous) and every refund so far.
+      const records = { requests: loadRequests(), registrations: loadRegState(), ntagPayments: loadNtagPayments(), receipts: readReceipts() };
+      const rows = refundRows(records, loadRefunds());
+      if (!rows.length) { console.log("Nothing to refund: autopilot has no refused, unmatched or ambiguous deposits on record."); break; }
+      for (const r of rows) {
+        console.log(`${r.key}  ${String(r.status).padEnd(19)}  ${r.amount ?? "?"} ${r.token ?? "?"}  from ${r.payer ?? "?"}  ${age(r.at)} ago`);
+        console.log(`    ${r.category ?? "?"}: ${String(r.reason ?? "").slice(0, 120)}`);
+        if (r.refundTx) console.log(`    refund ${r.refundNo ?? ""}: https://celoscan.io/tx/${r.refundTx}`);
+        if (r.error) console.log(`    error: ${r.error}`);
+        if (r.key.endsWith(":?")) console.log("    (an older record without its log index: find it on Celoscan, then refund --deposit <tx>:<logIndex>)");
+        else if (r.status === "refundable") console.log(`    refund (dry run): node src/agent.mjs refund --deposit ${r.key}`);
+        else if (r.status === "failed") console.log(`    retry (searches the chain first): node src/agent.mjs refund --deposit ${r.key} --retry --execute`);
+      }
+      const n = rows.filter((r) => r.status === "refundable").length;
+      console.log(`${rows.length} deposit(s); ${n} refundable now.`);
+      break;
+    }
+    case "refund": {
+      // Sends one deposit back to its sender (same token, same amount). Dry run unless --execute. docs/REFUNDS.md
+      const input = flag("deposit") ?? positional()[0];
+      if (!input) throw new Error("Usage: refund --deposit <tx>:<logIndex> [--execute] [--yes] [--retry]   (see: node src/agent.mjs refunds)");
+      const execute = has("execute");
+      const account = execute ? loadAccount() : null;
+      const agent = account?.address ?? agentAddress();
+      const deps = {
+        pub: readClient(), agent, own: loadContacts().own, contracts: BLOCKED_RECIPIENTS, preview, verifyTx, attributionCode: ATTRIBUTION_CODE,
+        wallet: execute ? makeClients(account).wallet : null, // the attribution-tagged wallet client (src/chain.mjs)
+        loadRecords: () => ({
+          requests: loadRequests(), registrations: loadRegState(), ntagPayments: loadNtagPayments(), receipts: readReceipts(), refunds: loadRefunds(),
+        }),
+        loadRefunds, saveRefunds, log, now: () => Date.now(), say: (m) => console.log(m), confirm,
+        lock: () => takeLock("refund --execute"),
+        report: reportRefund,
+        alert: (kind, text) => { try { (alerter ??= makeAlerter({ say: (m) => console.log(m) })).alert(kind, text); } catch { /* best effort */ } },
+      };
+      let alerter = null;
+      try {
+        await refundDeposit(input, deps, { execute, yes: has("yes"), retry: has("retry") });
+      } finally {
+        await alerter?.close({ waitMs: 5_000 }).catch(() => {});
+      }
+      break;
+    }
+    case "alert-test": {
+      const a = makeAlerter({ say: (m) => console.log(m) });
+      if (!a.enabled) {
+        console.log("Alerts are off. Set ALERT_TELEGRAM_TOKEN + ALERT_TELEGRAM_CHAT_ID and/or ALERT_WEBHOOK_URL (see .env.example).");
+        process.exitCode = 1;
+        break;
+      }
+      const r = await a.sendNow("test", `Test alert from the agent ${agentAddress()}. If you can read this, alerts work.`);
+      console.log(r.ok ? `Sent a test alert via ${a.channels.join(" and ")}.` : `The test alert was not sent (${r.error}); it stays queued and is retried by autopilot.`);
+      if (!r.ok) process.exitCode = 1;
+      await a.close({ waitMs: 0 });
+      break;
+    }
+    case "doctor": {
+      const results = await runDoctor();
+      for (const r of results) console.log(`${r.level.padEnd(4)}  ${r.name}: ${r.detail}`);
+      const fails = results.filter((r) => r.level === "FAIL").length;
+      const warns = results.filter((r) => r.level === "WARN").length;
+      console.log(`${results.length} checks: ${results.length - fails - warns} pass, ${warns} warn, ${fails} fail.`);
+      if (fails) process.exitCode = 1;
+      break;
+    }
     case "register":
       await register({ repoUrl: flag("repo") ?? "https://github.com/deeeko/lokal", execute: has("execute") });
       break;
@@ -551,7 +656,11 @@ async function main() {
       break;
     }
     default:
-      console.log("Lokal agent. Commands: keygen | status | quote | pay | ask | request | requests | registrations | ntag | ntags | ntag-data | watch | retry | status-sync | register | verify  (see README)");
+      console.log("Lokal agent. Commands: keygen | status | quote | pay | ask | request | requests | registrations | ntag | ntags | ntag-data | watch | retry | refunds | refund | status-sync | alert-test | doctor | register | verify  (see README)");
+      console.log("  Refunds: refunds (what can be refunded) · refund --deposit TX:LOGINDEX [--execute] [--yes] [--retry] · watch --execute --auto-refund");
+      console.log("    A refund sends a refused, unmatched or ambiguous deposit back to its sender, same token and amount (docs/REFUNDS.md).");
+      console.log("  One agent at a time: watch --execute and pay/ask/retry/register/refund --execute take agent.lock; after a crash add --clear-stale-lock.");
+      console.log("  Alerts: set ALERT_TELEGRAM_TOKEN + ALERT_TELEGRAM_CHAT_ID and/or ALERT_WEBHOOK_URL; alert-test sends a test message.");
       console.log("  Lokal tags: ntag <@tag|address> · ntags · pay @tag <amount> [--to-currency X] [--execute] · ntag-data @tag <amount> [--token usdt|cngn] [--to-currency X] · retry --ntag TX:LOGINDEX [--force-refused]");
       console.log("  Currencies (--to-currency): naira (cngn) · rupiah (idrx) · argentina-peso (wars) · colombia-peso (wcop). quote --all shows them side by side.");
       console.log("  In PowerShell quote the tag ('@ada') or leave out the @ (ntag ada, pay --ntag ada --amount 5).");

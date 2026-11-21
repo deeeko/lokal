@@ -28,8 +28,8 @@ export function loadAccount({ required = true } = {}) {
   return privateKeyToAccount(privateKey);
 }
 
-export function makeClients(account) {
-  const transport = http(); // viem's default Celo RPC (Forno)
+/** `transport`: viem's default Celo RPC (Forno); tests pass a fake one so nothing reaches the network. */
+export function makeClients(account, transport = http()) {
   const pub = createPublicClient({ chain: CHAIN, transport });
   const wallet = createWalletClient({ account, chain: CHAIN, transport }).extend(
     withAttribution(ATTRIBUTION_CODE),

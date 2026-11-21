@@ -97,3 +97,15 @@ export const NTAG_PAYMENTS_FILE = process.env.NTAG_PAYMENTS_FILE ?? path.join(ro
 export const STATUS_OUTBOX_FILE = process.env.STATUS_OUTBOX_FILE ?? path.join(root, "status-outbox.jsonl");
 export const STATUS_SECRET_FILE = process.env.STATUS_SECRET_FILE ?? path.join(path.dirname(KEY_FILE), "status-secret");
 export const STATUS_URL = (process.env.STATUS_URL ?? `${SITE_URL}/api/status`).replace(/\/+$/, "");
+
+// Refunds (src/refund.mjs, docs/REFUNDS.md): a deposit autopilot will never pay can be sent back to its sender.
+// refunds.json is keyed by `${tx}:${logIndex}` (git-ignored). Refunds have their own rolling 24 h cap and never count
+// towards the payout caps above; deposits worth less than MIN_REFUND_USD are left alone (gas would cost more).
+export const REFUNDS_FILE = process.env.REFUNDS_FILE ?? path.join(root, "refunds.json");
+export const MAX_DAILY_REFUND_USD = process.env.MAX_DAILY_REFUND_USD ?? "100";
+export const MIN_REFUND_USD = process.env.MIN_REFUND_USD ?? "1";
+// One agent at a time: watch --execute and every --execute command take this lock (src/lock.mjs).
+export const AGENT_LOCK_FILE = process.env.AGENT_LOCK_FILE ?? path.join(path.dirname(WATCH_STATE_FILE), "agent.lock");
+// Alerts (src/alerts.mjs): autopilot warns when the agent holds less CELO than this (it pays every network fee in CELO).
+export const LOW_CELO_WARN = process.env.LOW_CELO_WARN ?? "3";
+export const ALERTS_OUTBOX_FILE = process.env.ALERTS_OUTBOX_FILE ?? path.join(root, "alerts-outbox.jsonl");

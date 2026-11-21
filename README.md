@@ -585,6 +585,124 @@ server is unavailable or has no record, the site estimates from the Celo chain a
   at the edge for 10 seconds. The site always uses the stricter of the agent's fresh totals and the chain for "room today", so a stale report can never let a payer send over a limit.
 - `node src/agent.mjs status-sync` checks the setup and sends anything waiting; `--backfill` re-sends every saved
   record from the last 30 days (run it once after the first deploy).
+- **Refunds are a status too.** A deposit sent back to its payer is reported as **refunded**, with its refund
+  transaction (`refundTx`) and refund number (`refundNo`, `RF-XXXX-XXXX`), so the payer's status page can say
+  "Refunded" with the link. "refunded" beats received, failed and refused; nothing beats "paid"; a deposit reported as
+  both paid and refunded is a conflict the server logs and never merges. A deposit that matched nothing (unmatched or
+  ambiguous) is reported with `kind: "deposit"`, which only ever appears with "refunded".
+
+#### Agent heartbeat: `GET /api/status?agent=1`
+
+While `watch --execute` runs with a status secret, autopilot posts a **signed heartbeat about once a minute**
+(`{ v: 1, ts, heartbeat }`, the same HMAC as reports, fire and forget: it never blocks a payout). The server checks it
+strictly, refuses a replay of an older one (409), and keeps it in its own small blob (`status/agent.json`), never with
+the deposit records. To save blob writes it is stored when `lowGas`, `autoRefund` or `version` changed or the stored one
+is 4 minutes old, so `lastSeen` is at most about 5 minutes behind while the agent runs.
+
+```
+GET /api/status?agent=1
+200 { "ok": true, "source": "agent", "agent": null }                        // no heartbeat stored yet
+200 { "ok": true, "source": "agent", "agent": {
+        "lastSeen": "2026-11-21T12:00:00.000Z",  // when the server last stored a heartbeat (server clock)
+        "ageSec": 42,                            // seconds since lastSeen, worked out on every read
+        "at": "2026-11-21T12:00:00.000Z",        // the agent's own clock when it sent it
+        "cursorBlock": "41234567",               // last block autopilot fully processed (string, or null)
+        "chainHead": "41234569",                 // latest Celo block it saw (string, or null)
+        "lagBlocks": 2,                          // chainHead - cursorBlock (or null)
+        "celoBalance": "12.5",                   // the agent's CELO for gas (string, or null if unreadable)
+        "lowGas": false,                         // under LOW_CELO_WARN (default 3 CELO)
+        "version": "0.1.0+c91eba0",              // package version + git commit
+        "autoRefund": false } }                  // watch --auto-refund on?
+503 { "ok": false, "reason": "unavailable" }     // no storage configured
+```
+
+Cached at the edge for 10 seconds like every GET. The site can show "Agent online · last seen N min ago" from `ageSec`
+(the watchdog below calls the agent offline after 10 minutes). Nothing on the site uses it yet.
+
+**Watchdog** (`.github/workflows/agent-watchdog.yml`, `scripts/agent-watchdog.mjs`): every 15 minutes GitHub Actions
+reads `?agent=1` and sends a Telegram alert (repository secrets `ALERT_TELEGRAM_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`) when
+the last heartbeat is more than 10 minutes old or the status server can't be read; while it stays down it re-alerts
+every 60 minutes, and it sends one "back online" message when heartbeats return.
+
+---
+
+### Refunds
+
+Money autopilot will never pay (a refused deposit, a payment to an expired or already used link, an unmatched or
+ambiguous deposit) stays in the agent wallet until the operator decides. `refund` sends it back to the wallet it came
+from: the `from` of the deposit's Transfer log, in the same token (USD₮, cNGN, IDRX, wARS or wCOP, in that token's own
+decimals), for exactly the same amount. The agent pays the gas. Full rules: [docs/REFUNDS.md](docs/REFUNDS.md).
+
+```powershell
+node src/agent.mjs refunds                                     # key, payer, token, amount, reason, age, status
+node src/agent.mjs refund --deposit 0x<tx>:<logIndex>          # DRY RUN with a gas estimate
+node src/agent.mjs refund --deposit 0x<tx>:<logIndex> --execute
+```
+
+1. **Dry run first**, with every check and a gas estimate. With `--execute`: type `yes` (or `--yes`) → take the agent
+   lock → re-read the deposit over RPC (succeeded, sent to the agent, token, amount, `from`) → check it is not paid,
+   refunded or in progress across `requests.json`, `registrations-state.json`, `ntag-payments.json` and `refunds.json`.
+2. **Record first:** `refunds.json` gets `status: "sending"` (keyed by `<tx>:<logIndex>`) **before** the transfer.
+3. **Send** with the attribution-tagged wallet client, wait for the receipt and check its Transfer log (from the agent,
+   to the depositor, that token and amount), then mark it **refunded** with `refundTx` and a refund number
+   `RF-XXXX-XXXX` (the first 8 hex characters of the refund tx; payout receipts keep `NP-`).
+4. **Log** it to `receipts.jsonl` as `kind: "refund"` (the payout caps skip these lines) and report "refunded" to the
+   status server.
+
+| Never refunded | Why |
+|---|---|
+| A paid deposit, or one with a payout recorded (received, failed) | it was (or may be) paid; a failed payout is settled with `retry` |
+| A transfer from one of your `own_wallets` | a top-up |
+| The agent's own swap output, or a transfer from the Textile reactor or another known contract | not a payer |
+| A deposit autopilot has no record of | it may still match a link; let `watch` see it first |
+| Worth under `MIN_REFUND_USD` (default $1) | recorded as `too_small_to_refund` and left alone |
+| Over `MAX_DAILY_REFUND_USD` (default $100) of refunds in 24 h | refunds have their own cap, apart from the payout caps |
+
+- **A refunded deposit is never paid.** Autopilot skips any deposit with a refund record, also on a rescan, and
+  `retry --force-refused` refuses one. **A paid deposit is never refunded.**
+- **A failure after recording is `failed`, never retried automatically,** with an urgent alert. `--retry` first searches
+  the chain for a transfer from the agent to that payer of that token and amount after the record time (and checks a
+  saved refund tx); only when there is none does it send again. A crash mid-send leaves `sending`, which blocks
+  everything until `--retry` (after 10 minutes) settles it the same way.
+- **Auto-refund is opt-in:** `watch --execute --auto-refund` refunds refused Lokal tag and "Get paid" deposits right
+  after refusing them, at most 3 per payer per 24 hours. Unmatched and ambiguous deposits are always refunded by hand. A
+  failed auto-refund is recorded and alerted and never stops autopilot.
+
+---
+
+### Operator safety: one agent at a time, alerts, doctor
+
+**One agent at a time** (`src/lock.mjs`). `watch --execute` and every command that can move money (`pay`, `ask`,
+`retry`, `register`, `refund`, each with `--execute`) first create `agent.lock` next to the watch state, with the `wx`
+flag, holding `{ pid, host, startedAt, command }`. A second one is refused: "Autopilot is already running (pid N,
+started T)." A lock whose process is gone (a crash) is **never removed automatically**: the command says a stale lock
+was found and asks you to check, then run it again with `--clear-stale-lock`. The lock is released on normal exit,
+Ctrl+C, SIGTERM and uncaught exceptions. Dry runs never take it.
+
+**Alerts** (`src/alerts.mjs`, optional). Telegram (`ALERT_TELEGRAM_TOKEN` + `ALERT_TELEGRAM_CHAT_ID`) and/or any
+webhook (`ALERT_WEBHOOK_URL`, a JSON POST `{ text, content, level, kind, at }` that Slack and Discord read). Alerts wait
+in `alerts-outbox.jsonl` and are sent in the background (5-second timeout, retries with backoff, dropped after 8 tries
+or 24 hours), so a failing alert never stops or changes a payout. They never contain keys or secrets. Test the setup
+with `node src/agent.mjs alert-test`.
+
+| Alert | Level | When |
+|---|---|---|
+| Autopilot stopped | urgent | it stopped on an error; with the reason and the exact resume command |
+| Payout failed | urgent | with the `retry` command for that deposit |
+| Refund failed | urgent | with the `refund --retry` command |
+| Daily cap reached | warning | the global `MAX_DAILY_USD` stopped autopilot |
+| CELO low | warning | under `LOW_CELO_WARN` (default 3 CELO) or the hard reserve (`MIN_CELO_RESERVE`); checked at most once a minute, re-warned at most hourly, at once when it drops below the reserve |
+| Status server unreachable | warning | no good answer for 10 minutes |
+| Deposit refused | info | with the `refund` command (mute with `ALERT_MUTE=deposit_refused`) |
+| Payout paid | info | with the receipt (mute with `ALERT_MUTE=payout_paid`) |
+
+When autopilot stops on an error, its **last line** says what happened and how to restart, e.g.
+`AUTOPILOT STOPPED: Payout to @ada failed: … Nothing more is paid until you restart it. Fix the cause (details above), then run: node src/agent.mjs watch --execute`.
+
+**Doctor** (`node src/agent.mjs doctor`, `src/doctor.mjs`): PASS / WARN / FAIL for the lock, Forno, Blockscout's lag,
+a $1 Textile preview, the agent's CELO for gas, whether a status secret is set up (never printed), whether every state
+file parses, how many deposits are refundable, and every token's decimals onchain against the config. It never reads
+the agent key file (it uses `AGENT_ADDRESS`).
 
 ---
 
@@ -679,6 +797,11 @@ All numbers are defaults from `src/config.mjs`; the language-parsing layer of `a
 | Encrypted CLI wallet | scrypt + AES-256-GCM, send password, 5 wrong in 10 min → 5-minute lockout, refuses the agent's key | `src/ntag.mjs` |
 | Non-custodial site | no keys, no funds; every transaction a page asks for is the user's own (claim, payment, registration, rating) | `site/` |
 | Stateless sign-in check | `POST /api/session`: JSON only, at most 4 KB, no cookies, no database, nothing stored or logged | `api/session.js` |
+| One agent at a time | `agent.lock` (created with `wx`: pid, host, start time, command) taken by `watch --execute` and every `--execute` command; a live holder is refused; a stale one is never removed without `--clear-stale-lock`; released on exit, Ctrl+C, SIGTERM and crashes | `src/lock.mjs` |
+| Refunds | only refused, unmatched (incl. expired or used links) and ambiguous deposits, to the deposit's `from`, same token and amount; never paid, top-up, swap-output or reactor transfers; recorded as `sending` before the transfer; **$100** per rolling 24 h (`MAX_DAILY_REFUND_USD`), nothing under **$1** (`MIN_REFUND_USD`); never counted in the payout caps | `src/refund.mjs`, `src/guards.mjs` |
+| Refunded never paid, paid never refunded | autopilot and `retry --force-refused` refuse a deposit with a refund record; `refund` refuses one with a payout record | `src/watch.mjs`, `src/agent.mjs`, `src/refund.mjs` |
+| Alerts | autopilot stopped, payout or refund failed (urgent); daily cap, CELO under **3** (`LOW_CELO_WARN`) or the reserve, status server down 10 min (warning); refused, paid (info). Outbox, 5 s timeout, never blocks a payout, no secrets | `src/alerts.mjs`, `src/watch.mjs` |
+| Heartbeat | signed, about once a minute, kept apart from the deposit records, replays refused; `GET /api/status?agent=1`; a watchdog alerts after 10 minutes of silence | `src/watch.mjs`, `lib/status.mjs`, `api/status.js` |
 
 **Sign-in check** (`api/session.js`, Vercel only): checks the message is this site's sign-in text, for a known host
 (the request's own host, `lokalpay.vercel.app`, or the older `naira-payout.vercel.app` and `celo-naira-payout-agent.vercel.app`), on Celo (chain 42220) and
@@ -813,6 +936,15 @@ node src/agent.mjs pay '@ada' 10                         # DRY RUN: operator pay
 node src/agent.mjs pay --ntag ada --amount 10            # the same, PowerShell-friendly
 node src/agent.mjs ntag-data '@ada' 10 --token usdt      # the to/data to pay a tag from your own wallet; uses no key
 
+node src/agent.mjs refunds                               # refundable deposits and every refund: key, payer, token, amount, reason, age, status
+node src/agent.mjs refund --deposit 0x<tx>:<logIndex>    # DRY RUN with a gas estimate; --execute sends it back (asks for yes)
+node src/agent.mjs refund --deposit 0x<tx>:<logIndex> --retry --execute   # after a failed refund: searches the chain first
+node src/agent.mjs watch --execute --auto-refund         # autopilot that also refunds refused tag and Get paid deposits
+
+node src/agent.mjs doctor                                # PASS / WARN / FAIL for the whole setup (never reads the key)
+node src/agent.mjs alert-test                            # sends a test alert to Telegram and/or ALERT_WEBHOOK_URL
+node src/agent.mjs watch --execute --clear-stale-lock    # after a crash left agent.lock behind (check first)
+
 node src/agent.mjs register --execute                    # ERC-8004 identity on Celo mainnet
 node src/agent.mjs verify 0x<txhash>                     # shows a transaction's attribution tag
 ```
@@ -830,10 +962,16 @@ node src/agent.mjs verify 0x<txhash>                     # shows a transaction's
 | `requests`, `registrations`, `ntags` | none |
 | `ntag <@tag or address>` | none |
 | `ntag-data @tag N` | `--token usdt` (default) or `cngn` |
-| `watch` | `--execute`, `--interval SECONDS` (default 15, minimum 5) |
-| `retry` | `--request ID`, `--registration HASH` or `--ntag TX:LOGINDEX`; `--force-refused` (Lokal tag only), `--execute`, `--yes` |
+| `watch` | `--execute`, `--interval SECONDS` (default 15, minimum 5), `--auto-refund` (with `--execute`), `--clear-stale-lock` |
+| `retry` | `--request ID`, `--registration HASH` or `--ntag TX:LOGINDEX`; `--force-refused` (Lokal tag only; refused when the deposit has a refund record), `--execute`, `--yes`, `--clear-stale-lock` |
+| `refunds` | none |
+| `refund` | `--deposit TX:LOGINDEX`, `--execute`, `--yes`, `--retry` (after a failed or stuck refund), `--clear-stale-lock` |
+| `alert-test`, `doctor` | none |
 | `register` | `--repo URL`, `--execute` (needs the key file) |
 | `verify <hash>` | none (needs the key file) |
+
+Every command with `--execute` (`watch`, `pay`, `ask`, `retry`, `register`, `refund`) takes `agent.lock` first and is
+refused while another one holds it; add `--clear-stale-lock` only after checking that no agent is running.
 
 `ID` is `usdt-cngn` (default) or `cngn-usdt`; `pay` and `quote` also take `celo-cngn`. `NAME` must be in `contacts.json`
 (case-insensitive): copy `contacts.example.json` to `contacts.json` and add recipients, plus any `own_wallets` the agent
@@ -872,15 +1010,24 @@ All optional (see `.env.example`).
 | `NP_STATUS_SECRET` | not set | Shared secret that signs status reports (or the file `status-secret` next to the agent key) |
 | `STATUS_URL` | `<SITE_URL>/api/status` | Where autopilot reports payout status |
 | `STATUS_OUTBOX_FILE` | `status-outbox.jsonl` | Queue of reports waiting to be sent |
+| `REFUNDS_FILE` | `refunds.json` | Refunds, keyed by `tx:logIndex` (`sending`, `refunded`, `failed`, `too_small_to_refund`) |
+| `MAX_DAILY_REFUND_USD` | `100` | Most USD refunded in any rolling 24 h (refunds never count towards the payout caps) |
+| `MIN_REFUND_USD` | `1` | Deposits worth less are recorded as `too_small_to_refund` and left alone |
+| `AGENT_LOCK_FILE` | `agent.lock` (next to `watch-state.json`) | One agent at a time |
+| `LOW_CELO_WARN` | `3` | Autopilot warns (and alerts) when the agent holds less CELO |
+| `ALERT_TELEGRAM_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | not set | Telegram alerts (a bot token is a secret: never commit it) |
+| `ALERT_WEBHOOK_URL` | not set | Webhook alerts: an https URL that takes a JSON POST `{ text, content, level, kind, at }` |
+| `ALERT_MUTE` | not set | Info alerts to mute: `payout_paid`, `deposit_refused` (comma-separated) |
+| `ALERTS_OUTBOX_FILE` | `alerts-outbox.jsonl` | Alerts waiting to be sent |
 
 State files (`contacts.json`, `receipts.jsonl`, `requests.json`, `watch-state.json`, `registrations-state.json`,
-`ntag-payments.json`, `status-outbox.jsonl`), `.env*` and key files are git-ignored. Textile quotes need no API key; a signed proof of wallet
+`ntag-payments.json`, `refunds.json`, `status-outbox.jsonl`, `alerts-outbox.jsonl`, `agent.lock`), `.env*` and key files are git-ignored. Textile quotes need no API key; a signed proof of wallet
 control (no funds moved) is sent only if Textile asks for it.
 
 ### Tests
 
 ```powershell
-npm test                          # 177 tests, all passing
+npm test                          # 258 tests, all passing
 node scripts/check-site.mjs       # static site check
 ```
 
@@ -902,12 +1049,49 @@ node scripts/check-site.mjs       # static site check
 | `test/status-report.test.mjs` | 19 | autopilot's reporter: outbox, batching, backoff, never throws into a payout, backfill |
 | `test/status-site.test.mjs` | 8 | the site's status helpers: exact vs estimated, reason text, allowance from the server |
 | `test/vercel-api.test.mjs` | 4 | the explorer proxy: allowed paths, refusals, methods, rewrites |
+| `test/currencies.test.mjs` | 20 | the currency registry: site and agent identical, corridors, decimals, per-currency pre-flight and autopilot |
+| `test/invariants.test.mjs` | 12 | one test per money-safety invariant (`INVARIANT 1` … `12`), against the real functions; changing one needs the owner's written OK |
+| `test/refund.test.mjs` | 19 | refunds: every refusal, record before send, dust, caps, paid never refunded, refunded never paid (also `retry --force-refused`), crash recovery and `--retry`, auto-refund |
+| `test/lock.test.mjs` | 8 | the agent lock: acquire, live holder refused, stale lock kept until `--clear-stale-lock`, other computers, release, autopilot holding it |
+| `test/alerts.test.mjs` | 12 | alerts: channels, muting, outbox, failing and hanging channels, no secrets; low-gas throttling, the stop line, heartbeats, status-down warning, the watchdog |
+| `test/status-refund-heartbeat.test.mjs` | 7 | "refunded" events, every merge pair, RF- numbers, the heartbeat end to end (store, throttle, replay, `?agent=1`), reporter signing and health |
+| `test/doctor.test.mjs` | 2 | `doctor` with fakes: all PASS, and every WARN / FAIL |
 
 ---
 
 ## Progress log
 
 Newest first.
+
+### 2026-11-21: refunds, autopilot lock and alerts
+
+Three operator-safety gaps an external review flagged, closed in code and tests:
+
+- **Refunds** ([Refunds](#refunds), [docs/REFUNDS.md](docs/REFUNDS.md)): `refunds` lists every refused, unmatched
+  (incl. expired or used links) and ambiguous deposit; `refund --deposit <tx>:<logIndex>` sends one back to its
+  sender in the same token and amount (any of the five tokens, in its own decimals). Dry run with a gas estimate; with
+  `--execute`: yes → lock → re-read over RPC → checks → `sending` recorded in `refunds.json` → tagged transfer →
+  receipt checked → `refunded` with an `RF-XXXX-XXXX` number → `receipts.jsonl` (`kind: "refund"`, skipped by the payout
+  caps) → status report. Never a paid deposit, a top-up, a swap output or a reactor transfer; own cap of $100 a day
+  (`MAX_DAILY_REFUND_USD`), nothing under $1 (`MIN_REFUND_USD`). A failed refund is never retried by itself;
+  `--retry` searches the chain first. Autopilot and `retry --force-refused` never pay a refunded deposit.
+  `watch --execute --auto-refund` (opt-in) refunds refused tag and Get paid deposits, at most 3 per payer a day.
+- **One agent at a time** (`src/lock.mjs`): `watch --execute` and every `--execute` command take `agent.lock`
+  (`wx`, pid/host/start/command); a live holder is refused, a stale one needs `--clear-stale-lock`; released on exit,
+  Ctrl+C, SIGTERM and crashes. Autopilot also stops cleanly on SIGTERM now.
+- **Alerts and liveness** (`src/alerts.mjs`): Telegram and/or a webhook, through an outbox that never blocks a payout:
+  autopilot stopped, payout failed, refund failed, daily cap, CELO low (default 3 CELO, checked once a minute,
+  re-warned hourly), status server down 10 minutes, deposit refused, payout paid. `alert-test` checks the setup. When
+  autopilot stops on an error its last line says what happened and the exact resume command.
+- **Heartbeat**: a signed heartbeat about once a minute; the status server keeps it apart from the deposit records and
+  answers `GET /api/status?agent=1` ([shape](#agent-heartbeat-get-apistatusagent1)). A GitHub Actions watchdog
+  (`agent-watchdog.yml`) alerts on Telegram after 10 minutes of silence, re-alerts hourly, and says when it is back.
+- **Status server**: a new **refunded** status (`refundTx`, `refundNo`), which beats refused / failed / received;
+  nothing beats paid; paid + refunded for one deposit is logged as a conflict and never merged.
+- **`doctor`**: PASS / WARN / FAIL for the lock, Forno, Blockscout lag, a $1 Textile preview, CELO gas, the status
+  secret (never printed), the state files, refundable deposits and token decimals.
+- **`test/invariants.test.mjs`**: the twelve money-safety invariants, one test each, against the real `pay()`, guards,
+  autopilot, refund flow, wallet client and site resolver. 61 new tests in all (258).
 
 ### 2026-11-21: rupiah and pesos, the currency picker and the cash-out guide
 
