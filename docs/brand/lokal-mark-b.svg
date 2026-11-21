@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Lokal">
+  <!-- Lokal, variant B: a white cursive L with a Celo-yellow underline flourish that runs out through the right edge.
+       The L is the "L" of Sentient Medium Italic (Indian Type Foundry, ITF Free Font License, which allows logos),
+       converted to outlines so the mark never depends on the font. -->
+  <defs>
+    <linearGradient id="lk-bg" gradientUnits="userSpaceOnUse" x1="96" y1="0" x2="416" y2="512">
+      <stop offset="0" stop-color="#2FD98B"/>
+      <stop offset=".5" stop-color="#00A862"/>
+      <stop offset="1" stop-color="#005433"/>
+    </linearGradient>
+    <radialGradient id="lk-shine" gradientUnits="userSpaceOnUse" cx="140" cy="30" r="390">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".38"/>
+      <stop offset=".6" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="lk-rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".65"/>
+      <stop offset=".45" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#00301C" stop-opacity=".55"/>
+    </linearGradient>
+    <!-- Celo yellow, as in the rails of the old mark -->
+    <linearGradient id="lk-rail" gradientUnits="userSpaceOnUse" x1="96" y1="0" x2="512" y2="0">
+      <stop offset="0" stop-color="#F2F548"/>
+      <stop offset="1" stop-color="#FCFF52"/>
+    </linearGradient>
+    <linearGradient id="lk-gold" gradientUnits="userSpaceOnUse" x1="0" y1="110" x2="0" y2="400">
+      <stop offset="0" stop-color="#FCFF52"/>
+      <stop offset="1" stop-color="#EEF23F"/>
+    </linearGradient>
+    <linearGradient id="lk-ink" gradientUnits="userSpaceOnUse" x1="0" y1="110" x2="0" y2="400">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4FBEF"/>
+    </linearGradient>
+    <filter id="lk-lift" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="9" stdDeviation="11" flood-color="#00301C" flood-opacity=".5"/>
+    </filter>
+    <clipPath id="lk-tile"><rect width="512" height="512" rx="116"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#lk-tile)">
+    <rect width="512" height="512" fill="url(#lk-bg)"/>
+    <g filter="url(#lk-lift)">
+      <path d="M118 411C196 397 300 399 560 377" fill="none" stroke="url(#lk-rail)" stroke-width="26" stroke-linecap="round"/>
+      <path d="M353.6 363L150.1 363L152 351.1L166.6 345Q176.9 340.4 180.5 335.7Q184.2 330.9 185.3 321.3L209 152.3L210.9 135.8Q210.9 125.5 197.6 119L184.9 112.9L186.8 101L297.8 101L296.2 112.9L281.3 119Q271.4 123.6 267.5 128.3Q263.7 133.1 262.6 142.7L239.2 311.7Q237.7 322.1 237.7 327Q237.7 334.7 241.7 337.6Q245.7 340.4 256.1 340.4L296.2 340.4Q311.9 340.4 320.3 334.9Q328.7 329.3 345.2 307.9L362 285.7L373.9 285.7Z" fill="url(#lk-ink)" stroke="url(#lk-ink)" stroke-width="9" stroke-linejoin="round"/>
+    </g>
+    <rect width="512" height="512" fill="url(#lk-shine)"/>
+  </g>
+  <rect x="3" y="3" width="506" height="506" rx="113" fill="none" stroke="url(#lk-rim)" stroke-width="6"/>
+</svg>

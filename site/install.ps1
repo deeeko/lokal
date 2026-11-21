@@ -1,6 +1,6 @@
-# Naira Payout: install the `ntag` command on Windows.
+# Lokal (formerly Naira Payout): install the `ntag` command on Windows.
 #
-#   irm https://naira-payout.vercel.app/install.ps1 | iex
+#   irm https://lokalpay.vercel.app/install.ps1 | iex
 #
 # You can read this whole file before running it. What it does:
 #   1. Checks that Node.js 20 or newer is installed. If not, it tells you how to get it and stops.
@@ -8,14 +8,17 @@
 #   2. Downloads the ntag code from GitHub (github.com/deeeko/celo-naira-payout-agent) as a zip.
 #   3. Installs the libraries the command line needs with npm, at the exact versions in package-lock.json
 #      (no install scripts are run; libraries only the website uses are skipped).
-#   4. Puts the code in  %LOCALAPPDATA%\naira-payout\app  (replacing an older copy in one step)
-#      and a small launcher in  %LOCALAPPDATA%\naira-payout\bin\ntag.cmd
+#   4. Puts the code in  %LOCALAPPDATA%\lokal\app  (replacing an older copy in one step)
+#      and a small launcher in  %LOCALAPPDATA%\lokal\bin\ntag.cmd
 #   5. Adds that bin folder to YOUR user PATH, so `ntag` works in any new terminal.
+#   6. Cleans up an install from before the rename to Lokal: removes %LOCALAPPDATA%\naira-payout\app and \bin
+#      and takes that old bin folder out of your user PATH.
 #
 # What it never does:
 #   - It never needs administrator rights.
 #   - It never creates, reads, moves or deletes your wallet. The wallet is a separate file,
-#     %USERPROFILE%\.naira-payout\wallet.json, so updating or uninstalling ntag keeps it.
+#     %USERPROFILE%\.lokal\wallet.json, so updating or uninstalling ntag keeps it. A wallet made before the
+#     rename stays at %USERPROFILE%\.naira-payout\wallet.json and ntag keeps using it there.
 #   - It never sends any transaction.
 #
 # Options (set before running; they are environment variables because `irm | iex` cannot take arguments):
@@ -24,7 +27,7 @@
 #   $env:NTAG_UNINSTALL = "1"  remove ntag (the app and bin folders and the PATH entry; never the wallet)
 #
 # Update: run the same one-liner again. Uninstall:
-#   $env:NTAG_UNINSTALL = "1"; irm https://naira-payout.vercel.app/install.ps1 | iex
+#   $env:NTAG_UNINSTALL = "1"; irm https://lokalpay.vercel.app/install.ps1 | iex
 #
 # Works in Windows PowerShell 5.1 and PowerShell 7. Everything runs inside one script block, so if the
 # download of this file is cut off halfway, PowerShell refuses to parse it and nothing runs at all.
@@ -39,7 +42,7 @@
   $Repo    = 'deeeko/celo-naira-payout-agent'
   $Ref     = if ($env:NTAG_REF) { $env:NTAG_REF.Trim() } else { 'main' }
   $MinNode = 20
-  $SiteUrl = 'https://naira-payout.vercel.app'
+  $SiteUrl = 'https://lokalpay.vercel.app'
   $OneLine = "irm $SiteUrl/install.ps1 | iex"
 
   function Say([string]$Text, [string]$Color = 'Gray') { Write-Host $Text -ForegroundColor $Color }
@@ -83,8 +86,8 @@
     finally { $key.Close() }
     # Tell Windows (Explorer, new terminals) that the environment changed. Setting and clearing a
     # throwaway variable with [Environment]::SetEnvironmentVariable sends that notice for us.
-    [Environment]::SetEnvironmentVariable('NAIRA_PAYOUT_PATH_REFRESH', '1', 'User')
-    [Environment]::SetEnvironmentVariable('NAIRA_PAYOUT_PATH_REFRESH', $null, 'User')
+    [Environment]::SetEnvironmentVariable('LOKAL_PATH_REFRESH', '1', 'User')
+    [Environment]::SetEnvironmentVariable('LOKAL_PATH_REFRESH', $null, 'User')
   }
 
   # Moves a folder, retrying briefly: antivirus scanners often hold new files open for a moment.
@@ -118,12 +121,22 @@
 
   # Where things go. The wallet is NOT here: it lives in your user folder (see the end of this script).
   if (-not $env:LOCALAPPDATA) { Say 'Could not find your local app data folder (%LOCALAPPDATA% is not set).' Red; return }
-  $Root       = Join-Path $env:LOCALAPPDATA 'naira-payout'
+  $Root       = Join-Path $env:LOCALAPPDATA 'lokal'
   $App        = Join-Path $Root 'app'
   $Bin        = Join-Path $Root 'bin'
   $Shim       = Join-Path $Bin 'ntag.cmd'
+  # Where installs went before the rename to Lokal. Cleaned up on install, update and uninstall.
+  $OldRoot    = Join-Path $env:LOCALAPPDATA 'naira-payout'
+  $OldApp     = Join-Path $OldRoot 'app'
+  $OldBin     = Join-Path $OldRoot 'bin'
   # Shown in messages only. USERPROFILE can be unset (some service accounts); never let that stop the script here.
-  $WalletFile = if ($env:USERPROFILE) { Join-Path $env:USERPROFILE '.naira-payout\wallet.json' } else { '%USERPROFILE%\.naira-payout\wallet.json' }
+  # ntag uses %USERPROFILE%\.lokal\wallet.json, or the wallet from before the rename if only that one exists.
+  $WalletFile = '%USERPROFILE%\.lokal\wallet.json'
+  if ($env:USERPROFILE) {
+    $WalletFile = Join-Path $env:USERPROFILE '.lokal\wallet.json'
+    $OldWallet  = Join-Path $env:USERPROFILE '.naira-payout\wallet.json'
+    if (-not (Test-Path -LiteralPath $WalletFile) -and (Test-Path -LiteralPath $OldWallet)) { $WalletFile = $OldWallet }
+  }
   $Stage      = $null
   $NoPath     = [bool]($env:NTAG_NO_PATH -and $env:NTAG_NO_PATH -ne '0')
   $Uninstall  = [bool]($env:NTAG_UNINSTALL -and $env:NTAG_UNINSTALL -ne '0')
@@ -134,12 +147,38 @@
     return @(Get-ChildItem -LiteralPath $Root -Directory -Force | Where-Object { $_.Name -like '.new-*' -or $_.Name -like '.old-*' } | ForEach-Object { $_.FullName })
   }
 
+  # Removes an install from before the rename to Lokal (%LOCALAPPDATA%\naira-payout): its app and bin folders,
+  # leftovers of an interrupted run, and its bin folder in the user PATH and in this window's PATH. Never a wallet:
+  # wallets were never stored there. Returns $true if anything was found.
+  function Remove-OldInstall {
+    $found = $false
+    if (-not $NoPath) {
+      $userPath = Get-UserPath
+      if (Test-PathEntry $userPath $OldBin) { Set-UserPath (Remove-PathEntry $userPath $OldBin); $found = $true; Step "Removed the old naira-payout bin folder from your user PATH" }
+    } elseif (Test-PathEntry (Get-UserPath) $OldBin) {
+      $found = $true
+      Step 'Left your PATH alone (NTAG_NO_PATH is set). Remove the old bin folder from it yourself:'
+      Say "      $OldBin"
+    }
+    $env:Path = Remove-PathEntry $env:Path $OldBin
+    if (Test-Path -LiteralPath $OldRoot) {
+      $old = @($OldApp, $OldBin) + @(Get-ChildItem -LiteralPath $OldRoot -Directory -Force | Where-Object { $_.Name -like '.new-*' -or $_.Name -like '.old-*' } | ForEach-Object { $_.FullName })
+      foreach ($dir in $old) {
+        if (-not (Test-Path -LiteralPath $dir)) { continue }
+        $found = $true
+        if (Remove-Folder $dir) { Step "Removed the old install folder $dir" } else { Say "  Could not remove $dir yet (is an old ntag window open?). Delete it later; it is no longer used." DarkGray }
+      }
+      if (-not (Get-ChildItem -LiteralPath $OldRoot -Force)) { Remove-Item -LiteralPath $OldRoot -Force }
+    }
+    return $found
+  }
+
   Say ''
   # ---------------------------------------------------------------------------------------------
   # Uninstall ($env:NTAG_UNINSTALL = "1")
   # ---------------------------------------------------------------------------------------------
   if ($Uninstall) {
-    Say 'Naira Payout: uninstalling the ntag command' White
+    Say 'Lokal: uninstalling the ntag command' White
     Say "This removes $App, $Bin and the PATH entry. Your wallet file is not touched."
     Say ''
     try {
@@ -149,7 +188,7 @@
         if (-not (Test-Path -LiteralPath $dir)) { continue }
         if (Remove-Folder $dir) { Step "Removed $dir" } else { $ok = $false; Say "  Could not remove $dir. Close any window running ntag and run the uninstall again." Yellow }
       }
-      # Remove the naira-payout folder itself if nothing else is left in it.
+      # Remove the lokal folder itself if nothing else is left in it.
       if ((Test-Path -LiteralPath $Root) -and -not (Get-ChildItem -LiteralPath $Root -Force)) { Remove-Item -LiteralPath $Root -Force }
 
       # Take the bin folder out of the user PATH and out of this window's PATH.
@@ -162,6 +201,8 @@
         else { Step 'Your user PATH did not contain the bin folder' }
       }
       $env:Path = Remove-PathEntry $env:Path $Bin
+      # And anything left from an install made before the rename to Lokal.
+      $null = Remove-OldInstall
 
       Say ''
       if ($ok) { Say 'ntag is uninstalled.' Green } else { Say 'ntag is partly uninstalled (see above).' Yellow }
@@ -177,7 +218,7 @@
   # ---------------------------------------------------------------------------------------------
   # Install
   # ---------------------------------------------------------------------------------------------
-  Say 'Naira Payout: installing the ntag command' White
+  Say 'Lokal: installing the ntag command' White
   Say "  1. Check Node.js $MinNode or newer      2. Download ntag ($Ref) from GitHub"
   Say '  3. Install its libraries with npm    4. Add "ntag" to your PATH'
   Say "Into $Root. No admin rights needed; your wallet is never touched."
@@ -288,7 +329,7 @@
     $null = New-Item -ItemType Directory -Force -Path $Bin
     $shimText = @(
       '@echo off',
-      'rem ntag launcher, written by https://naira-payout.vercel.app/install.ps1',
+      'rem ntag launcher, written by https://lokalpay.vercel.app/install.ps1',
       'rem Runs the ntag command from the app folder next to this one. Your wallet is not stored here.',
       'where node >nul 2>nul || (echo ntag needs Node.js 20 or newer: https://nodejs.org 1>&2 & exit /b 1)',
       'node "%~dp0..\app\src\ntag.mjs" %*'
@@ -308,6 +349,10 @@
       $env:Path = Add-PathEntry $env:Path $Bin
     }
 
+    # Updating from an install made before the rename to Lokal: take the old naira-payout bin folder out of PATH
+    # (so the old ntag can't shadow this one) and delete the old copy.
+    if (Remove-OldInstall) { Step 'Cleaned up the install from before the rename (Naira Payout is now Lokal)' }
+
     # Final check, through the launcher itself.
     $r = Invoke-Native $Shim @('help')
     if ($r.Code -ne 0) { Fail "ntag was installed but did not start through $Shim (exit code $($r.Code)). Output:`n$($r.Output)" }
@@ -320,7 +365,7 @@
   } catch {
     Say ''
     Say "Install failed: $($_.Exception.Message)" Red
-    Say 'Nothing was changed outside the naira-payout folder, and your wallet was not touched.' Gray
+    Say 'Nothing was changed outside the lokal folder, and your wallet was not touched.' Gray
     Say "Run it again: $OneLine"
     Say ''
     if ($Stage) { $null = Remove-Folder $Stage }

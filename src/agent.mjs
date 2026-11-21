@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// CLI entry point. Corridors: usdt-cngn (default, pay in naira), cngn-usdt (pay in dollars) and, for pay/quote only,
+// Lokal agent CLI entry point. Corridors: usdt-cngn (default, pay in naira), cngn-usdt (pay in dollars) and, for pay/quote only,
 // celo-cngn (pay in naira from CELO: two swaps, CELO -> USDT -> cNGN; amount in CELO).
 //   node src/agent.mjs keygen                                   create the agent wallet (key never printed)
 //   node src/agent.mjs status                                   balances, limits, today's total
@@ -505,7 +505,7 @@ async function main() {
       break;
     }
     default:
-      console.log("Commands: keygen | status | quote | pay | ask | request | requests | registrations | ntag | ntags | ntag-data | watch | retry | status-sync | register | verify  (see README)");
+      console.log("Lokal agent. Commands: keygen | status | quote | pay | ask | request | requests | registrations | ntag | ntags | ntag-data | watch | retry | status-sync | register | verify  (see README)");
       console.log("  nTags: ntag <@tag|address> · ntags · pay @tag <amount> [--corridor ID] [--execute] · ntag-data @tag <amount> [--token usdt|cngn] · retry --ntag TX:LOGINDEX [--force-refused]");
       console.log("  In PowerShell quote the tag ('@ada') or leave out the @ (ntag ada, pay --ntag ada --amount 5).");
       console.log("  Status server: autopilot (watch --execute) reports each deposit's status (paid, refused, received) and the day's");

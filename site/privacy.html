@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' https://forno.celo.org https://celo.blockscout.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
-<title>Privacy policy · Naira Payout</title>
-<meta name="description" content="What Naira Payout Agent does with information about you: no cookies, no analytics, no tracking.">
+<title>Privacy policy · Lokal</title>
+<meta name="description" content="What Lokal does with information about you: no cookies, no analytics, no tracking.">
 <meta name="theme-color" content="#040806">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Naira Payout Agent">
-<meta property="og:description" content="Pay someone in naira or dollars. Converts on Textile FX and pays out on Celo.">
-<meta property="og:image" content="https://naira-payout.vercel.app/og.png">
+<meta property="og:title" content="Lokal: pay anyone in their local money">
+<meta property="og:description" content="Send dollars on Celo. They receive their local money. Converts on Textile FX and pays their own wallet.">
+<meta property="og:image" content="https://lokalpay.vercel.app/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="logo.png" type="image/png">
@@ -53,7 +53,7 @@
 <div class="sky sky-sm" aria-hidden="true"></div>
 <aside class="sidebar" id="sidebar" aria-label="Site navigation">
   <div class="sb-head">
-    <a class="sb-brand" href="index.html"><img src="logo.svg" alt="" width="34" height="34"><span class="sb-label">Naira Payout</span></a>
+    <a class="sb-brand" href="index.html"><img src="logo.svg" alt="" width="34" height="34"><span class="sb-label">Lokal</span></a>
     <button class="icon-btn sm sb-collapse" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar  [ ]"><svg class="i"><use href="#i-chevron-left"/></svg></button>
     <button class="icon-btn sm sb-close" type="button" aria-label="Close menu"><svg class="i"><use href="#i-x"/></svg></button>
   </div>
@@ -78,7 +78,7 @@
 
 <div class="nav-wrap">
   <nav class="nav" aria-label="Main">
-    <a class="nav-brand" href="index.html"><img src="logo.svg" alt="" width="30" height="30"><span>Naira Payout</span></a>
+    <a class="nav-brand" href="index.html"><img src="logo.svg" alt="" width="30" height="30"><span>Lokal</span></a>
     <div class="nav-links">
       <a href="index.html">Overview</a>
       <a href="quote.html" data-also="pay.html tag.html">Send</a>
@@ -108,7 +108,7 @@
       <p>Signing in means connecting your wallet and signing a short message that says which site you're signing in to, when, and when it ends (7 days later). Signing is free and sends nothing. There's no password, email or phone number.</p>
       <ul>
         <li><strong>What's saved:</strong> your wallet address, that message and its signature, in this browser's local storage under <code>np-session</code>. It's needed for the sign-in to work, so it's saved whatever you chose for layout. It ends after 7 days or when you sign out. While your wallet is switched to another account, the sign-in is paused, not ended: it picks up again when you switch back.</li>
-        <li><strong>The check:</strong> on naira-payout.vercel.app, the message and signature are sent once to our <code>/api/session</code> function, which checks the signature matches the address and replies yes or no. It doesn't store or log them, and sets no cookie. On the GitHub Pages copy and the local preview there's no server, so the page accepts the signature your wallet returns without that check.</li>
+        <li><strong>The check:</strong> on lokalpay.vercel.app (and the older naira-payout.vercel.app address), the message and signature are sent once to our <code>/api/session</code> function, which checks the signature matches the address and replies yes or no. It doesn't store or log them, and sets no cookie. On the GitHub Pages copy and the local preview there's no server, so the page accepts the signature your wallet returns without that check.</li>
         <li><strong>Signing out</strong> deletes the saved sign-in and disconnects your wallet from the site. To remove the site's access completely, also disconnect it in your wallet's "Connected sites" settings.</li>
       </ul>
       <p>A sign-in only tells this site which wallet you are. It can't move your money: this site never holds money or keys, and every payment is sent from your own wallet, only after you approve it there.</p>
@@ -142,7 +142,7 @@
   <div class="container">
     <div class="cols">
       <div>
-        <div class="foot-brand"><img src="logo.svg" alt="" width="28" height="28">Naira Payout</div>
+        <div class="foot-brand"><img src="logo.svg" alt="" width="28" height="28">Lokal</div>
         <p class="small soft" style="max-width:40ch">An agent that converts between USD₮ and cNGN on Textile FX and pays recipients on Celo.</p>
       </div>
       <div>

@@ -1,10 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- small-size mark: flat green tile, Celo-yellow rails running out of the right edge, white N -->
+  <!-- small-size Lokal mark, variant B: flat green tile, white L, yellow underline running out of the right edge -->
   <defs><clipPath id="t"><rect width="64" height="64" rx="15"/></clipPath></defs>
   <g clip-path="url(#t)">
     <rect width="64" height="64" fill="#00A862"/>
-    <path d="M19.5 28H70M19.5 36.5H70" fill="none" stroke="#FCFF52" stroke-width="4.4" stroke-linecap="round"/>
-    <path d="M19.5 46V18L44.5 46V18" fill="none" stroke="#00A862" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M19.5 46V18L44.5 46V18" fill="none" stroke="#FFFFFF" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M13 53.2C25 51.2 40 50.7 70 46.2" fill="none" stroke="#FCFF52" stroke-width="4.4" stroke-linecap="round"/>
+    <path d="M45 46L17.9 46L18.1 44.4L20.1 43.6Q21.4 43 21.9 42.3Q22.4 41.7 22.6 40.4L25.7 17.8L26 15.6Q26 14.3 24.2 13.4L22.5 12.6L22.8 11L37.6 11L37.4 12.6L35.4 13.4Q34.1 14 33.5 14.7Q33 15.3 32.9 16.6L29.8 39.2Q29.6 40.5 29.6 41.2Q29.6 42.2 30.1 42.6Q30.6 43 32 43L37.4 43Q39.5 43 40.6 42.2Q41.7 41.5 43.9 38.6L46.2 35.7L47.7 35.7Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="2.2" stroke-linejoin="round"/>
   </g>
 </svg>

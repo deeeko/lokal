@@ -64,8 +64,8 @@ export const EXPLORER_API = (process.env.BLOCKSCOUT_API ?? "https://celo.blocksc
 // Max allowed gap between the free preview and the firm quote (basis points).
 export const MAX_SLIPPAGE_BPS = Number(process.env.MAX_SLIPPAGE_BPS ?? 300);
 
-// Public site that renders payment links and receipts.
-export const SITE_URL = (process.env.SITE_URL ?? "https://naira-payout.vercel.app").replace(/\/+$/, "");
+// Public site that renders payment links and receipts (Lokal; the older naira-payout.vercel.app address still works).
+export const SITE_URL = (process.env.SITE_URL ?? "https://lokalpay.vercel.app").replace(/\/+$/, "");
 
 const root = path.join(import.meta.dirname, "..");
 export const KEY_FILE =

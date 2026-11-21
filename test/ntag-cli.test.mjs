@@ -11,6 +11,7 @@ import {
   explainError, formatBox, formatSummary, matchNtagPayout, todayText, walletAllowance, CNGN_LIMIT_TEXT, LIMITS_TEXT,
   loadWallet, lockoutState, main, parseAmountUnits, parseArgs, parseTag, parseTransferCalldata, passwordProblem, readKeystore,
   recordFailure, saveWallet, scryptN, shortAddr, transferFromItem, typedTagMatches, unlockWallet, walletFile, LOCK_FOR_MS, SCRYPT_N,
+  DEFAULT_WALLET_FILE, LEGACY_WALLET_FILE, LEGACY_NOTICE_FILE, legacyWalletNotice, usesLegacyWallet,
 } from "../src/ntag.mjs";
 import { decodeNtagMemo as decodeSrc, encodeNtagTransfer as encodeSrc } from "../src/ntags.mjs";
 import { decodeNtagMemo as decodeSite, encodeNtagTransfer as encodeSite } from "../site/assets/core.js";
@@ -137,7 +138,35 @@ test("refuses the agent's key: by path (before reading) and by address", () => {
 
 test("wallet file location: NTAG_WALLET_FILE overrides the default", () => {
   assert.equal(walletFile({ NTAG_WALLET_FILE: "C:/tmp/w.json" }), path.resolve("C:/tmp/w.json"));
-  assert.ok(walletFile({}).endsWith(path.join(".naira-payout", "wallet.json")));
+  assert.ok(walletFile({}, () => false).endsWith(path.join(".lokal", "wallet.json")));
+  assert.equal(walletFile({}, () => false), DEFAULT_WALLET_FILE);
+});
+
+test("wallet file location after the rename to Lokal: an old wallet is used in place, and the note shows once", () => {
+  const files = new Set();
+  const exists = (f) => files.has(f);
+  assert.ok(LEGACY_WALLET_FILE.endsWith(path.join(".naira-payout", "wallet.json")));
+  // nothing anywhere: new wallets go to ~/.lokal, no note
+  assert.equal(walletFile({}, exists), DEFAULT_WALLET_FILE);
+  assert.equal(legacyWalletNotice({ env: {}, exists, markShown: () => files.add(LEGACY_NOTICE_FILE) }), null);
+  // only the old wallet: it is used where it is, and the note shows exactly once
+  files.add(LEGACY_WALLET_FILE);
+  assert.equal(usesLegacyWallet({}, exists), true);
+  assert.equal(walletFile({}, exists), LEGACY_WALLET_FILE);
+  const note = legacyWalletNotice({ env: {}, exists, markShown: () => files.add(LEGACY_NOTICE_FILE) });
+  assert.match(note, /now Lokal/);
+  assert.ok(note.includes(LEGACY_WALLET_FILE) && note.includes(DEFAULT_WALLET_FILE));
+  assert.equal(legacyWalletNotice({ env: {}, exists, markShown: () => files.add(LEGACY_NOTICE_FILE) }), null);
+  // a marker that can't be written never breaks the command (the note just shows again next time)
+  files.delete(LEGACY_NOTICE_FILE);
+  assert.match(legacyWalletNotice({ env: {}, exists, markShown: () => { throw new Error("read-only"); } }), /now Lokal/);
+  // both exist: the new place wins; NTAG_WALLET_FILE always wins
+  files.add(DEFAULT_WALLET_FILE);
+  assert.equal(walletFile({}, exists), DEFAULT_WALLET_FILE);
+  assert.equal(legacyWalletNotice({ env: {}, exists }), null);
+  files.delete(DEFAULT_WALLET_FILE);
+  assert.equal(walletFile({ NTAG_WALLET_FILE: "C:/tmp/w.json" }, exists), path.resolve("C:/tmp/w.json"));
+  assert.equal(legacyWalletNotice({ env: { NTAG_WALLET_FILE: "C:/tmp/w.json" }, exists }), null);
 });
 
 test("keystore: encrypt/decrypt round-trip; wrong password fails; no plaintext key on disk", () => {

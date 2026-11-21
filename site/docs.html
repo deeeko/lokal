@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' https://forno.celo.org https://celo.blockscout.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
-<title>Docs · Naira Payout</title>
-<meta name="description" content="How the Naira Payout agent quotes, converts and pays out in two corridors, how payment links and autopilot work, the safeguards it enforces in code, and how to run it from the command line.">
+<title>Docs · Lokal</title>
+<meta name="description" content="How the Lokal agent quotes, converts and pays out in two corridors, how payment links and autopilot work, the safeguards it enforces in code, and how to run it from the command line.">
 <meta name="theme-color" content="#040806">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Naira Payout Agent">
-<meta property="og:description" content="Pay someone in naira or dollars. Converts on Textile FX and pays out on Celo.">
-<meta property="og:image" content="https://naira-payout.vercel.app/og.png">
+<meta property="og:title" content="Lokal: pay anyone in their local money">
+<meta property="og:description" content="Send dollars on Celo. They receive their local money. Converts on Textile FX and pays their own wallet.">
+<meta property="og:image" content="https://lokalpay.vercel.app/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="logo.png" type="image/png">
@@ -86,7 +86,7 @@
 <div class="sky sky-sm" aria-hidden="true"></div>
 <aside class="sidebar" id="sidebar" aria-label="Site navigation">
   <div class="sb-head">
-    <a class="sb-brand" href="index.html"><img src="logo.svg" alt="" width="34" height="34"><span class="sb-label">Naira Payout</span></a>
+    <a class="sb-brand" href="index.html"><img src="logo.svg" alt="" width="34" height="34"><span class="sb-label">Lokal</span></a>
     <button class="icon-btn sm sb-collapse" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar  [ ]"><svg class="i"><use href="#i-chevron-left"/></svg></button>
     <button class="icon-btn sm sb-close" type="button" aria-label="Close menu"><svg class="i"><use href="#i-x"/></svg></button>
   </div>
@@ -111,7 +111,7 @@
 
 <div class="nav-wrap">
   <nav class="nav" aria-label="Main">
-    <a class="nav-brand" href="index.html"><img src="logo.svg" alt="" width="30" height="30"><span>Naira Payout</span></a>
+    <a class="nav-brand" href="index.html"><img src="logo.svg" alt="" width="30" height="30"><span>Lokal</span></a>
     <div class="nav-links">
       <a href="index.html">Overview</a>
       <a href="quote.html" data-also="pay.html tag.html">Send</a>
@@ -136,7 +136,7 @@
       <section class="card" id="overview" aria-labelledby="overview-h">
         <div class="card-h"><h2 id="overview-h">Overview</h2></div>
         <div class="card-b">
-          <p class="soft">Naira Payout is a payout agent on Celo mainnet, with this website for people and a command line for its operator. It converts between USD₮ and cNGN (a naira stablecoin) through Textile FX, and pays the result to the recipient: a contact saved by the agent's owner, the wallet that made a “Get paid” link, or the wallet behind an @nTag. It works in two directions, called corridors: pay someone in naira, or pay someone in dollars. The owner can also pay someone in naira from the agent's CELO (<code class="inline" translate="no">celo-cngn</code>): Textile has no direct CELO to cNGN pair, so the agent makes two swaps, CELO to USD₮ and then USD₮ to cNGN, and pays two Textile fees.</p>
+          <p class="soft">Lokal is a payout agent on Celo mainnet, with this website for people and a command line for its operator. It converts between USD₮ and cNGN (a naira stablecoin) through Textile FX, and pays the result to the recipient: a contact saved by the agent's owner, the wallet that made a “Get paid” link, or the wallet behind an @nTag. It works in two directions, called corridors: pay someone in naira, or pay someone in dollars. The owner can also pay someone in naira from the agent's CELO (<code class="inline" translate="no">celo-cngn</code>): Textile has no direct CELO to cNGN pair, so the agent makes two swaps, CELO to USD₮ and then USD₮ to cNGN, and pays two Textile fees.</p>
           <p class="soft">The owner can run a single payout by hand, or create a <a class="link" href="pay.html">payment link</a> for an exact amount. When the payer sends that amount, <a class="link" href="autopilot.html">autopilot</a> matches the deposit, converts it and pays the contact. After every payout the agent prints a <a class="link" href="receipt.html">receipt</a> link that rebuilds the payout from chain data, and the payer can rate it in the agent's onchain reputation registry.</p>
           <p class="soft">Onchain: the agent's ERC-8004 identity (agent #10079), and every transaction it sends during a payout: the approval (and an allowance reset, if one is needed), the swap and the transfer to the recipient. Each one carries the attribution tag <code class="inline" translate="no">celo_7360953d1b53</code>. Off chain, on the owner's computer: the Textile price quotes, the contacts file, the agent's key file, the payment requests file and a local receipts log.</p>
         </div>
@@ -204,7 +204,7 @@
           <ol class="steps mt-24">
             <li><h3>Sign in</h3><p>On <a class="link" href="account.html">Account</a>, connect your wallet and sign a short message. It's free, sends nothing and lasts 7 days. Signing out forgets it and disconnects the wallet.</p></li>
             <li><h3>Claim</h3><p>Pick a tag and send one transaction to the agent with value 0. Its data is <code class="inline" translate="no">NT1:{"t":"ada"}</code>, with an optional display name <code class="inline" translate="no">"n"</code>. It costs only the network fee.</p></li>
-            <li><h3>Share</h3><p>Your page is <code class="inline" translate="no">/@ada</code> on naira-payout.vercel.app, or <code class="inline" translate="no">tag.html#ada</code> on any copy of the site, with a QR code and a WhatsApp button.</p></li>
+            <li><h3>Share</h3><p>Your page is <code class="inline" translate="no">/@ada</code> on lokalpay.vercel.app, or <code class="inline" translate="no">tag.html#ada</code> on any copy of the site, with a QR code and a WhatsApp button.</p></li>
             <li><h3>Get paid</h3><p>The payer sends USD₮ (you get naira) or cNGN (you get dollars) to the agent, with your tag written after the transfer. Autopilot converts it and pays your wallet.</p></li>
           </ol>
         </div>
@@ -224,7 +224,7 @@
         <div class="card-b">
           <h3 class="label">Paying a tag without the website</h3>
           <p class="soft mt-8">Send an ordinary ERC-20 <code class="inline" translate="no">transfer(agent, amount)</code> on USD₮ or cNGN and add the bytes of <code class="inline" translate="no">NTP:ada</code> after the usual 68 bytes of calldata. Token contracts ignore the extra bytes. <code class="inline" translate="no">node src/agent.mjs ntag-data @ada 10</code> prints the exact <code class="inline" translate="no">to</code> and <code class="inline" translate="no">data</code> to send from your own wallet; it never uses a key.</p>
-          <div class="alert mt-16"><svg class="i"><use href="#i-info"/></svg><span>Sign-in is checked by <code class="inline" translate="no">/api/session</code> only on naira-payout.vercel.app. That function verifies the signature and stores nothing. On GitHub Pages and the local preview there's no server, so the page trusts the signature your wallet returns. A sign-in never moves money: every transaction still needs your approval in your wallet.</span></div>
+          <div class="alert mt-16"><svg class="i"><use href="#i-info"/></svg><span>Sign-in is checked by <code class="inline" translate="no">/api/session</code> only on lokalpay.vercel.app (and the older naira-payout.vercel.app address). That function verifies the signature and stores nothing. On GitHub Pages and the local preview there's no server, so the page trusts the signature your wallet returns. A sign-in never moves money: every transaction still needs your approval in your wallet.</span></div>
         </div>
       </section>
 
@@ -233,15 +233,15 @@
         <div class="card-b">
           <p class="soft"><code class="inline" translate="no">ntag</code> pays an nTag from <b>your own wallet</b> in PowerShell. To install it, open PowerShell (no admin needed) and paste this line. It takes about a minute.</p>
           <div class="code mt-16">
-            <pre translate="no">irm https://naira-payout.vercel.app/install.ps1 | iex</pre>
-            <button class="icon-btn" type="button" aria-label="Copy the install command" data-copy-label="Command copied" data-copy="irm https://naira-payout.vercel.app/install.ps1 | iex"><svg class="i"><use href="#i-copy"/></svg></button>
+            <pre translate="no">irm https://lokalpay.vercel.app/install.ps1 | iex</pre>
+            <button class="icon-btn" type="button" aria-label="Copy the install command" data-copy-label="Command copied" data-copy="irm https://lokalpay.vercel.app/install.ps1 | iex"><svg class="i"><use href="#i-copy"/></svg></button>
           </div>
           <p class="small muted mt-8">You can <a class="link" href="install.ps1">read the script</a> before you run it. It needs <b>Node.js 20 or newer</b>; if Node is missing it says so and stops (get it with <code class="inline" translate="no">winget install OpenJS.NodeJS.LTS</code> or from <a class="link" href="https://nodejs.org">nodejs.org</a>). It never installs other software for you.</p>
           <ol class="steps mt-24">
             <li><h3>Check</h3><p>Looks for Node.js 20 or newer and npm. Nothing is changed if they are missing.</p></li>
             <li><h3>Download</h3><p>Fetches the code as a zip from GitHub (<code class="inline" translate="no">main</code>, or the branch, tag or commit in <code class="inline" translate="no">$env:NTAG_REF</code>) and installs its libraries with <code class="inline" translate="no">npm ci --ignore-scripts</code>, so no package runs code while installing.</p></li>
-            <li><h3>Swap</h3><p>Checks the new copy starts, then puts it in <code class="inline" translate="no">%LOCALAPPDATA%\naira-payout\app</code> in one rename. If anything fails, your previous install stays as it was.</p></li>
-            <li><h3>PATH</h3><p>Writes the launcher <code class="inline" translate="no">%LOCALAPPDATA%\naira-payout\bin\ntag.cmd</code> and adds that folder to your user PATH. Terminals that were already open need a restart.</p></li>
+            <li><h3>Swap</h3><p>Checks the new copy starts, then puts it in <code class="inline" translate="no">%LOCALAPPDATA%\lokal\app</code> in one rename. An install from before the rename, in <code class="inline" translate="no">%LOCALAPPDATA%\naira-payout</code>, is removed and its PATH entry taken out. If anything fails, your previous install stays as it was.</p></li>
+            <li><h3>PATH</h3><p>Writes the launcher <code class="inline" translate="no">%LOCALAPPDATA%\lokal\bin\ntag.cmd</code> and adds that folder to your user PATH. Terminals that were already open need a restart.</p></li>
           </ol>
         </div>
         <div class="card-b">
@@ -259,10 +259,10 @@ ntag send ada 10"><svg class="i"><use href="#i-copy"/></svg></button>
           <p class="small muted mt-8">In PowerShell a leading <code class="inline" translate="no">@</code> is special: write <code class="inline" translate="no">ada</code> or <code class="inline" translate="no">'@ada'</code>. <code class="inline" translate="no">ntag help</code> lists every command; <code class="inline" translate="no">--dry-run</code> shows a payment without sending it.</p>
           <ul class="checks mt-16">
             <li><svg class="i"><use href="#i-check"/></svg><span><b>Update.</b> Run the same line again. The app folder is replaced; your wallet is not touched.</span></li>
-            <li><svg class="i"><use href="#i-check"/></svg><span><b>Uninstall.</b> <code class="inline" translate="no">$env:NTAG_UNINSTALL = "1"; irm https://naira-payout.vercel.app/install.ps1 | iex</code> removes the app and bin folders and the PATH entry. By hand: delete both folders and remove the bin folder from your user PATH.</span></li>
+            <li><svg class="i"><use href="#i-check"/></svg><span><b>Uninstall.</b> <code class="inline" translate="no">$env:NTAG_UNINSTALL = "1"; irm https://lokalpay.vercel.app/install.ps1 | iex</code> removes the app and bin folders and the PATH entry. By hand: delete both folders and remove the bin folder from your user PATH.</span></li>
             <li><svg class="i"><use href="#i-check"/></svg><span><b>Options.</b> <code class="inline" translate="no">$env:NTAG_REF</code> pins a branch, tag or commit; <code class="inline" translate="no">$env:NTAG_NO_PATH = "1"</code> leaves your PATH alone and prints the folder to add.</span></li>
           </ul>
-          <div class="alert mt-16"><svg class="i"><use href="#i-info"/></svg><span>Your wallet is a separate file, <code class="inline" translate="no">%USERPROFILE%\.naira-payout\wallet.json</code> (or <code class="inline" translate="no">NTAG_WALLET_FILE</code>). The installer never creates, reads, moves or deletes it. The key inside is encrypted with your send password, and there is no recovery: copy the file somewhere safe, for example <code class="inline" translate="no">Copy-Item $HOME\.naira-payout\wallet.json D:\backup\</code>, and remember the password.</span></div>
+          <div class="alert mt-16"><svg class="i"><use href="#i-info"/></svg><span>Your wallet is a separate file, <code class="inline" translate="no">%USERPROFILE%\.lokal\wallet.json</code> (or <code class="inline" translate="no">NTAG_WALLET_FILE</code>). A wallet made before the rename stays in <code class="inline" translate="no">%USERPROFILE%\.naira-payout\wallet.json</code> and ntag keeps using it there. The installer never creates, reads, moves or deletes it. The key inside is encrypted with your send password, and there is no recovery: copy the file somewhere safe, for example <code class="inline" translate="no">Copy-Item $HOME\.naira-payout\wallet.json D:\backup\</code>, and remember the password.</span></div>
         </div>
       </section>
 
@@ -376,7 +376,7 @@ node src/agent.mjs watch"><svg class="i"><use href="#i-copy"/></svg></button>
               <tr><td class="lead-cell" data-label="Variable"><code class="inline" translate="no">CELO_GAS_MARGIN</code></td><td data-label="Default" class="num"><span>0.1</span></td><td data-label="What it controls"><span>CELO set aside for the gas of a <code class="inline" translate="no">celo-cngn</code> payout itself (up to 7 transactions), on top of the reserve.</span></td></tr>
               <tr><td class="lead-cell" data-label="Variable"><code class="inline" translate="no">ATTRIBUTION_CODE</code></td><td data-label="Default"><span class="mono nw" translate="no">celo_7360953d1b53</span></td><td data-label="What it controls"><span>Tag added to every transaction. 1–32 characters of a–z, 0–9 and _.</span></td></tr>
               <tr><td class="lead-cell" data-label="Variable"><code class="inline" translate="no">AGENT_ADDRESS</code></td><td data-label="Default"><span class="mono" translate="no">0x8a69…7a1e</span></td><td data-label="What it controls"><span>Agent address used when there is no key file: by <code class="inline" translate="no">request</code> and by a dry-run <code class="inline" translate="no">watch</code>.</span></td></tr>
-              <tr><td class="lead-cell" data-label="Variable"><code class="inline" translate="no">SITE_URL</code></td><td data-label="Default"><span class="mono" translate="no">https://<wbr>deeeko.github.io/<wbr>celo-naira-payout-agent</span></td><td data-label="What it controls"><span>Site used in payment links and receipt links.</span></td></tr>
+              <tr><td class="lead-cell" data-label="Variable"><code class="inline" translate="no">SITE_URL</code></td><td data-label="Default"><span class="mono" translate="no">https://<wbr>lokalpay.vercel.app</span></td><td data-label="What it controls"><span>Site used in payment links and receipt links.</span></td></tr>
               <tr><td class="lead-cell" data-label="Variable"><code class="inline" translate="no">CELO_AGENT_KEY_FILE</code></td><td data-label="Default"><span class="mono" translate="no">~/.celo-naira-agent/<wbr>agent.json</span></td><td data-label="What it controls"><span>Where the agent's private key is stored, outside the repo.</span></td></tr>
               <tr><td class="lead-cell" data-label="Variable"><code class="inline" translate="no">CONTACTS_FILE</code></td><td data-label="Default"><span class="mono nw" translate="no">contacts.json</span></td><td data-label="What it controls"><span>The allow-list of recipients and your own wallets, in the repo folder. Git-ignored.</span></td></tr>
               <tr><td class="lead-cell" data-label="Variable"><code class="inline" translate="no">RECEIPTS_FILE</code></td><td data-label="Default"><span class="mono nw" translate="no">receipts.jsonl</span></td><td data-label="What it controls"><span>Log of executed payouts and unmatched deposits. The daily cap is counted from it. Git-ignored.</span></td></tr>
@@ -481,7 +481,7 @@ node src/agent.mjs watch"><svg class="i"><use href="#i-copy"/></svg></button>
   <div class="container">
     <div class="cols">
       <div>
-        <div class="foot-brand"><img src="logo.svg" alt="" width="28" height="28">Naira Payout</div>
+        <div class="foot-brand"><img src="logo.svg" alt="" width="28" height="28">Lokal</div>
         <p class="small soft" style="max-width:40ch">An agent that converts between USD₮ and cNGN on Textile FX and pays recipients on Celo.</p>
       </div>
       <div>

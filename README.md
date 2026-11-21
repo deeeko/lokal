@@ -1,12 +1,15 @@
-# Naira Payout: a Celo naira payout agent
+# Lokal: pay anyone in their local money
 
-Send dollars, they get naira: an agent on Celo that converts USD₮ to cNGN on Textile FX and pays the recipient's own
-wallet, by @nTag, payment link or command line, with every limit enforced in code.
+Formerly Naira Payout.
 
-**[Live app](https://naira-payout.vercel.app)** ·
+Send dollars, they receive their local money: an agent on Celo that converts USD₮ to a local stablecoin on Textile FX
+(cNGN for Nigeria today, with more local stablecoins on the way) and pays the recipient's own wallet, by @nTag, payment
+link or command line, with every limit enforced in code.
+
+**[Live app](https://lokalpay.vercel.app)** ·
 **[Agent on Celoscan](https://celoscan.io/address/0x8a695cf54CB44753c8b784EB36d266f748617a1e)** ·
 **[ERC-8004 identity (agentId 10079)](https://celoscan.io/token/0x8004A169FB4a3325136EB29fA0ceB6D2e539a432?a=10079)** ·
-**[Docs](https://naira-payout.vercel.app/docs.html)** ·
+**[Docs](https://lokalpay.vercel.app/docs.html)** ·
 [GitHub Pages mirror](https://deeeko.github.io/celo-naira-payout-agent/)
 
 Built for the **Agents Open for Business** hackathon on Celo, **Track 3: Stablecoin Corridors (Textile FX)**
@@ -42,14 +45,15 @@ Built for the **Agents Open for Business** hackathon on Celo, **Track 3: Stablec
 
 ## What it is and who it's for
 
-Someone abroad wants to send money to someone in Nigeria. They hold dollars (USD₮) on Celo; the recipient wants
-naira. This agent sits in the middle: it takes the dollars, converts them to **cNGN** (a naira stablecoin) on
-**Textile FX**, and pays the recipient's own Celo wallet. It also runs the other way (naira in, dollars out), and the
-operator can pay out in naira from the agent's CELO.
+Someone abroad wants to send money home. They hold dollars (USD₮) on Celo; the recipient wants their local money.
+Lokal's agent sits in the middle: it takes the dollars, converts them to a local stablecoin on **Textile FX**, and pays
+the recipient's own Celo wallet. Today the corridor is Nigeria: **cNGN** (a naira stablecoin); more local stablecoins
+are on the way. It also runs the other way (naira in, dollars out), and the operator can pay out in naira from the
+agent's CELO.
 
 - **Senders** pay from any Celo wallet: to an **@nTag** (a short handle), through a **payment link**, from the site,
   or from the **`ntag` command line** in PowerShell.
-- **Recipients** get paid straight into their own wallet. They can claim an @nTag and share `naira-payout.vercel.app/@name`,
+- **Recipients** get paid straight into their own wallet. They can claim an @nTag and share `lokalpay.vercel.app/@name`,
   or publish a payment link from their own wallet ("Get paid").
 - **The operator** runs the agent (`src/agent.mjs`): it watches for deposits (`watch --execute`) and pays them out,
   under hard limits.
@@ -96,7 +100,7 @@ An nTag is a handle like `@ada` tied to one Celo wallet. People pay the tag; the
    the agent. Its input is `hex("NT1:" + JSON)` plus the attribution tag, for example `{"t":"ada","n":"Ada Obi"}`.
    The page waits for the explorer to index it and confirms the tag is yours (or explains if someone claimed it a
    moment earlier).
-4. **Share** `https://naira-payout.vercel.app/@ada` (on the GitHub Pages mirror: `tag.html#ada`), with a QR code and a
+4. **Share** `https://lokalpay.vercel.app/@ada` (on the GitHub Pages mirror: `tag.html#ada`), with a QR code and a
    WhatsApp button. The account page also shows your wallet balances (USD₮, cNGN, CELO) and the payments to your tag
    with receipt links. You can change your tag or release it (`{"t":""}`) from the same page.
 
@@ -186,7 +190,7 @@ refuses to use it.
 The quickest way, for anyone: open PowerShell (no admin needed) and paste
 
 ```powershell
-irm https://naira-payout.vercel.app/install.ps1 | iex
+irm https://lokalpay.vercel.app/install.ps1 | iex
 ```
 
 Requirement: **Node.js 20 or newer**. If it is missing or too old, the installer says how to get it
@@ -197,19 +201,23 @@ You can read [`site/install.ps1`](site/install.ps1) (served as plain text at the
 2. downloads the code as a zip from GitHub (`codeload.github.com/deeeko/celo-naira-payout-agent/zip/<ref>`, `main`
    unless `$env:NTAG_REF` names a branch, tag or commit), over TLS 1.2 in Windows PowerShell 5.1 too;
 3. runs `npm ci --omit=dev --ignore-scripts --no-audit --no-fund` in a staging folder and checks that `ntag help` runs;
-4. swaps it into `%LOCALAPPDATA%\naira-payout\app` with a rename (a failed update keeps the previous install);
-5. writes `%LOCALAPPDATA%\naira-payout\bin\ntag.cmd` and adds that folder to your **user** PATH (and to the current
-   window). `$env:NTAG_NO_PATH = "1"` skips the PATH change and prints the folder to add instead.
+4. swaps it into `%LOCALAPPDATA%\lokal\app` with a rename (a failed update keeps the previous install);
+5. writes `%LOCALAPPDATA%\lokal\bin\ntag.cmd` and adds that folder to your **user** PATH (and to the current
+   window). `$env:NTAG_NO_PATH = "1"` skips the PATH change and prints the folder to add instead;
+6. cleans up an install from before the rename to Lokal: deletes `%LOCALAPPDATA%\naira-payout\app` and `bin` and takes
+   the old bin folder out of your user PATH, so the old `ntag` can never shadow the new one.
 
 Then: `ntag wallet new`, send USD₮ and a little CELO (for fees) to the address `ntag wallet` shows, `ntag whois ada`,
 `ntag send ada 10`. Written for both Windows PowerShell 5.1 (built into Windows) and PowerShell 7.
 
 - **Update:** run the same line again.
-- **Uninstall:** `$env:NTAG_UNINSTALL = "1"; irm https://naira-payout.vercel.app/install.ps1 | iex` removes the app
+- **Uninstall:** `$env:NTAG_UNINSTALL = "1"; irm https://lokalpay.vercel.app/install.ps1 | iex` removes the app
   and bin folders and the PATH entry. By hand: delete both folders and remove the bin folder from your user PATH.
-- **Your wallet is separate:** `%USERPROFILE%\.naira-payout\wallet.json` (or `NTAG_WALLET_FILE`). The installer never
+- **Your wallet is separate:** `%USERPROFILE%\.lokal\wallet.json` (or `NTAG_WALLET_FILE`). The installer never
   creates, reads, moves or deletes it, so updates and uninstalls keep it. Back it up, for example
-  `Copy-Item $HOME\.naira-payout\wallet.json D:\backup\`, and remember the send password.
+  `Copy-Item $HOME\.lokal\wallet.json D:\backup\`, and remember the send password.
+- **Wallets made before the rename** stay at `%USERPROFILE%\.naira-payout\wallet.json`. When that file exists and the
+  new one doesn't, `ntag` keeps using it where it is and says so once; nothing is moved for you.
 
 **Setup** (from a checkout of this repo, any OS)
 
@@ -223,7 +231,7 @@ ntag wallet import                # or use a key you already have (typed at a hi
 ntag wallet                       # address, CELO / USD₮ / cNGN balances and your nTag
 ```
 
-The wallet file (default `%USERPROFILE%\.naira-payout\wallet.json`, override with `NTAG_WALLET_FILE`) holds the key
+The wallet file (default `%USERPROFILE%\.lokal\wallet.json`, or the older `.naira-payout\wallet.json` if only that exists; override with `NTAG_WALLET_FILE`) holds the key
 encrypted with **scrypt (N = 131072) and AES-256-GCM**; on Windows its permissions are limited to your user. `ntag`
 never shows or exports the key and never overwrites an existing wallet. There is no recovery: back up the file and
 remember the password; if you forget it, re-import your own key backup with a new password.
@@ -296,7 +304,7 @@ Settings: `NTAG_WALLET_FILE`, `CELO_RPC_URL` (default Forno), `NTAG_PASSWORD`, `
    attribution tag (the run exits non-zero), logs the payout to `receipts.jsonl` and prints the receipt number and link:
 
    ```
-   Receipt NP-7F3A-91C2: https://naira-payout.vercel.app/receipt.html#NP-7F3A-91C2
+   Receipt NP-7F3A-91C2: https://lokalpay.vercel.app/receipt.html#NP-7F3A-91C2
    ```
 
 Every transaction the agent sends (reset, approval, swap, payout, identity registration) carries `celo_7360953d1b53`,
@@ -389,7 +397,7 @@ All numbers are defaults from `src/config.mjs`; the language-parsing layer of `a
 | Stateless sign-in check | `POST /api/session`: JSON only, at most 4 KB, no cookies, no database, nothing stored or logged | `api/session.js` |
 
 **Sign-in check** (`api/session.js`, Vercel only): checks the message is this site's sign-in text, for a known host
-(the request's own host, `naira-payout.vercel.app` or `celo-naira-payout-agent.vercel.app`), on Celo (chain 42220) and
+(the request's own host, `lokalpay.vercel.app`, or the older `naira-payout.vercel.app` and `celo-naira-payout-agent.vercel.app`), on Celo (chain 42220) and
 not expired, and that the address signed it. Normal wallets (EIP-191) are verified locally with viem; smart-contract
 wallets (ERC-1271, or ERC-6492 before deployment) are checked on Celo through Forno with an 8-second timeout. Returns
 `{ ok, address, exp }`, 400 for a bad sign-in, or 503 if Celo could not be asked in time. On the GitHub Pages mirror and
@@ -559,7 +567,7 @@ All optional (see `.env.example`).
 | `CELO_GAS_MARGIN` | `0.1` | CELO set aside for the gas of a `celo-cngn` payout (up to 7 transactions) |
 | `ATTRIBUTION_CODE` | `celo_7360953d1b53` | Tag on every transaction (1–32 chars of a–z, 0–9, _) |
 | `AGENT_ADDRESS` | `0x8a695cf54CB44753c8b784EB36d266f748617a1e` | Agent address when there is no key file (`request`, dry-run `watch`) |
-| `SITE_URL` | `https://naira-payout.vercel.app` | Site used in payment and receipt links |
+| `SITE_URL` | `https://lokalpay.vercel.app` | Site used in payment and receipt links |
 | `CELO_AGENT_KEY_FILE` | `~/.celo-naira-agent/agent.json` | Agent private key, outside the repo |
 | `CONTACTS_FILE` | `contacts.json` | Allow-list and `own_wallets` |
 | `RECEIPTS_FILE` | `receipts.jsonl` | Executed payouts and refused or unmatched deposits; the daily caps are counted from it |
@@ -570,7 +578,7 @@ All optional (see `.env.example`).
 | `BLOCKSCOUT_API` | `https://celo.blockscout.com/api/v2` | Where registrations and tag claims are discovered |
 | `CELO_RPC_URL` | Forno | RPC for `watch`, the agent's read commands and the `ntag` CLI |
 | `TEXTILE_API` | `https://api.textilecredit.com/v2` | Textile FX RFQ endpoint |
-| `NTAG_WALLET_FILE` | `~/.naira-payout/wallet.json` | `ntag` CLI wallet (encrypted) |
+| `NTAG_WALLET_FILE` | `~/.lokal/wallet.json` (or `~/.naira-payout/wallet.json` if only that exists) | `ntag` CLI wallet (encrypted) |
 | `NTAG_PASSWORD`, `NTAG_OLD_PASSWORD` | not set | Answer the `ntag` password prompts in scripts (less safe) |
 | `NTAG_PRIVATE_KEY` | not set | Key for `ntag wallet import` instead of the hidden prompt |
 | `NTAG_WAIT_MINUTES` | `30` | How long `ntag send --wait` waits for the payout |
@@ -585,7 +593,7 @@ control (no funds moved) is sent only if Textile asks for it.
 ### Tests
 
 ```powershell
-npm test                          # 162 tests, all passing
+npm test                          # 177 tests, all passing
 node scripts/check-site.mjs       # static site check
 ```
 
@@ -599,13 +607,13 @@ node scripts/check-site.mjs       # static site check
 | `test/watch-autopilot.test.mjs` | 10 | memo guard, recorded refusals, failed saves never drop a deposit, "paid" write failure, waiting on the tag list, firm-quote refusals |
 | `test/ntags.test.mjs` | 15 | the byte-identical port, rules, codec, resolution and ordering, cross-check with the site, discovery, onchain re-check, cache refresh, force-pay |
 | `test/ntags-watch.test.mjs` | 13 | nTag autopilot: corridor by token, exact amounts, owner resolved before the deposit, minimums, attempts refused |
-| `test/ntag-cli.test.mjs` | 20 | the `ntag` CLI: parsing, exact amounts and limits, dry-run data, refusing the agent's key, keystore, password change, lockout, allowance, payout matching |
+| `test/ntag-cli.test.mjs` | 21 | the `ntag` CLI: wallet location (and the pre-rename wallet), parsing, exact amounts and limits, dry-run data, refusing the agent's key, keystore, password change, lockout, allowance, payout matching |
 | `test/ntag-ui.test.mjs` | 12 | tag input, live rules, availability, suggestions, limits, deposit eligibility, payout tracking, daily allowance |
-| `test/session-api.test.mjs` | 7 | the sign-in check: hosts, chain, expiry, body limits, contract wallets |
+| `test/session-api.test.mjs` | 8 | the sign-in check: hosts (Lokal and the older addresses), the pre-rename sign-in text, chain, expiry, body limits, contract wallets |
 | `test/site-helpers.test.mjs` | 5 | the limits line matches `src/config.mjs` on every page, rate age, network errors, decimal-comma amounts |
-| `test/status-api.test.mjs` | 14 | the status server: signatures, replay window, body limits, strict validation, merge rules, totals, 503 fallback |
-| `test/status-report.test.mjs` | 12 | autopilot's reporter: outbox, batching, backoff, never throws into a payout, backfill |
-| `test/status-site.test.mjs` | 5 | the site's status helpers: exact vs estimated, reason text, allowance from the server |
+| `test/status-api.test.mjs` | 17 | the status server: signatures, replay window, body limits, strict validation, merge rules, totals, 503 fallback |
+| `test/status-report.test.mjs` | 19 | autopilot's reporter: outbox, batching, backoff, never throws into a payout, backfill |
+| `test/status-site.test.mjs` | 8 | the site's status helpers: exact vs estimated, reason text, allowance from the server |
 | `test/vercel-api.test.mjs` | 4 | the explorer proxy: allowed paths, refusals, methods, rewrites |
 
 ---
@@ -635,7 +643,7 @@ Newest first.
   including smart-contract wallets.
 - **The `ntag` PowerShell CLI.** `wallet new/import/password`, `whois`, `send` (`--dollars`, `--wait`, `--dry-run`),
   `claim`, `release`, `status`; the key encrypted with a send password (scrypt + AES-256-GCM) and a lockout.
-- **One-line Windows installer.** `irm https://naira-payout.vercel.app/install.ps1 | iex` installs `ntag` for the
+- **One-line Windows installer.** `irm https://lokalpay.vercel.app/install.ps1 | iex` installs `ntag` for the
   current user in about a minute: Node.js 20+ check, GitHub zip pinned by `NTAG_REF`, `npm ci --ignore-scripts`,
   atomic swap, user PATH. Run it again to update; `NTAG_UNINSTALL=1` removes it. It never touches the wallet file.
 - **Daily limits on every payment screen.** $25 per payment, $25 per person per day, $100 per day overall, plus how much
@@ -659,6 +667,13 @@ Newest first.
 
 ### 2026-11-21: pay from CELO and the new address
 
+- **Renamed to Lokal ahead of multi-currency corridors.** Naira Payout is now **Lokal**: "pay anyone in their local
+  money". The layout, type and colours are unchanged; the names, copy and logo mark changed (a cursive L cut from the
+  site's own Sentient Italic, in three variants under `docs/brand/`). New address **lokalpay.vercel.app** for links,
+  receipts, the installer and `SITE_URL`; naira-payout.vercel.app keeps working, and the sign-in check accepts both
+  (plus sign-ins signed before the rename, until they expire). `ntag` installs to `%LOCALAPPDATA%\lokal` (an old
+  `naira-payout` install and its PATH entry are cleaned up on update) and new wallets go to `~/.lokal/wallet.json`,
+  while an existing `~/.naira-payout/wallet.json` keeps being used in place. cNGN and the naira corridor are unchanged.
 - **CELO payout corridor** (`celo-cngn`): the operator can pay in naira from the agent's CELO, as two Textile swaps
   (CELO → USD₮ → cNGN) with a 1.05 USD₮ minimum, a 2 CELO reserve plus gas margin, both swaps checked against their
   previews, and a recovery message if it stops halfway. Shown as "From CELO" on the quote page.
@@ -698,7 +713,7 @@ Newest first.
 
 **Done**
 
-- [x] Agent on Celo mainnet, 162 tests passing
+- [x] Agent on Celo mainnet, 177 tests passing
 - [x] Live Textile price previews for all three corridors
 - [x] ERC-8004 identity registered (agentId 10079)
 - [x] Payment links, Get paid, autopilot, two stablecoin corridors plus CELO, receipts and onchain reviews
@@ -706,6 +721,7 @@ Newest first.
 - [x] Live app on Vercel behind a test-gated deploy
 - [x] Status server: exact payout status and daily limits on the site
 - [x] One-line Windows installer for the `ntag` command
+- [x] Renamed to Lokal, at lokalpay.vercel.app (naira-payout.vercel.app keeps working)
 
 **Still to do** (added here only once they have happened)
 

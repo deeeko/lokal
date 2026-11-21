@@ -13,9 +13,9 @@ const abi = [
 export function registrationFile({ repoUrl, agentId } = {}) {
   return {
     type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
-    name: "Naira Payout Agent",
+    name: "Lokal",
     description:
-      "Converts USD₮ to cNGN on Textile FX and pays it out to a named recipient in Nigeria on Celo. Spending is capped and recipients are allow-listed in code.",
+      "Lokal (formerly Naira Payout): pay anyone in their local money. Converts USD₮ to local stablecoins (cNGN for Nigeria today) on Textile FX and pays the recipient's own wallet on Celo. Spending is capped and recipients are checked in code.",
     services: [{ name: "web", endpoint: repoUrl }],
     x402Support: false,
     active: true,

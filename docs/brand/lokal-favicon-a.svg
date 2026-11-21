@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- small-size Lokal mark, variant A: flat green tile, Celo-yellow L, thickened for 16-32 px -->
+  <defs><clipPath id="t"><rect width="64" height="64" rx="15"/></clipPath></defs>
+  <g clip-path="url(#t)">
+    <rect width="64" height="64" fill="#00A862"/>
+    <path d="M47.5 53L14.9 53L15.2 51.1L17.5 50.1Q19.2 49.4 19.7 48.6Q20.3 47.8 20.5 46.3L24.3 19.2L24.6 16.6Q24.6 14.9 22.5 13.9L20.4 12.9L20.8 11L38.5 11L38.3 12.9L35.9 13.9Q34.3 14.6 33.7 15.4Q33.1 16.2 32.9 17.7L29.2 44.8Q28.9 46.4 28.9 47.2Q28.9 48.5 29.6 48.9Q30.2 49.4 31.8 49.4L38.3 49.4Q40.8 49.4 42.2 48.5Q43.5 47.6 46.1 44.2L48.8 40.6L50.7 40.6Z" fill="#FCFF52" stroke="#FCFF52" stroke-width="2.4" stroke-linejoin="round"/>
+  </g>
+</svg>

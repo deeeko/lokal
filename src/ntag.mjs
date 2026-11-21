@@ -30,8 +30,30 @@ import { receiptNo, receiptNoLink } from "./requests.mjs";
 // without also being refused as "the agent's key".
 export const AGENT = "0x8a695cf54CB44753c8b784EB36d266f748617a1e";
 export const RPC_URL = process.env.CELO_RPC_URL || "https://forno.celo.org";
-export const DEFAULT_WALLET_FILE = path.join(os.homedir(), ".naira-payout", "wallet.json");
-export const walletFile = (env = process.env) => (env.NTAG_WALLET_FILE ? path.resolve(env.NTAG_WALLET_FILE) : DEFAULT_WALLET_FILE);
+export const DEFAULT_WALLET_FILE = path.join(os.homedir(), ".lokal", "wallet.json");
+// Where the wallet lived before the rename to Lokal. Still used, in place, when it exists and the new one doesn't:
+// ntag never moves a wallet by itself.
+export const LEGACY_WALLET_FILE = path.join(os.homedir(), ".naira-payout", "wallet.json");
+// Marker (next to the old wallet) that the "still using your old wallet" note was shown, so it appears only once.
+export const LEGACY_NOTICE_FILE = path.join(path.dirname(LEGACY_WALLET_FILE), ".lokal-notice-shown");
+/** True when there is no wallet at the new place but there is one at the old place. */
+export const usesLegacyWallet = (env = process.env, exists = fs.existsSync) =>
+  !env.NTAG_WALLET_FILE && !exists(DEFAULT_WALLET_FILE) && exists(LEGACY_WALLET_FILE);
+export const walletFile = (env = process.env, exists = fs.existsSync) => {
+  if (env.NTAG_WALLET_FILE) return path.resolve(env.NTAG_WALLET_FILE);
+  return usesLegacyWallet(env, exists) ? LEGACY_WALLET_FILE : DEFAULT_WALLET_FILE;
+};
+/**
+ * The one-time note for people whose wallet is still at the old place. Returns the text to show, or null (new place,
+ * custom NTAG_WALLET_FILE, or already shown). Marks it shown; if the marker can't be written the note simply shows again.
+ */
+const markLegacyNoticeShown = () => fs.writeFileSync(LEGACY_NOTICE_FILE, new Date().toISOString() + "\n");
+export function legacyWalletNotice({ env = process.env, exists = fs.existsSync, markShown = markLegacyNoticeShown } = {}) {
+  if (!usesLegacyWallet(env, exists) || exists(LEGACY_NOTICE_FILE)) return null;
+  try { markShown(); } catch { /* shown again next time */ }
+  return `Naira Payout is now Lokal. Your wallet stays where it was, ${LEGACY_WALLET_FILE}, and ntag keeps using it there. `
+    + `New wallets go to ${DEFAULT_WALLET_FILE}. To move yours, close ntag and move the file there (keep a backup); nothing else changes.`;
+}
 
 const USDT = TOKENS.USDT;
 const CNGN = TOKENS.CNGN;
@@ -849,7 +871,7 @@ const ok = (s) => out(`${c.green("✓")} ${s}`);
 const warn = (s) => out(`${c.yellow("!")} ${s}`);
 
 function cmdHelp() {
-  out(`${c.bold("ntag")}: send money to an nTag (@handle) on Celo, from your own wallet.
+  out(`${c.bold("ntag")}: send money to an nTag (@handle) on Celo, from your own wallet. Lokal: pay anyone in their local money.
 
 ${c.bold("Get started")}
   ntag wallet new                 create your wallet (key encrypted with a send password)
@@ -890,7 +912,8 @@ ${c.bold("PowerShell examples")}
   PS> node src/ntag.mjs wallet import          # paste the key at the hidden prompt, then pick a send password
   PS> $env:NTAG_WALLET_FILE = "D:\\keys\\ntag.json"; ntag wallet
 
-${c.bold("Settings")}  NTAG_WALLET_FILE (default ${DEFAULT_WALLET_FILE}), CELO_RPC_URL (default Forno).
+${c.bold("Settings")}  NTAG_WALLET_FILE (default ${DEFAULT_WALLET_FILE}; a wallet made before the rename,
+  in ${LEGACY_WALLET_FILE}, keeps being used there), CELO_RPC_URL (default Forno).
   NTAG_PASSWORD (and NTAG_OLD_PASSWORD for "wallet password") answer the password prompts for scripts.
   That is less safe: environment variables can be read by other programs you run. The key itself is never stored
   unencrypted either way.`);
@@ -1313,6 +1336,8 @@ export async function main(argv = process.argv.slice(2)) {
   try {
     const { cmd, args, flags } = parseArgs(argv);
     if (flags.help || cmd === "help") { cmdHelp(); return 0; }
+    const note = process.env.NODE_TEST_CONTEXT ? null : legacyWalletNotice(); // tests never touch a real home folder
+    if (note) console.error(`${c.yellow("!")} ${note}`);
     const run = { wallet: cmdWallet, whois: cmdWhois, send: cmdSend, pay: cmdSend, claim: cmdClaim, release: cmdRelease, status: cmdStatus }[cmd];
     if (!run) throw new UsageError(`Unknown command "${cmd}". Run "ntag help".`);
     await run(args, flags);

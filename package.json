@@ -1,7 +1,7 @@
 {
   "name": "celo-naira-payout-agent",
   "version": "0.1.0",
-  "description": "Agent that pays out in cNGN on Celo via Textile FX",
+  "description": "Lokal: pay anyone in their local money. An agent that pays out in local stablecoins (cNGN today) on Celo via Textile FX",
   "scripts": {
     "test": "node --test",
     "start": "node src/agent.mjs",

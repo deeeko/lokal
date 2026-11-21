@@ -70,7 +70,7 @@ async function render() {
   const tag = readTag();
   shownTag = tag;
   if (!tag) {
-    document.title = "Pay by nTag · Naira Payout";
+    document.title = "Pay by nTag · Lokal";
     title.replaceChildren("Find an ", el("em", {}, "nTag"));
     lead.textContent = "An nTag is a short name tied to a Celo wallet. Pay the tag and the agent pays that wallet in naira or dollars.";
     root.replaceChildren(finderCard(null));
@@ -84,7 +84,7 @@ async function render() {
       finderCard("Look someone up", tag)));
     return;
   }
-  document.title = `@${tag} · Naira Payout`;
+  document.title = `@${tag} · Lokal`;
   title.replaceChildren("Pay ", el("em", {}, "@" + tag));
   root.replaceChildren(el("p", { class: "small muted", role: "status" }, el("span", { class: "skel", style: "width:14px;height:14px;border-radius:50%;margin-right:8px" }), `Looking up @${tag} on Celo…`));
   let state;

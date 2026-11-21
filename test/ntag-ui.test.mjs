@@ -58,9 +58,9 @@ test("greeting and the WhatsApp link", () => {
   assert.equal(greeting(new Date("2026-11-21T07:00:00Z")), "Good morning"); // 08:00 in Lagos
   assert.equal(greeting(new Date("2026-11-21T13:00:00Z")), "Good afternoon");
   assert.equal(greeting(new Date("2026-11-21T19:00:00Z")), "Good evening");
-  const u = whatsappUrl("ada", "https://naira-payout.vercel.app/@ada");
+  const u = whatsappUrl("ada", "https://lokalpay.vercel.app/@ada");
   assert.ok(u.startsWith("https://wa.me/?text="));
-  assert.match(decodeURIComponent(u.slice(20)), /@ada: https:\/\/naira-payout\.vercel\.app\/@ada$/);
+  assert.match(decodeURIComponent(u.slice(20)), /@ada: https:\/\/lokalpay\.vercel\.app\/@ada$/);
 });
 
 // ---------- payments to a tag ----------

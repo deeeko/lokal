@@ -353,7 +353,7 @@ function exportCsv() {
       HASH_RE.test(hash) ? celoscanTx(hash) : "",
     ].map(csvCell).join(",");
   });
-  download("naira-payout-transactions.csv", [header.join(","), ...lines].join("\r\n") + "\r\n");
+  download("lokal-transactions.csv", [header.join(","), ...lines].join("\r\n") + "\r\n");
   toast(`Exported ${state.rows.length} transactions`);
 }
 
@@ -362,7 +362,7 @@ function exportMine() {
   const header = ["hash", "receipt_no", "activity", "status", "time_utc", "celoscan_url"];
   const lines = mine.rows.map((r) => [r.hash, r.kind === "payout" ? receiptNo(r.hash) : "", r.label, r.status[0],
     r.time ? new Date(r.time).toISOString() : "", celoscanTx(r.hash)].map(csvCell).join(","));
-  download("naira-payout-my-payments.csv", [header.join(","), ...lines].join("\r\n") + "\r\n");
+  download("lokal-my-payments.csv", [header.join(","), ...lines].join("\r\n") + "\r\n");
   toast(`Exported ${mine.rows.length} payments`);
 }
 

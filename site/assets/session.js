@@ -12,7 +12,10 @@ export const SESSION_KEY = "np-session";
 export const SESSION_DAYS = 7;
 export const CELO_CHAIN = "0xa4ec"; // 42220
 export const CELO_CHAIN_ID = 42220;
-export const SIGN_IN_STATEMENT = "Sign in to Naira Payout. This is free and sends nothing.";
+export const SIGN_IN_STATEMENT = "Sign in to Lokal. This is free and sends nothing.";
+// Signed before the rename to Lokal. Still accepted, so a sign-in from then stays valid until it expires (7 days at most).
+export const LEGACY_SIGN_IN_STATEMENTS = ["Sign in to Naira Payout. This is free and sends nothing."];
+const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // ---------- the sign-in message (built here, parsed here and in api/session.js) ----------
 /** The exact text the wallet signs. Times are ISO strings; nonce is 16 hex characters. */
@@ -21,7 +24,7 @@ export function buildSignInMessage({ host, origin, address, nonce, issuedAt, exp
     + `URI: ${origin}\nVersion: 1\nChain ID: ${CELO_CHAIN_ID}\nNonce: ${nonce}\nIssued At: ${issuedAt}\nExpiration Time: ${expiresAt}`;
 }
 const MSG_RE = new RegExp("^([A-Za-z0-9.-]+(?::\\d{1,5})?) wants you to sign in with your Ethereum account:\\n(0x[0-9a-fA-F]{40})\\n\\n"
-  + SIGN_IN_STATEMENT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\n\\n"
+  + "(?:" + [SIGN_IN_STATEMENT, ...LEGACY_SIGN_IN_STATEMENTS].map(escapeRe).join("|") + ")\\n\\n"
   + "URI: (https?://[^\\s]+)\\nVersion: (\\d+)\\nChain ID: (\\d+)\\nNonce: ([0-9a-f]{16})\\nIssued At: ([0-9TZ:.+-]+)\\nExpiration Time: ([0-9TZ:.+-]+)$");
 /**
  * Parses a sign-in message. Returns { host, address, uri, uriHost, version, chainId, nonce, issuedAt, exp } (times in

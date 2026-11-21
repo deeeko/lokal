@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { checkSignIn, makeHandler, MAX_BODY } from "../api/session.js";
+import { checkSignIn, makeHandler, MAX_BODY, KNOWN_HOSTS } from "../api/session.js";
 import { buildSignInMessage, parseSignInMessage, signInMessageError, explainWalletError, ensureCelo } from "../site/assets/session.js";
 
 const account = privateKeyToAccount(generatePrivateKey()); // throwaway key, made for this test only
@@ -12,7 +12,7 @@ const handler = makeHandler({ client: noChain });
 const NOW = 1_795_000_000;
 const iso = (s) => new Date(s * 1000).toISOString();
 const msgFor = (o = {}) => buildSignInMessage({
-  host: "naira-payout.vercel.app", origin: "https://naira-payout.vercel.app", address: account.address,
+  host: "lokalpay.vercel.app", origin: "https://lokalpay.vercel.app", address: account.address,
   nonce: "0123456789abcdef", issuedAt: iso(NOW), expiresAt: iso(NOW + 7 * 86400), ...o,
 });
 const mkRes = () => {
@@ -25,12 +25,12 @@ const mkRes = () => {
 
 test("sign-in message: builds the agreed text and parses back", () => {
   const m = msgFor();
-  assert.equal(m, `naira-payout.vercel.app wants you to sign in with your Ethereum account:\n${account.address}\n\n`
-    + "Sign in to Naira Payout. This is free and sends nothing.\n\nURI: https://naira-payout.vercel.app\nVersion: 1\n"
+  assert.equal(m, `lokalpay.vercel.app wants you to sign in with your Ethereum account:\n${account.address}\n\n`
+    + "Sign in to Lokal. This is free and sends nothing.\n\nURI: https://lokalpay.vercel.app\nVersion: 1\n"
     + `Chain ID: 42220\nNonce: 0123456789abcdef\nIssued At: ${iso(NOW)}\nExpiration Time: ${iso(NOW + 7 * 86400)}`);
   const p = parseSignInMessage(m);
   assert.equal(p.address, account.address);
-  assert.equal(p.host, "naira-payout.vercel.app");
+  assert.equal(p.host, "lokalpay.vercel.app");
   assert.equal(p.chainId, 42220);
   assert.equal(p.exp, NOW + 7 * 86400);
   assert.equal(signInMessageError(p, NOW + 10), null);
@@ -42,7 +42,7 @@ test("sign-in message: builds the agreed text and parses back", () => {
 
 test("sign-in message: anything else is refused", () => {
   assert.equal(parseSignInMessage(msgFor() + "\nextra"), null);
-  assert.equal(parseSignInMessage(msgFor().replace("Sign in to Naira Payout", "Sign in to Something")), null);
+  assert.equal(parseSignInMessage(msgFor().replace("Sign in to Lokal", "Sign in to Something")), null);
   assert.equal(parseSignInMessage(msgFor({ nonce: "xyz" })), null);
   assert.equal(parseSignInMessage(42), null);
   assert.equal(signInMessageError(parseSignInMessage(msgFor().replace("Chain ID: 42220", "Chain ID: 1")), NOW), "wrong chain");
@@ -55,31 +55,51 @@ test("sign-in message: anything else is refused", () => {
 test("api/session: a real signature for this site passes", async () => {
   const message = msgFor();
   const signature = await account.signMessage({ message });
-  const ok = await checkSignIn({ message, signature }, { host: "naira-payout.vercel.app", nowSec: NOW + 60 });
+  const ok = await checkSignIn({ message, signature }, { host: "lokalpay.vercel.app", nowSec: NOW + 60 });
   assert.deepEqual(ok, { ok: true, address: account.address, exp: NOW + 7 * 86400 });
   // a preview deployment signs with its own host, which must match the request's Host header
   const pm = msgFor({ host: "preview-abc.vercel.app", origin: "https://preview-abc.vercel.app" });
   const ps = await account.signMessage({ message: pm });
   assert.equal((await checkSignIn({ message: pm, signature: ps }, { host: "preview-abc.vercel.app", nowSec: NOW })).ok, true);
-  assert.equal((await checkSignIn({ message: pm, signature: ps }, { host: "naira-payout.vercel.app", nowSec: NOW })).error, "signed for a different site");
+  assert.equal((await checkSignIn({ message: pm, signature: ps }, { host: "lokalpay.vercel.app", nowSec: NOW })).error, "signed for a different site");
+});
+
+test("api/session: the Lokal address and the older addresses are all our sites (rename to Lokal)", async () => {
+  assert.deepEqual(KNOWN_HOSTS, ["lokalpay.vercel.app", "naira-payout.vercel.app", "celo-naira-payout-agent.vercel.app"]);
+  for (const site of KNOWN_HOSTS) {
+    const message = msgFor({ host: site, origin: `https://${site}` });
+    const signature = await account.signMessage({ message });
+    for (const reqHost of KNOWN_HOSTS) {
+      assert.equal((await checkSignIn({ message, signature }, { host: reqHost, nowSec: NOW })).ok, true, `${site} on ${reqHost}`);
+    }
+  }
+  // a sign-in made before the rename ("Sign in to Naira Payout.") stays valid until it expires
+  const old = msgFor({ host: "naira-payout.vercel.app", origin: "https://naira-payout.vercel.app" })
+    .replace("Sign in to Lokal. This is free", "Sign in to Naira Payout. This is free");
+  assert.ok(old.includes("\n\nSign in to Naira Payout. This is free and sends nothing.\n\n"));
+  assert.equal(parseSignInMessage(old).host, "naira-payout.vercel.app");
+  const oldSig = await account.signMessage({ message: old });
+  assert.equal((await checkSignIn({ message: old, signature: oldSig }, { host: "lokalpay.vercel.app", nowSec: NOW })).ok, true);
+  // new sign-ins use the Lokal text
+  assert.ok(msgFor().includes("\n\nSign in to Lokal. This is free and sends nothing.\n\n"));
 });
 
 test("api/session: wrong signer, tampering, expiry and junk are refused", async () => {
   const message = msgFor();
   const other = privateKeyToAccount(generatePrivateKey());
   const bad = await other.signMessage({ message });
-  assert.equal((await checkSignIn({ message, signature: bad }, { host: "naira-payout.vercel.app", nowSec: NOW, client: noChain })).ok, false);
+  assert.equal((await checkSignIn({ message, signature: bad }, { host: "lokalpay.vercel.app", nowSec: NOW, client: noChain })).ok, false);
   const signature = await account.signMessage({ message });
   const tampered = message.replace("0123456789abcdef", "fedcba9876543210");
-  assert.equal((await checkSignIn({ message: tampered, signature }, { host: "naira-payout.vercel.app", nowSec: NOW, client: noChain })).ok, false);
-  assert.equal((await checkSignIn({ message, signature }, { host: "naira-payout.vercel.app", nowSec: NOW + 8 * 86400 })).error, "the sign-in has expired");
-  assert.equal((await checkSignIn({ message, signature: "0x1234" }, { host: "naira-payout.vercel.app", nowSec: NOW })).ok, false);
+  assert.equal((await checkSignIn({ message: tampered, signature }, { host: "lokalpay.vercel.app", nowSec: NOW, client: noChain })).ok, false);
+  assert.equal((await checkSignIn({ message, signature }, { host: "lokalpay.vercel.app", nowSec: NOW + 8 * 86400 })).error, "the sign-in has expired");
+  assert.equal((await checkSignIn({ message, signature: "0x1234" }, { host: "lokalpay.vercel.app", nowSec: NOW })).ok, false);
   assert.equal((await checkSignIn({}, { host: "x" })).ok, false);
 });
 
 test("api/session: smart-contract wallets are checked on Celo (ERC-1271 / ERC-6492), with a timeout", async () => {
   const message = msgFor();
-  const opts = { host: "naira-payout.vercel.app", nowSec: NOW };
+  const opts = { host: "lokalpay.vercel.app", nowSec: NOW };
   const long = "0x" + "ab".repeat(65 + 200); // a wrapped ERC-6492 signature is longer than 65 bytes
   const asked = [];
   const chain = { verifyMessage: async (a) => { asked.push(a); return a.signature === long; } };
@@ -108,7 +128,7 @@ test("api/session: smart-contract wallets are checked on Celo (ERC-1271 / ERC-64
   assert.equal((await checkSignIn({ message, signature: long }, { ...opts, client: reverted })).status, undefined);
   // the handler passes 503 through
   const r = mkRes();
-  await makeHandler({ client: hang, timeoutMs: 30 })({ method: "POST", headers: { "content-type": "application/json", host: "naira-payout.vercel.app" }, body: { message: msgFor({ issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 86400_000).toISOString() }), signature: long } }, r);
+  await makeHandler({ client: hang, timeoutMs: 30 })({ method: "POST", headers: { "content-type": "application/json", host: "lokalpay.vercel.app" }, body: { message: msgFor({ issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 86400_000).toISOString() }), signature: long } }, r);
   assert.equal(r.code, 503);
   assert.equal(r.body.ok, false);
   assert.equal("status" in r.body, false);
@@ -117,7 +137,7 @@ test("api/session: smart-contract wallets are checked on Celo (ERC-1271 / ERC-64
 test("api/session handler: POST + JSON only, size limit, 400 on a bad sign-in, no caching", async () => {
   const message = msgFor({ issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 86400_000).toISOString() });
   const signature = await account.signMessage({ message });
-  const headers = { "content-type": "application/json", host: "naira-payout.vercel.app" };
+  const headers = { "content-type": "application/json", host: "lokalpay.vercel.app" };
 
   const r1 = mkRes(); await handler({ method: "GET", headers }, r1);
   assert.equal(r1.code, 405); assert.equal(r1.headers.Allow, "POST");

@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' https://forno.celo.org https://celo.blockscout.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
-<title>Pay · Naira Payout</title>
+<title>Pay · Lokal</title>
 <meta name="description" content="Pay a payment link: send the exact amount to the agent on Celo and follow the deposit and payout live.">
 <meta name="theme-color" content="#040806">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Naira Payout Agent">
-<meta property="og:description" content="Pay someone in naira or dollars. Converts on Textile FX and pays out on Celo.">
-<meta property="og:image" content="https://naira-payout.vercel.app/og.png">
+<meta property="og:title" content="Lokal: pay anyone in their local money">
+<meta property="og:description" content="Send dollars on Celo. They receive their local money. Converts on Textile FX and pays their own wallet.">
+<meta property="og:image" content="https://lokalpay.vercel.app/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="logo.png" type="image/png">
@@ -58,7 +58,7 @@
 <div class="sky sky-sm" aria-hidden="true"></div>
 <aside class="sidebar" id="sidebar" aria-label="Site navigation">
   <div class="sb-head">
-    <a class="sb-brand" href="index.html"><img src="logo.svg" alt="" width="34" height="34"><span class="sb-label">Naira Payout</span></a>
+    <a class="sb-brand" href="index.html"><img src="logo.svg" alt="" width="34" height="34"><span class="sb-label">Lokal</span></a>
     <button class="icon-btn sm sb-collapse" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar  [ ]"><svg class="i"><use href="#i-chevron-left"/></svg></button>
     <button class="icon-btn sm sb-close" type="button" aria-label="Close menu"><svg class="i"><use href="#i-x"/></svg></button>
   </div>
@@ -83,7 +83,7 @@
 
 <div class="nav-wrap">
   <nav class="nav" aria-label="Main">
-    <a class="nav-brand" href="index.html"><img src="logo.svg" alt="" width="30" height="30"><span>Naira Payout</span></a>
+    <a class="nav-brand" href="index.html"><img src="logo.svg" alt="" width="30" height="30"><span>Lokal</span></a>
     <div class="nav-links">
       <a href="index.html">Overview</a>
       <a href="quote.html" data-also="pay.html tag.html">Send</a>
@@ -112,7 +112,7 @@
           <div class="field">
             <label class="label" for="open-link">Paste the link you were sent</label>
             <div class="row" style="gap:10px;flex-wrap:nowrap">
-              <input class="input" id="open-link" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://naira-payout.vercel.app/pay.html#…" aria-describedby="open-hint" style="flex:1;min-width:0">
+              <input class="input" id="open-link" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://lokalpay.vercel.app/pay.html#…" aria-describedby="open-hint" style="flex:1;min-width:0">
               <button class="btn btn-primary" type="submit">Open<svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
             </div>
             <p class="hint" id="open-hint" aria-live="polite">It starts with this site's address and contains #tx= or #r=.</p>
@@ -402,7 +402,7 @@
   <div class="container">
     <div class="cols">
       <div>
-        <div class="foot-brand"><img src="logo.svg" alt="" width="28" height="28">Naira Payout</div>
+        <div class="foot-brand"><img src="logo.svg" alt="" width="28" height="28">Lokal</div>
         <p class="small soft" style="max-width:40ch">An agent that converts between USD₮ and cNGN on Textile FX and pays recipients on Celo.</p>
       </div>
       <div>

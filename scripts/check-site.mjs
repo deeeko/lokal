@@ -138,7 +138,7 @@ for (const file of walk(SITE).filter((f) => f.endsWith(".json") && !f.endsWith("
   try { JSON.parse(fs.readFileSync(file, "utf8")); } catch { fail(`${path.relative(".", file)}: invalid JSON`); }
 }
 
-// The Windows installer (irm https://naira-payout.vercel.app/install.ps1 | iex). Windows PowerShell 5.1 decodes a
+// The Windows installer (irm https://lokalpay.vercel.app/install.ps1 | iex). Windows PowerShell 5.1 decodes a
 // download without a BOM as Latin-1 and keeps a BOM as a stray first character, so the file must be ASCII with no BOM.
 // It must be served as text (vercel.json) so people can read it in the browser before running it.
 {
