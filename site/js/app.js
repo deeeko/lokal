@@ -18,7 +18,8 @@ import {
   potTitleError, cleanTitle, titleRoom, parseUsd6, usd6Text, capsError, CLOSE_PRESETS, closesAtFor, closeTimeError, closeText,
   potState, potUrl, loadHostPots, latestBlock,
 } from "../assets/pots.js";
-import { potMeter, potBadge, potShare } from "../assets/pot-ui.js";
+import { potMeter, potBadge, potShare, confirmDelete } from "../assets/pot-ui.js";
+import { readHidden, hidePot, restorePot, splitHidden, deleteAction, deleteConfirmCopy, deletedToggleText, potIdKey } from "../assets/pots-hidden.js";
 import { ntagCard, stage, shareBlock, contractEntry, greeting, alertBox, plainError, waitForReceipt, sameAddr } from "../assets/ntag-ui.js";
 import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 import { sharedActivity, receivedTotals } from "../assets/my-activity.js";
@@ -30,6 +31,7 @@ initChrome();
 
 const root = $("#dash-root");
 const D = { rendered: undefined, tag: undefined, entry: null, legacyTag: null, busy: false, rate: null, activity: null, note: null };
+const storage = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
 const isHash = (h) => /^0x[0-9a-fA-F]{64}$/.test(String(h));
 const errText = (e) => (e?.plain ? e.message : explainWalletError(e));
 const section = (id, title, ...body) => el("section", { class: "card dash-card", id, "aria-labelledby": `${id}-h` },
@@ -346,23 +348,51 @@ function potsSection(s) {
   newBtn.addEventListener("click", () => toggle(true));
   sec.openNew = () => { toggle(true); sec.scrollIntoView({ behavior: "smooth", block: "start" }); };
 
+  // Deleted pots: hidden from this list in this browser, per wallet (LokalPots has no delete; open pots are closed first)
+  const store = storage();
+  const L = { pots: [], showDeleted: false };
+  const render = ({ focus = null } = {}) => {
+    const now = Math.floor(Date.now() / 1000);
+    const { shown, hidden } = splitHidden(L.pots, readHidden(store, s.address), (p) => potState(p, now));
+    const nodes = [];
+    if (shown.length) {
+      nodes.push(el("ul", { class: "pot-rows" }, shown.map((p) => potRow(s, p, { reload: () => loadList(), onHidden: () => render({ focus: "toggle" }) }))));
+    } else {
+      nodes.push(el("div", { class: "dash-empty" }, el("p", { class: "dash-empty-title" }, hidden.length ? "No pots on your dashboard" : "No pots yet"),
+        el("p", { class: "small soft" }, hidden.length ? "You deleted the ones you had. Open a new one any time." : "Open one for a wedding, a birthday or a group gift.")));
+    }
+    if (hidden.length) {
+      const open = L.showDeleted;
+      const tg = el("button", { class: "linklike pot-deleted-toggle", type: "button", "aria-expanded": String(open), "aria-controls": "pots-deleted" }, deletedToggleText(hidden.length, open));
+      tg.addEventListener("click", () => { L.showDeleted = !L.showDeleted; render({ focus: "toggle" }); });
+      const box = el("div", { class: "pot-deleted", id: "pots-deleted", hidden: !open },
+        open ? el("ul", { class: "pot-rows is-deleted", "aria-label": "Deleted pots" }, hidden.map((p) => deletedRow(p, () => {
+          restorePot(store, s.address, p.potId);
+          toast("Pot restored");
+          render({ focus: `restored-${potIdKey(p.potId)}` });
+        }))) : null);
+      nodes.push(el("div", { class: "pot-deleted-wrap" }, tg, box));
+    }
+    list.replaceChildren(...nodes);
+    if (focus === "toggle") (list.querySelector(".pot-deleted-toggle") ?? sec.querySelector("#pots-h"))?.focus();
+    else if (focus) list.querySelector(`[data-pot-focus="${focus}"]`)?.focus();
+  };
   const loadList = async (justOpened = null) => {
     list.setAttribute("aria-busy", "true");
     if (!list.firstChild) list.replaceChildren(el("p", { class: "small muted" }, el("span", { class: "skel" }), " Looking for your pots…"));
     try {
-      const found = (await loadHostPots(s.address)).slice(0, 12);
+      const all = await loadHostPots(s.address);
+      // the newest 12 on the list, plus up to 12 deleted ones (so deleting doesn't push others off the end)
+      const { shown, hidden } = splitHidden(all, readHidden(store, s.address));
+      const found = [...shown.slice(0, 12), ...hidden.slice(0, 12)].sort((a, b) => (BigInt(b.potId) > BigInt(a.potId) ? 1 : -1));
       const pots = (await Promise.all(found.map((p) => readPotInfo(p.potId).then((i) => ({ potId: BigInt(p.potId), ...i })).catch(() => null)))).filter(Boolean);
       if (justOpened != null && !pots.some((p) => p.potId === BigInt(justOpened))) {
         const i = await readPotInfo(justOpened).catch(() => null);
         if (i) pots.unshift({ potId: BigInt(justOpened), ...i });
       }
       list.removeAttribute("aria-busy");
-      if (!pots.length) {
-        list.replaceChildren(el("div", { class: "dash-empty" }, el("p", { class: "dash-empty-title" }, "No pots yet"),
-          el("p", { class: "small soft" }, "Open one for a wedding, a birthday or a group gift.")));
-        return;
-      }
-      list.replaceChildren(el("ul", { class: "pot-rows" }, pots.map((p) => potRow(s, p, () => loadList()))));
+      L.pots = pots;
+      render();
     } catch {
       list.removeAttribute("aria-busy");
       const b = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, icon("refresh"), "Try again");
@@ -375,8 +405,12 @@ function potsSection(s) {
   return sec;
 }
 
-/** One of the host's pots: progress, state, link and QR, and Close (two steps, simulated first). */
-function potRow(s, p, reload) {
+/**
+ * One of the host's pots: progress, state, link and QR, Close (two steps, simulated first) and Delete. Delete hides a
+ * closed or ended pot from this list with no transaction; on an open pot it is "Close & delete": closePot from the
+ * host's wallet first, and the pot is hidden only once Celo confirms it closed.
+ */
+function potRow(s, p, { reload, onHidden }) {
   const now = Math.floor(Date.now() / 1000);
   const st = potState(p, now);
   const meter = potMeter(p, { size: "sm" });
@@ -418,15 +452,70 @@ function potRow(s, p, reload) {
     });
     end.append(close);
   }
+  const action = deleteAction(st, canClosePot(s, p));
+  if (action) end.append(deleteButton(s, p, action, msg, { onHidden }));
   return el("li", { class: "pot-row" },
     el("div", { class: "pot-row-main" },
-      el("div", { class: "pot-row-title" }, el("a", { class: "dash-list-label", href: url }, el("bdi", {}, p.title)), potBadge(st)),
+      el("div", { class: "pot-row-title" }, el("a", { class: "dash-list-label", href: url, dataset: { potFocus: `restored-${potIdKey(p.potId)}` } }, el("bdi", {}, p.title)), potBadge(st)),
       meter.el,
       el("span", { class: "micro muted" }, [`Pot #${p.potId}`, `${p.payerCount} guest${p.payerCount === 1 ? "" : "s"}`, `up to ${usd6Text(p.perPayerCapUsd6)} each`,
         st === "open" || st === "full" ? `closes ${closeText(p.closesAt)}` : st === "closed" ? "closed by you" : `ended ${closeText(p.closesAt)}`].join(" · "))),
     end, qrBox, msg);
 }
 
+/** "Delete" (closed or ended) or "Close & delete" (open or full, host only): a confirm dialog, then hide (after closing). */
+function deleteButton(s, p, action, msg, { onHidden }) {
+  const copy = deleteConfirmCopy(p.title, action);
+  const label = copy.confirm;
+  const btn = el("button", { class: "btn btn-ghost btn-sm pot-delete", type: "button", "aria-haspopup": "dialog", "aria-label": `${label}: ${p.title}` }, label);
+  let busy = false;
+  const idle = () => { busy = false; btn.removeAttribute("aria-disabled"); btn.textContent = label; };
+  const hide = () => {
+    const r = hidePot(storage(), s.address, p.potId);
+    const what = action === "close-delete" ? "Pot closed and deleted" : "Pot deleted";
+    toast(r.saved ? what : `${what} for now. This browser blocks storage, so it shows again after a reload.`);
+    onHidden();
+  };
+  btn.addEventListener("click", async () => {
+    if (busy || D.busy) return;
+    msg.replaceChildren();
+    if (!(await confirmDelete(copy, btn))) return;
+    if (action === "delete") return hide();
+    // open or full: close it onchain first; hidden only once Celo confirms the close
+    if (!canClosePot(s, p) || D.busy) return;
+    busy = true; D.busy = true; btn.setAttribute("aria-disabled", "true"); btn.textContent = "Check your wallet…";
+    try {
+      await sendCall(LOKAL_POTS, s.address, closePotData(p.potId), { potId: p.potId }, (h) => { btn.textContent = "Closing…"; msg.replaceChildren(sentLine(h)); },
+        "The contract refused to close the pot on Celo, so it is still open and still on your dashboard. Only the network fee was spent.");
+      // belt and braces: read it back, and keep it listed unless Celo now says it no longer takes sprays
+      const now = Math.floor(Date.now() / 1000);
+      const after = await readPotInfo(p.potId).catch(() => null);
+      const st = after ? potState(after, now) : null;
+      if (st !== "closed" && st !== "ended") {
+        throw plainError("Celo confirmed the transaction, but the pot still reads as open, so it stays on your dashboard. Reload in a moment.");
+      }
+      Object.assign(p, after); // the deleted list shows it as it is now
+      D.busy = false; idle();
+      hide();
+    } catch (e) {
+      D.busy = false; idle();
+      msg.replaceChildren(alertBox("err", "alert", el("p", {}, errText(e))));
+    }
+  });
+  return btn;
+}
+
+/** A deleted (hidden) pot under "Show deleted pots": muted, with Restore. */
+function deletedRow(p, onRestore) {
+  const st = potState(p, Math.floor(Date.now() / 1000));
+  const restore = el("button", { class: "btn btn-secondary btn-sm", type: "button", "aria-label": `Restore ${p.title}` }, "Restore");
+  restore.addEventListener("click", onRestore);
+  return el("li", { class: "pot-row is-deleted" },
+    el("div", { class: "pot-row-main" },
+      el("div", { class: "pot-row-title" }, el("bdi", { class: "dash-list-label" }, p.title), potBadge(st)),
+      el("span", { class: "micro muted" }, [`Pot #${p.potId}`, `${usd6Text(p.totalUsd6)} sprayed`, `${p.payerCount} guest${p.payerCount === 1 ? "" : "s"}`].join(" · "))),
+    el("div", { class: "dash-list-end" }, restore));
+}
 /** The "New pot" form: title, closing time, the pot's cap and the per-guest cap, within the contract's maxima. */
 function createPotForm(s, { onDone, onCancel }) {
   const F = { limits: null, preset: "14d", custom: null, busy: false };

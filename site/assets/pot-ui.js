@@ -83,3 +83,38 @@ export function flutter(host, count = 7) {
   host.append(layer);
   setTimeout(() => layer.remove(), 2200);
 }
+
+/**
+ * "Delete pot?": a modal confirm (a native <dialog>, so focus stays inside it and the page behind is inert).
+ * Focus starts on the safe choice (keep it); Esc, the cancel button or a click on the backdrop cancel. Resolves true
+ * only for the confirm button. Focus goes back to `returnTo` (the button that opened it) when it closes.
+ * copy: { heading, body: [paragraphs], note, confirm, cancel } (deleteConfirmCopy in pots-hidden.js).
+ */
+export function confirmDelete(copy, returnTo) {
+  return new Promise((resolve) => {
+    const id = `pot-del-${Math.random().toString(36).slice(2, 8)}`;
+    const cancel = el("button", { class: "btn btn-secondary", type: "button" }, copy.cancel);
+    const ok = el("button", { class: "btn btn-danger", type: "button" }, copy.confirm);
+    const dlg = el("dialog", { class: "pot-dialog", "aria-labelledby": `${id}-h`, "aria-describedby": `${id}-b` },
+      el("div", { class: "pot-dialog-in" },
+        el("h2", { class: "pot-dialog-h", id: `${id}-h` }, el("bdi", {}, copy.heading)),
+        el("div", { class: "pot-dialog-b", id: `${id}-b` }, copy.body.map((t) => el("p", {}, t))),
+        copy.note ? el("p", { class: "micro muted" }, copy.note) : null,
+        el("div", { class: "pot-dialog-f" }, cancel, ok)));
+    if (reducedMotion()) dlg.classList.add("no-motion");
+    let result = false;
+    const done = (v) => { result = v; if (dlg.open) dlg.close(); };
+    cancel.addEventListener("click", () => done(false));
+    ok.addEventListener("click", () => done(true));
+    dlg.addEventListener("cancel", (e) => { e.preventDefault(); done(false); }); // Esc
+    dlg.addEventListener("click", (e) => { if (e.target === dlg) done(false); }); // the backdrop
+    dlg.addEventListener("close", () => {
+      dlg.remove();
+      if (returnTo?.isConnected) returnTo.focus();
+      resolve(result);
+    }, { once: true });
+    document.body.append(dlg);
+    dlg.showModal();
+    cancel.focus();
+  });
+}

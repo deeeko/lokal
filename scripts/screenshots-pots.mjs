@@ -2,6 +2,8 @@
 // the public pot page with its Spray Wall, a guest spraying, and the host's "Your pots" card.
 //
 //   node scripts/screenshots-pots.mjs [out-folder]          (default: ./screenshots/pots)
+//   node scripts/screenshots-pots.mjs <out-folder> delete   only "Delete pot": the buttons, the confirm dialog, a refused
+//                                                           close (the pot stays) and "Show deleted pots" (390, 1440; 360 checked)
 //
 // Needs Google Chrome and playwright-core (not a dependency of this repo); point at them with PLAYWRIGHT_CORE and CHROME
 // exactly as for scripts/screenshots.mjs. Serves site/ locally; the rate is the live one from lokalpay.vercel.app.
@@ -13,7 +15,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { encodeAbiParameters, encodeEventTopics, decodeFunctionData } from "viem";
+import { encodeAbiParameters, encodeEventTopics, decodeFunctionData, encodeErrorResult } from "viem";
 import { buildSignInMessage, SESSION_KEY } from "../site/assets/session.js";
 import { abiEncode, CURRENCIES, USDT_ADDRESS, tagSuffix } from "../site/assets/core.js";
 import { LOKAL_TAGS, LOKAL_POTS, FN, TOPIC, currencyRef, potUsdValue } from "../site/assets/lokal-contracts.js";
@@ -21,6 +23,7 @@ import { LOKAL_TAGS, LOKAL_POTS, FN, TOPIC, currencyRef, potUsdValue } from "../
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SITE = path.join(ROOT, "site");
 const OUT = path.resolve(process.argv[2] ?? "screenshots/pots");
+const ONLY = process.argv[3] ?? null; // "delete": only the Delete pot shots
 fs.mkdirSync(OUT, { recursive: true });
 const CHROME = process.env.CHROME ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const pw = createRequire(path.join(process.env.PLAYWRIGHT_CORE ?? ROOT, "x.js"))("playwright-core");
@@ -54,15 +57,16 @@ const hashOf = (n) => "0x" + n.toString(16).padStart(8, "0").repeat(8);
 const HEAD = 84_000_000;
 const NOW = () => Math.floor(Date.now() / 1000);
 
-function mockChain() {
+function mockChain({ closedPot = false } = {}) {
   const now = NOW();
   const st = {
     pots: new Map([
       [3n, { host: ME, title: "Bisi's 30th", closesAt: now - 2 * 86_400, open: false, cap: usd(80), each: usd(4), payers: new Set(), sprays: [] }],
       [7n, { host: ME, title: "Ada & Tunde's wedding", closesAt: now + 2 * 86_400 + 5 * 3600, open: true, cap: usd(100), each: usd(5), payers: new Set(), sprays: [] }],
     ]),
-    count: 7n, lastPay: null, lastCreate: null, sent: 0, block: HEAD,
+    count: 7n, lastPay: null, lastCreate: null, lastClose: null, refuseClose: false, sent: 0, block: HEAD,
   };
+  if (closedPot) st.pots.set(5n, { host: ME, title: "Office kitty for Chidi", closesAt: now + 4 * 86_400, open: false, cap: usd(60), each: usd(5), payers: new Set(), sprays: [] });
   // guests' sprays: [minutes ago, token, units, receive]
   const seed = [[3, "usdt", 5, "cngn"], [7, "cngn", 7205, "cngn"], [12, "usdt", 2, "cngn"], [18, "usdt", 5, "usdt"], [26, "cngn", 2882, "cngn"],
     [41, "usdt", 1, "cngn"], [55, "usdt", 3, "idrx"], [80, "cngn", 4323, "usdt"], [96, "usdt", 5, "cngn"], [130, "usdt", 2.5, "cngn"], [150, "usdt", 4, "cngn"]];
@@ -97,6 +101,7 @@ function mockChain() {
   const potArg = (data) => BigInt("0x" + data.slice(10, 74));
   const addrArg = (data, i) => "0x" + data.slice(10 + 64 * i + 24, 10 + 64 * (i + 1));
   const revert = (sel) => ({ error: { code: 3, message: "execution reverted", data: sel } });
+  const err = (name) => encodeErrorResult({ abi: potsAbi, errorName: name, args: [] });
 
   function call({ to, data, from }) {
     const sel = data.slice(0, 10);
@@ -105,6 +110,11 @@ function mockChain() {
         const sfx = tagSuffix().length; // the attribution suffix the site appends (trimmed for viem)
         if (sel === FN.createPot) st.lastCreate = decodeFunctionData({ abi: potsAbi, data: data.slice(0, -sfx) }).args;
         if (sel === FN.payPot) st.lastPay = { ...decodeFunctionData({ abi: potsAbi, data: data.slice(0, -sfx) }), from };
+        if (sel === FN.closePot) {
+          const id = potArg(data);
+          if (st.refuseClose || lc(st.pots.get(id)?.host) !== lc(from)) return revert(err("NotHost"));
+          st.lastClose = id;
+        }
         return { result: "0x" };
       }
       if (sel === FN.potInfo) { const r = potInfo(potArg(data)); return r ? { result: r } : revert("0x30e4a782" + word(potArg(data))); }
@@ -149,6 +159,11 @@ function mockChain() {
       st.lastCreate = null;
       return { status: "0x1", blockNumber: "0x" + st.block.toString(16), logs: [createdLog(id, st.pots.get(id))] };
     }
+    if (kind === FN.closePot.slice(2) && st.lastClose != null) {
+      st.pots.get(st.lastClose).open = false;
+      st.lastClose = null;
+      return { status: "0x1", blockNumber: "0x" + st.block.toString(16), logs: [] };
+    }
     if (kind === FN.payPot.slice(2) && st.lastPay) {
       const [id, token, amount, ref] = st.lastPay.args;
       const recv = Buffer.from(ref.slice(2), "hex").toString("utf8").replace(/\0+$/, "").replace(/^cur:/, "") || "usdt";
@@ -186,9 +201,9 @@ function mockChain() {
       const t0 = u.searchParams.get("topic0");
       const asRow = (l, ts) => ({ ...l, timeStamp: "0x" + ts.toString(16) });
       if (t0 === TOPIC.PotPaid) {
-        const id = BigInt(u.searchParams.get("topic1"));
-        const p = st.pots.get(id);
-        const rows = (p?.sprays ?? []).map((s) => asRow(paidLog(s), NOW() - (st.block - s.block)));
+        const t1 = u.searchParams.get("topic1"); // none: the bell asks for every spray to this host
+        const sprays = t1 ? st.pots.get(BigInt(t1))?.sprays ?? [] : [...st.pots.values()].flatMap((p) => p.sprays);
+        const rows = sprays.map((s) => asRow(paidLog(s), NOW() - (st.block - s.block)));
         return rows.length ? { status: "1", message: "OK", result: rows } : { status: "0", message: "No logs found", result: [] };
       }
       if (t0 === TOPIC.PotCreated) {
@@ -232,7 +247,7 @@ async function context({ width, mock, session = false, wallet = null, reduced = 
         if (method === "eth_requestAccounts") { accs = [wallet.account]; return accs; }
         if (method === "eth_chainId") return "0xa4ec";
         // never broadcast: a made-up hash that starts with the call's selector, so the mocked receipt knows what it was
-        if (method === "eth_sendTransaction") { n++; return "0x" + params[0].data.slice(2, 10) + n.toString(16).padStart(56, "0"); }
+        if (method === "eth_sendTransaction") { n++; window.__sentTx = n; return "0x" + params[0].data.slice(2, 10) + n.toString(16).padStart(56, "0"); }
         if (method === "wallet_switchEthereumChain") return null;
         throw Object.assign(new Error("unsupported in the screenshot wallet"), { code: 4200 });
       },
@@ -280,7 +295,91 @@ async function tall(page, name) {
 }
 const hideConsent = (page) => page.addStyleTag({ content: ".consent { display: none !important; } .shot-el .nav-wrap { visibility: hidden; }" });
 
-for (const width of [390, 1440]) {
+const checks = [];
+const check = (ok, what) => { checks.push(`${ok ? "ok  " : "FAIL"} ${what}`); };
+const delBtn = (page, title) => page.locator(`#pots .pot-delete[aria-label$="${title}"]`);
+async function deleteShots(width) {
+  const mock = mockChain({ closedPot: true });
+  const ctx = await context({ width, mock, session: true, wallet: { connected: true, account: ME } });
+  const page = await ctx.newPage();
+  const w = `${width}`;
+  const shoot = width !== 360; // 360: checked for overflow, saved as check-*
+  const name = (n) => (shoot ? `pots-delete-${n}-${w}` : `check-${n}-${w}`);
+  await page.goto(ORIGIN + "/app.html");
+  await hideConsent(page);
+  await page.waitForSelector(".pot-rows", { timeout: 20000 });
+  await settle(page, 1200);
+  const pots = page.locator("#pots");
+  const WED = "Ada & Tunde's wedding", BISI = "Bisi's 30th";
+  check(await page.locator("#pots .pot-delete").count() === 3, `${w}: three pots, each with a delete button`);
+  check((await delBtn(page, WED).textContent()) === "Close & delete", `${w}: the open pot says Close & delete`);
+  check((await delBtn(page, BISI).textContent()) === "Delete", `${w}: the ended pot says Delete`);
+  await save(pots, name("1-list"));
+  // the confirm dialog: focus inside, Esc cancels and focus goes back
+  await delBtn(page, WED).click();
+  await page.waitForSelector("dialog.pot-dialog[open]");
+  await settle(page, 400);
+  check(await page.evaluate(() => document.activeElement?.closest("dialog") != null), `${w}: focus moves into the dialog`);
+  await save(page, name("2-confirm"));
+  await page.keyboard.press("Escape");
+  await settle(page, 200);
+  check(await page.locator("dialog.pot-dialog").count() === 0, `${w}: Esc closes the dialog`);
+  check(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")) === `Close & delete: ${WED}`, `${w}: focus is back on the button`);
+  check(await page.locator("#pots .pot-deleted-toggle").count() === 0, `${w}: Esc deleted nothing`);
+  // a refused close: the error shows and the pot stays
+  mock.st.refuseClose = true;
+  await delBtn(page, WED).click();
+  await page.locator("dialog.pot-dialog button:has-text('Close & delete')").click();
+  await page.waitForSelector("#pots .alert.err", { timeout: 20000 });
+  check(await delBtn(page, WED).count() === 1, `${w}: a refused close keeps the pot listed`);
+  check(await page.evaluate(() => localStorage.getItem("np-pots-hidden")) == null, `${w}: a refused close stores nothing`);
+  if (width === 390) await save(pots, name("3-refused"));
+  mock.st.refuseClose = false;
+  // Delete the ended pot (no transaction) and Close & delete the open one (closed first)
+  const txBefore = await page.evaluate(() => window.__sentTx ?? 0);
+  await delBtn(page, BISI).click();
+  await page.locator("dialog.pot-dialog button:has-text('Delete')").click();
+  await page.waitForSelector("#pots .pot-deleted-toggle");
+  check(await page.evaluate(() => window.__sentTx ?? 0) === txBefore, `${w}: Delete sent no transaction`);
+  check(await page.evaluate(() => document.activeElement?.classList.contains("pot-deleted-toggle")), `${w}: after a delete, focus lands on Show deleted pots`);
+  await delBtn(page, WED).click();
+  await page.locator("dialog.pot-dialog button:has-text('Close & delete')").click();
+  await page.waitForSelector("#pots .pot-deleted-toggle:has-text('(2)')", { timeout: 30000 });
+  check(mock.st.pots.get(7n).open === false, `${w}: the open pot was closed before it was hidden`);
+  check(JSON.stringify(await page.evaluate(() => JSON.parse(localStorage.getItem("np-pots-hidden")))) === JSON.stringify({ [ME]: [3, 7] }), `${w}: stored per wallet as { address: [3, 7] }`);
+  await page.click("#pots .pot-deleted-toggle");
+  await settle(page, 500);
+  await save(pots, name("4-deleted-shown"));
+  // a reload: still deleted; Restore brings one back
+  await page.reload();
+  await page.waitForSelector("#pots .pot-deleted-toggle", { timeout: 20000 });
+  check((await page.locator("#pots .pot-deleted-toggle").textContent()) === "Show deleted pots (2)", `${w}: still deleted after a reload`);
+  await page.click("#pots .pot-deleted-toggle");
+  await page.locator(`#pots button[aria-label="Restore ${BISI}"]`).click();
+  await settle(page, 300);
+  check(await delBtn(page, BISI).count() === 1, `${w}: Restore puts it back`);
+  check(await page.evaluate(() => document.activeElement?.textContent) === BISI, `${w}: focus goes to the restored pot`);
+  await ctx.close();
+}
+if (ONLY === "delete") {
+  for (const width of [390, 1440, 360]) await deleteShots(width);
+  // storage full: Delete still works for this page, and says it won't last
+  const mock = mockChain({ closedPot: true });
+  const ctx = await context({ width: 390, mock, session: true, wallet: { connected: true, account: ME } });
+  await ctx.addInitScript(() => { const set = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === "np-pots-hidden") throw new DOMException("full", "QuotaExceededError"); return set.call(this, k, v); }; });
+  const page = await ctx.newPage();
+  await page.goto(ORIGIN + "/app.html");
+  await page.waitForSelector(".pot-rows", { timeout: 20000 });
+  await delBtn(page, "Bisi's 30th").click();
+  await page.locator("dialog.pot-dialog button:has-text('Delete')").click();
+  await page.waitForSelector("#pots .pot-deleted-toggle");
+  check((await page.locator("#toast").textContent()).includes("blocks storage"), "storage full: deleted for this page, and it says so");
+  await page.reload();
+  await page.waitForSelector(".pot-rows", { timeout: 20000 });
+  check(await delBtn(page, "Bisi's 30th").count() === 1 && await page.locator("#pots .pot-deleted-toggle").count() === 0, "storage full: back after a reload");
+  await ctx.close();
+}
+for (const width of ONLY ? [] : [390, 1440]) {
   // ---------- the host: create a pot on the dashboard, see it made, the "Your pots" card ----------
   {
     const mock = mockChain();
@@ -333,7 +432,7 @@ for (const width of [390, 1440]) {
   }
 }
 // ---------- edge states at phone width: a pot that isn't there, an ended pot, reduced motion ----------
-{
+if (!ONLY) {
   const mock = mockChain();
   const ctx = await context({ width: 390, mock, reduced: true });
   const page = await ctx.newPage();
@@ -351,6 +450,7 @@ for (const width of [390, 1440]) {
 
 await browser.close();
 server.close();
+if (checks.length) console.log(checks.join("\n"));
 if (errors.length) console.error("Page errors:\n" + errors.map((e) => "  " + e).join("\n"));
 if (overflow.length) console.error("Wider than the screen:\n" + overflow.map((e) => "  " + e).join("\n"));
 console.log(`${shots.length} screenshots in ${OUT}:\n` + shots.map((s) => "  " + s).join("\n"));
