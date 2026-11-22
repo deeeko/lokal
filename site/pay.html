@@ -16,6 +16,7 @@
 <link rel="icon" href="logo.png?v=lokal2" type="image/png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=lokal2">
 <link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/ntags.css">
 <style>.field, .card-b.stack { grid-template-columns: minmax(0, 1fr); }
 .qr { display: grid; place-items: center; }
 .qr svg { width: min(240px, 100%); height: auto; border-radius: var(--r-md); }
@@ -268,7 +269,7 @@
         <div class="stack">
           <section class="card" aria-labelledby="send-h">
             <div class="card-h"><h2 id="send-h">Send exactly</h2><span id="l-exp-badge"></span></div>
-            <div class="card-b">
+            <div class="card-b stack">
               <div class="field">
                 <label class="label" for="l-amount">Amount to send</label>
                 <div class="money">
@@ -276,63 +277,71 @@
                   <span class="token" id="l-token"></span>
                 </div>
                 <p class="hint" id="l-amount-hint">Send this exact amount. A different amount can't be matched to this link.</p>
-                <p class="limits"><svg class="i"><use href="#i-shield"/></svg><span><a href="docs.html#limits">Limits</a>: <b>$25 per payment</b> · <b>$25 per person per day</b> · <b>$100 per day overall</b></span></p>
-                <div id="l-room" aria-live="polite"></div>
               </div>
-
-              <div class="swap-arrow" aria-hidden="true"><span><svg class="i"><use href="#i-down"/></svg></span></div>
 
               <div class="receive">
                 <label class="label" for="l-receive" id="l-receive-label">Recipient gets (approx.)</label>
                 <output id="l-receive" class="num" aria-live="polite"><span class="skel lg"></span></output>
               </div>
+              <p class="small soft" id="l-note-row" hidden>For: <span id="l-note"></span></p>
 
-              <ul class="kv-list mt-16">
-                <li><span>Send to</span><span class="row" style="justify-content:flex-end;gap:8px"><a class="mono link" id="l-agent" href="#"></a><button class="icon-btn sm" type="button" id="l-agent-copy" aria-label="Copy agent address" data-copy-label="Address copied"><svg class="i"><use href="#i-copy"/></svg></button></span></li>
-                <li><span>Token</span><span class="row" style="justify-content:flex-end;gap:8px"><span id="l-token-name"></span><a class="mono link" id="l-token-addr" href="#"></a></span></li>
-                <li><span>Network</span><span>Celo mainnet</span></li>
-                <li><span>Exchange rate</span><span id="l-rate" class="num" aria-live="polite"><span class="skel"></span></span></li>
-                <li><span>Expires</span><span><span id="l-countdown" class="num"></span><span class="muted" id="l-exp-time"></span></span></li>
-                <li id="l-note-row" hidden><span>Note</span><span id="l-note"></span></li>
-                <li><span id="l-id-label">Request</span><span class="mono" id="l-id"></span></li>
-              </ul>
-              <div id="l-notice" aria-live="polite"></div>
+              <!-- warnings and refusals: always in view -->
+              <div class="hide-empty" id="l-notice" aria-live="polite"></div>
+              <div class="hide-empty" id="l-room-warn" aria-live="polite"></div>
 
-              <div class="pay-wallet mt-24" id="l-wallet" aria-live="polite"></div>
-              <div class="row mt-16" id="l-actions">
-                <a class="btn btn-primary" id="l-open" href="#"><svg class="i" aria-hidden="true"><use href="#i-ext"/></svg>Open in wallet</a>
-                <button class="btn btn-secondary" type="button" id="l-amount-copy" data-copy-label="Amount copied"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg>Copy amount</button>
+              <div class="nt-folds">
+                <div class="dc boxed">
+                  <button class="dc-toggle" type="button" aria-expanded="false" aria-controls="l-rate-panel"><span class="dc-sum" id="l-rate-sum">Rate loading…</span><span class="dc-more"><span class="dc-more-text">Details</span><svg class="i dc-chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>
+                  <div class="dc-panel" id="l-rate-panel" hidden><div class="dc-inner">
+                    <ul class="kv-list">
+                      <li><span>Send to</span><span class="row" style="justify-content:flex-end;gap:8px"><a class="mono link" id="l-agent" href="#"></a><button class="icon-btn sm" type="button" id="l-agent-copy" aria-label="Copy agent address" data-copy-label="Address copied"><svg class="i"><use href="#i-copy"/></svg></button></span></li>
+                      <li><span>Token</span><span class="row" style="justify-content:flex-end;gap:8px"><span id="l-token-name"></span><a class="mono link" id="l-token-addr" href="#"></a></span></li>
+                      <li><span>Network</span><span>Celo mainnet</span></li>
+                      <li><span>Exchange rate</span><span id="l-rate" class="num" aria-live="polite"><span class="skel"></span></span></li>
+                      <li><span>Expires</span><span><span id="l-countdown" class="num"></span><span class="muted" id="l-exp-time"></span></span></li>
+                      <li><span id="l-id-label">Request</span><span class="mono" id="l-id"></span></li>
+                    </ul>
+                    <p class="micro muted">The rate moves. The agent takes a fresh quote when it converts.</p>
+                  </div></div>
+                </div>
+                <div class="dc boxed" id="l-limits">
+                  <button class="dc-toggle" type="button" aria-expanded="false" aria-controls="l-limits-panel"><svg class="i"><use href="#i-shield"/></svg><span class="dc-sum" id="l-limits-sum">Up to $25</span><span class="dc-more"><span class="dc-more-text">Limits</span><svg class="i dc-chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>
+                  <div class="dc-panel" id="l-limits-panel" hidden><div class="dc-inner">
+                    <p class="limits"><svg class="i"><use href="#i-shield"/></svg><span><a href="docs.html#limits">Limits</a>: <b>$25 per payment</b> · <b>$25 per person per day</b> · <b>$100 per day overall</b></span></p>
+                    <div id="l-room" aria-live="polite"></div>
+                    <p class="micro muted">Only the first matching deposit before the link expires is paid out.</p>
+                  </div></div>
+                </div>
               </div>
-            </div>
-          </section>
 
-          <section class="card" aria-labelledby="manual-h" id="l-manual">
-            <div class="card-h"><h2 id="manual-h">Or send it by hand</h2></div>
-            <div class="card-b stack">
-              <p class="small soft" id="l-manual-text"></p>
-              <div class="code">
-                <pre id="l-manual-addr" aria-label="Agent address"></pre>
-                <button class="icon-btn" type="button" id="l-manual-copy" aria-label="Copy agent address" data-copy-label="Address copied"><svg class="i"><use href="#i-copy"/></svg></button>
+              <div class="pay-wallet hide-empty" id="l-wallet" aria-live="polite"></div>
+              <div class="row" id="l-actions">
+                <a class="btn btn-primary btn-lg" id="l-open" href="#"><svg class="i" aria-hidden="true"><use href="#i-ext"/></svg>Open in wallet</a>
               </div>
-              <p class="small muted">Your wallet also needs a small amount for the network fee (gas).</p>
+
+              <!-- other ways to pay: open in a wallet app, copy the amount, scan a QR code, or send it by hand -->
+              <div class="dc boxed" id="l-other">
+                <button class="dc-toggle" type="button" aria-expanded="false" aria-controls="l-other-panel"><span class="dc-sum">Other ways to pay</span><span class="dc-more"><span class="dc-more-text">Show</span><svg class="i dc-chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>
+                <div class="dc-panel" id="l-other-panel" hidden><div class="dc-inner">
+                  <div class="row" id="l-other-btns">
+                    <a class="btn btn-secondary btn-sm" id="l-open-alt" href="#" hidden><svg class="i" aria-hidden="true"><use href="#i-ext"/></svg>Open in a wallet app</a>
+                    <button class="btn btn-secondary btn-sm" type="button" id="l-amount-copy" data-copy-label="Amount copied"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg>Copy amount</button>
+                    <button class="btn btn-secondary btn-sm" type="button" id="l-uri-copy" data-copy-label="Wallet link copied"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg>Copy wallet link</button>
+                  </div>
+                  <div id="l-qr-slot"></div>
+                  <p class="small soft" id="l-manual-text"></p>
+                  <div class="code">
+                    <pre id="l-manual-addr" aria-label="Agent address"></pre>
+                    <button class="icon-btn" type="button" id="l-manual-copy" aria-label="Copy agent address" data-copy-label="Address copied"><svg class="i"><use href="#i-copy"/></svg></button>
+                  </div>
+                  <p class="micro muted">Your wallet also needs a small amount of CELO for the network fee.</p>
+                </div></div>
+              </div>
             </div>
           </section>
         </div>
 
         <div class="stack">
-          <section class="card" aria-labelledby="who-h" id="l-who" hidden>
-            <div class="card-h"><h2 id="who-h">Who gets paid</h2></div>
-            <div class="card-b">
-              <ul class="kv-list">
-                <li><span>Name</span><span id="w-name"></span></li>
-                <li><span>Wallet</span><span class="row" style="justify-content:flex-end;gap:8px"><a class="mono link" id="w-wallet" href="#"></a><button class="icon-btn sm" type="button" id="w-wallet-copy" aria-label="Copy recipient wallet address" data-copy-label="Address copied"><svg class="i"><use href="#i-copy"/></svg></button></span></li>
-                <li><span>Registered</span><span id="w-time" class="num"></span></li>
-              </ul>
-              <div class="alert mt-16"><svg class="i"><use href="#i-shield"/></svg><span><b>Registered by this wallet onchain.</b> The wallet signed this request itself, so the payout can only go to it. <a class="link" id="w-reg" href="#">View registration <svg class="i" aria-hidden="true"><use href="#i-ext"/></svg></a></span></div>
-              <p class="small muted mt-16">The name and note were typed by the wallet owner. They aren't checked by anyone.</p>
-            </div>
-          </section>
-
           <section class="card" aria-labelledby="status-h">
             <div class="card-h"><h2 id="status-h">Status</h2><span id="l-status-badge" aria-live="polite"><span class="skel" style="width:120px;height:24px;border-radius:999px"></span></span></div>
             <div class="card-b" aria-live="polite">
@@ -345,26 +354,38 @@
             </div>
           </section>
 
-          <section class="card" aria-labelledby="qr-h" id="l-qr-card">
-            <div class="card-h"><h2 id="qr-h">Scan to pay</h2></div>
-            <div class="card-b stack">
-              <div id="l-qr" class="qr"></div>
-              <p class="small muted" style="text-align:center">Scan with a Celo wallet camera. It fills in the token, amount and address.</p>
-              <div class="row" style="justify-content:center">
-                <button class="btn btn-secondary btn-sm" type="button" id="l-uri-copy" data-copy-label="Wallet link copied"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg>Copy wallet link</button>
+          <section class="card" aria-labelledby="who-h" id="l-who" hidden>
+            <div class="card-h"><h2 id="who-h">Who gets paid</h2></div>
+            <div class="card-b">
+              <p class="soft" style="margin:0"><b id="w-name"></b> · <a class="mono link" id="w-wallet" href="#"></a> · registered by this wallet onchain</p>
+              <p class="small soft mt-8">Don't pay from that same wallet: the agent won't pay it out.</p>
+              <div class="dc boxed mt-8">
+                <button class="dc-toggle" type="button" aria-expanded="false" aria-controls="w-panel"><svg class="i"><use href="#i-shield"/></svg><span class="dc-sum">The payout can only go to this wallet</span><span class="dc-more"><span class="dc-more-text">Details</span><svg class="i dc-chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>
+                <div class="dc-panel" id="w-panel" hidden><div class="dc-inner">
+                  <ul class="kv-list">
+                    <li><span>Wallet</span><span class="row" style="justify-content:flex-end;gap:8px"><span class="mono" id="w-wallet-full"></span><button class="icon-btn sm" type="button" id="w-wallet-copy" aria-label="Copy recipient wallet address" data-copy-label="Address copied"><svg class="i"><use href="#i-copy"/></svg></button></span></li>
+                    <li><span>Registered</span><span id="w-time" class="num"></span></li>
+                  </ul>
+                  <p class="small soft">The wallet signed this request itself, so the payout can only go to it. <a class="link" id="w-reg" href="#">View registration <svg class="i" aria-hidden="true"><use href="#i-ext"/></svg></a></p>
+                  <p class="micro muted">The name and note were typed by the wallet owner. They aren't checked by anyone.</p>
+                </div></div>
               </div>
             </div>
           </section>
 
           <section class="card" aria-labelledby="safe-h">
-            <div class="card-h"><h2 id="safe-h">Before you pay</h2></div>
-            <div class="card-b">
-              <ul class="checks" style="grid-template-columns:minmax(0,1fr)">
-                <li><svg class="i"><use href="#i-check"/></svg><span>The address is the agent's: <b class="mono" id="l-agent-short"></b>. It is registered on Celo as ERC-8004 agent <a class="link" href="agent.html">#10079</a>.</span></li>
-                <li><svg class="i"><use href="#i-check"/></svg><span id="l-safe-who">The agent pays only <b>the contact named on this link</b>, a saved recipient, up to <b>$25 per payment</b>.</span></li>
-                <li><svg class="i"><use href="#i-check"/></svg><span>Only the <b>first matching deposit</b> before expiry is paid out.</span></li>
-                <li><svg class="i"><use href="#i-check"/></svg><span>This site never holds your money or keys. You pay from your own wallet, after you approve it there.</span></li>
-              </ul>
+            <div class="card-b" style="padding-top:6px;padding-bottom:6px">
+              <div class="dc">
+                <button class="dc-toggle" type="button" aria-expanded="false" aria-controls="safe-panel"><svg class="i"><use href="#i-shield"/></svg><span class="dc-sum"><b id="safe-h">Is this safe?</b> What the agent checks</span><span class="dc-more"><span class="dc-more-text">Details</span><svg class="i dc-chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>
+                <div class="dc-panel" id="safe-panel" hidden><div class="dc-inner">
+                  <ul class="checks" style="grid-template-columns:minmax(0,1fr)">
+                    <li><svg class="i"><use href="#i-check"/></svg><span>The address is the agent's: <b class="mono" id="l-agent-short"></b>. It is registered on Celo as ERC-8004 agent <a class="link" href="agent.html">#10079</a>.</span></li>
+                    <li><svg class="i"><use href="#i-check"/></svg><span id="l-safe-who">The agent pays only <b>the contact named on this link</b>, a saved recipient, up to <b>$25 per payment</b>.</span></li>
+                    <li><svg class="i"><use href="#i-check"/></svg><span>Only the <b>first matching deposit</b> before expiry is paid out.</span></li>
+                    <li><svg class="i"><use href="#i-check"/></svg><span>This site never holds your money or keys. You pay from your own wallet, after you approve it there.</span></li>
+                  </ul>
+                </div></div>
+              </div>
             </div>
           </section>
         </div>

@@ -2,6 +2,16 @@
 
 Newest first. This was the README's progress log; it moved here when the README was cut to one page.
 
+## 2026-11-22: calmer payment screens
+
+- **Show what you need, hide what you might need** ([the website](ARCHITECTURE.md#the-website-landing-sign-up-dashboard)):
+  the tag, payment-link and pot screens open on what they receive, the amount, the "gets about" number and Pay; the
+  rate, route, limits and "Who am I paying?" fold into one line each. Warnings and refusals are never folded.
+- **QR codes on demand and one Share button**: every QR is drawn only when "Show QR code" is opened; Share uses the Web
+  Share API (Copy link and WhatsApp where it isn't there). The dashboard's Settings are folded.
+- **A calm confirmation** after paying a tag, a link or a pot (a big check, one sentence, Done), with the transaction
+  in Details. `site/assets/disclose.js`, 11 new tests (346), `scripts/screenshots-simple.mjs`.
+
 ## 2026-11-21: a six-section landing, a Features page and a one-page README
 
 - **Landing** ([the website](ARCHITECTURE.md#the-website-landing-sign-up-dashboard)): six sections with one job each:

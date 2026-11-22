@@ -9,6 +9,9 @@ import {
   permitTypedData, readAllowance, readNonce, readPaymentRoom, readTagInfo, simulate, splitSignature, tokenAmountText,
 } from "../assets/lokal-contracts.js";
 import { currencyPicker } from "../assets/currency-ui.js";
+import {
+  disclosure, currencyChoice, successPanel, successHeadline, rateSummary, limitsSummary, trustSummary, defaultReceive,
+} from "../assets/disclose.js";
 import { getSession, explainWalletError, injectedWallet, ensureCelo, CELO_CHAIN } from "../assets/session.js";
 import {
   ntagCard, stage, alertBox, availabilityMessage, ntagFinder, waitForReceipt, plainError, sameAddr, sleep, dayMonthYear,
@@ -144,14 +147,14 @@ function renderUnclaimed(tag, found) {
 function renderProfile(tag, entry) {
   const C = entry.source === "contract";
   const pref = entry.currency ? currencyOf(entry.currency) : null;
-  const gets = pref ? `prefers to receive ${pref.plural}` : C && entry.receive === "usdt" ? "prefers to receive dollars" : "gets paid in their own local money";
-  if (entry.name) lead.replaceChildren(nameText(entry.name), ` ${gets} on Celo. You send USD₮; the agent converts it on Textile FX and pays their wallet.`);
-  else lead.textContent = `@${tag} ${gets}. You send USD₮; the agent converts it on Textile FX and pays this tag's wallet.`;
+  const gets = pref ? `prefers ${pref.plural}` : C && entry.receive === "usdt" ? "prefers dollars" : "gets paid in their own money";
+  if (entry.name) lead.replaceChildren(nameText(entry.name), ` ${gets}. You send dollars; the agent pays their wallet.`);
+  else lead.textContent = `@${tag} ${gets}. You send dollars; the agent pays their wallet.`;
   const card = ntagCard({ tag, name: entry.name, address: entry.owner, since: entry.since, currency: entry.currency, as: "button", label: `Lokal tag @${tag}. Copy the link to this page` });
   card.dataset.copy = ntagUrl(tag);
   card.dataset.copyLabel = "Link copied";
   const who = whoCard(tag, entry);
-  root.replaceChildren(el("div", { class: "grid-main" }, payCard(tag, entry, who.before), el("div", { class: "nt-profile" }, stage(card), who.section)));
+  root.replaceChildren(el("div", { class: "grid-main" }, payCard(tag, entry, who.el), el("div", { class: "nt-profile" }, stage(card))));
   const my = renderSeq;
   loadTrust(tag, entry).then((a) => { if (my === renderSeq) who.show(a); });
 }
@@ -178,47 +181,51 @@ async function loadTrust(tag, entry) {
   return assessTag({ tag, entry, history, legacyClaims, paid: readPaidTags(paidStore(), getConsent()), nowSec: Math.floor(Date.now() / 1000) });
 }
 /**
- * The card on the right ("Who am I paying?"): three facts (tag age, payments received, owner) and one line per warning
- * that applies, plus a one-line note for the pay card (`before`, above the Pay button, so a phone shows it first).
- * show(assessment) fills both in.
+ * "Who am I paying?" inside the pay card, right above the Pay button (so a phone shows it before paying). With no
+ * warning it is one line ("@ada · tag 41 days old · paid 4 times ✓ · Details"); the facts (age, payments, owner) open
+ * on demand. Any warning is always shown in full, never folded. show(assessment) fills it in.
  */
 function whoCard(tag, entry) {
-  const pending = (w = "8em") => el("span", { class: "skel", style: `width:${w}` });
-  const ageCell = el("span", {}, pending());
-  const paidCell = el("span", {}, pending("9em"));
-  const notes = el("div", { class: "trust-checks", "aria-live": "polite" });
-  const before = el("div", { class: "trust-before", "aria-live": "polite" });
+  const root = el("div", { class: "trust-line", "aria-live": "polite" },
+    el("p", { class: "small muted", role: "status" }, el("span", { class: "skel", style: "width:14px;height:14px;border-radius:50%;margin-right:8px" }), `Checking who holds @${tag}…`));
   const owner = el("span", { class: "nt-namecell" },
     el("span", { class: "trust-owner" },
       el("a", { class: "mono link", href: celoscanAddr(entry.owner), title: `${entry.owner} on Celoscan` }, short(entry.owner), " ", icon("ext")),
       el("button", { class: "icon-btn sm", type: "button", "aria-label": "Copy the owner's address", title: "Copy address", dataset: { copy: entry.owner, copyLabel: "Address copied" } }, icon("copy"))),
     entry.name ? el("small", { class: "micro muted" }, "“", nameText(entry.name), "” is set by the owner, not checked by anyone") : null);
-  const section = el("section", { class: "card trust-card", "aria-labelledby": "who-h" },
-    el("div", { class: "card-h" }, el("h2", { id: "who-h", tabindex: "-1" }, "Who am I paying?")),
-    el("div", { class: "card-b" },
-      el("ul", { class: "kv-list" },
-        el("li", {}, el("span", {}, "Tag age"), ageCell),
-        el("li", {}, el("span", {}, "Payments received"), paidCell),
-        el("li", {}, el("span", {}, "Owner"), owner)),
-      notes));
 
   function show(a) {
-    ageCell.textContent = a.age.since ? `${a.age.text.replace(/^Claimed /, "").replace(/ ago$/, "")} (${dayMonthYear(a.age.since)})` : "Couldn't check";
+    const age = a.age.since ? `${a.age.text.replace(/^Claimed /, "").replace(/ ago$/, "")} (${dayMonthYear(a.age.since)})` : "Couldn't check";
     const p = a.payments;
-    paidCell.textContent = p.state !== "ok" ? "Couldn't check" : p.count === 0 ? "None yet" : `${p.count}${p.capped ? "+" : ""} since ${dayMonthYear(p.since ?? a.age.since)}`;
-    paidCell.title = p.state === "ok" ? "Through LokalTags, to this owner. Payers aren't shown." : p.reason;
-    const warn = (c) => el("li", { title: c.reason }, icon("alert"), el("span", {}, el("span", { class: "sr-only" }, "Warning: "), c.title));
-    notes.replaceChildren(...[
-      a.warnings.length ? el("ul", { class: "trust-warns" }, a.warnings.map(warn)) : null,
+    const paid = el("span", { title: p.state === "ok" ? "Through LokalTags, to this owner. Payers aren't shown." : p.reason },
+      p.state !== "ok" ? "Couldn't check" : p.count === 0 ? "None yet" : `${p.count}${p.capped ? "+" : ""} since ${dayMonthYear(p.since ?? a.age.since)}`);
+    const facts = [
+      el("ul", { class: "kv-list" },
+        el("li", {}, el("span", {}, "Tag age"), el("span", {}, age)),
+        el("li", {}, el("span", {}, "Payments received"), paid),
+        el("li", {}, el("span", {}, "Owner"), owner)),
       a.unknown.length ? el("p", { class: "micro muted trust-unknown" }, `Couldn't check: ${a.unknown.map((u) => u.short).join(", ")}.`) : null,
-    ].filter(Boolean));
+    ];
     if (a.warnings.length) {
-      const why = el("a", { class: "link", href: "#who-h" }, "See why");
-      why.addEventListener("click", (e) => { e.preventDefault(); scrollToNode(section); section.querySelector("#who-h")?.focus({ preventScroll: true }); });
-      before.replaceChildren(alertBox("warn", "alert", el("p", {}, el("b", {}, "Before you pay: "), a.warnings.map((w) => w.short).join(", "), ". ", why)));
-    } else before.replaceChildren();
+      // a warning is never folded: each one in full (with its reason), then the facts on demand
+      const warn = (c) => el("li", {}, icon("alert"), el("span", {}, el("span", { class: "sr-only" }, "Warning: "), c.title,
+        c.reason ? el("small", { class: "trust-why" }, c.reason) : null));
+      root.classList.add("has-warn");
+      root.replaceChildren(
+        el("div", { class: "trust-alert", role: "alert" }, el("p", { class: "trust-head" }, el("b", {}, `Before you pay @${tag}`)),
+          el("ul", { class: "trust-warns" }, a.warnings.map(warn))),
+        disclosure({ lead: icon("shield"), summary: "Who am I paying?", content: facts, cls: "boxed" }).el);
+      return;
+    }
+    root.classList.remove("has-warn");
+    const line = trustSummary(tag, a, a.age.since ? a.age.text.replace(/^Claimed /, "") : null);
+    root.replaceChildren(disclosure({
+      lead: icon("shield"), cls: "boxed",
+      summary: [line.text, line.ok ? el("span", { class: "trust-ok" }, " ", el("span", { "aria-hidden": "true" }, "✓"), el("span", { class: "sr-only" }, "Every check passed.")) : null],
+      content: facts,
+    }).el);
   }
-  return { section, before, show };
+  return { el: root, show };
 }
 
 // ---------- pay ----------
@@ -227,7 +234,7 @@ function payCard(tag, entry, beforePay = null) {
   // this payment (the owner's optional default is pre-selected, else naira): you send USD₮ for naira, rupiah or pesos,
   // or cNGN for dollars. On the contract the choice travels in payTag's `ref` ("cur:<code>"), which the agent reads.
   const C = entry.source === "contract";
-  const startCode = entry.receive === "usdt" ? "usd" : entry.currency ?? "cngn";
+  const startCode = defaultReceive(entry);
   const P = {
     corridor: startCode === "usd" ? "cngn-usdt" : `usdt-${startCode}`, rate: null, rateFailed: false, account: null, chainOk: null, bal: null, celo: null, busy: false,
     touched: false, allowance: null, celoAnyway: false, alive: true, room: null,
@@ -249,29 +256,47 @@ function payCard(tag, entry, beforePay = null) {
       const unitChange = (next === "cngn-usdt") !== (P.corridor === "cngn-usdt");
       P.corridor = next;
       if (unitChange) { amountIn.value = isNaira() ? "10" : "15000"; P.bal = null; P.room = null; refreshBalances(); refreshRoom(); }
+      choice.refresh();
       renderForm();
     },
   });
-  const seg = picker.el;
+  // "They receive: Naira · Change": the full picker opens inline on demand
+  const choice = currencyChoice({ picker, label: "They receive" });
   const segHint = el("p", { class: "hint" });
-  const amountIn = el("input", { id: "pay-amount", type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false", size: "4", value: "10", "aria-describedby": "pay-amount-hint pay-today" });
+  choice.el.querySelector(".dc-inner").append(segHint);
+  const amountIn = el("input", { id: "pay-amount", type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false", size: "4", value: "10", "aria-describedby": "pay-amount-hint pay-refusal" });
   const tokenEl = el("span", { class: "token" }, "USD₮");
-  const amountHint = el("p", { class: "hint", id: "pay-amount-hint" });
+  const amountHint = el("p", { class: "hint", id: "pay-amount-hint", hidden: true });
   const out = el("output", { for: "pay-amount", "aria-live": "polite" }, el("span", { class: "skel lg" }));
   const sRate = el("span", {}, "—"), sSend = el("span", {}, "—");
   const today = el("p", { class: "small soft", id: "pay-today" }, `Checking how much more @${tag} can receive today…`);
   const ctrRoom = el("p", { class: "small soft", id: "pay-contract-room" });
-  const limits = el("div", { class: "nt-limits" }, today, C ? ctrRoom : null,
-    el("p", { class: "micro muted" }, LIMITS_TEXT, ". ", REFUSED_NOTE));
+  // a refusal the contract or the agent would make (over today's room), or a payout that would wait: never folded
+  const refusal = el("div", { class: "nt-refusal", id: "pay-refusal", "aria-live": "polite" });
+  // the rate, fees and route: one line, the table on demand
+  const rateRow = disclosure({
+    cls: "boxed", summary: "Rate loading…",
+    content: [
+      el("ul", { class: "kv-list" },
+        el("li", {}, el("span", {}, "You send"), sSend),
+        el("li", {}, el("span", {}, "Rate"), sRate),
+        el("li", {}, el("span", {}, "Through"), el("span", {}, C ? "The LokalTags contract, which checks every limit first" : "A transfer to the agent with a memo")),
+        el("li", {}, el("span", {}, "Paid by"), el("span", {}, "The agent, when autopilot next runs"))),
+      el("p", { class: "micro muted" }, "The final amount is set by Textile FX when the agent converts."),
+    ],
+  });
+  // the limits: one short line, the full rules on demand
+  const cngnNote = el("p", { class: "small soft", hidden: true });
+  const limitsRow = disclosure({
+    cls: "boxed", lead: icon("shield"), more: "Limits", summary: `Up to $${CAP}`,
+    content: el("div", { class: "nt-limits" }, today, C ? ctrRoom : null, cngnNote, el("p", { class: "micro muted" }, LIMITS_TEXT, ". ", REFUSED_NOTE)),
+  });
 
   // wallet area: built once and updated in place, so a click is never lost to a rebuild (blur re-renders the form)
   const fromLink = el("a", { class: "mono link" });
   const balCell = el("span", { class: "num" });
   const netCell = el("span", {});
-  const walletInfo = el("ul", { class: "kv-list" },
-    el("li", {}, el("span", {}, "Paying from"), fromLink),
-    el("li", {}, el("span", {}, "Balance"), balCell),
-    el("li", {}, el("span", {}, "Network"), netCell));
+  const walletInfo = el("p", { class: "small soft nt-from" }, "Paying from ", fromLink, " · ", balCell, netCell);
   const problemBox = el("div", {});
   const noWalletBox = el("div", {});
   const walletBox = el("div", { class: "stack", style: "gap:12px" });
@@ -281,23 +306,17 @@ function payCard(tag, entry, beforePay = null) {
   connectBtn.addEventListener("click", () => connect());
   const actions = el("div", { class: "nt-actions" });
   const msg = el("div", { "aria-live": "polite" });
-  const form = el("div", { class: "stack" },
-    el("div", { class: "field" }, el("span", { class: "label", id: "corridor-l" }, "What does @" + tag + " get?"), seg, segHint),
+  const form = el("div", { class: "stack nt-payform" },
+    el("h2", { id: "pay-h", class: "sr-only" }, "Pay @" + tag),
+    choice.el,
     el("div", { class: "field" }, el("label", { class: "label", for: "pay-amount" }, "You send"), el("div", { class: "money" }, amountIn, tokenEl), amountHint),
-    el("div", { class: "swap-arrow", "aria-hidden": "true" }, el("span", {}, icon("down"))),
     el("div", { class: "receive" }, el("div", { class: "label" }, el("span", {}, "@" + tag + " gets about")), out),
-    el("ul", { class: "kv-list" },
-      el("li", {}, el("span", {}, "You send"), sSend),
-      el("li", {}, el("span", {}, "Rate"), sRate),
-      el("li", {}, el("span", {}, "Through"), el("span", {}, C ? "The LokalTags contract, which checks every limit first" : "A transfer to the agent with a memo")),
-      el("li", {}, el("span", {}, "Paid by"), el("span", {}, "The agent, when autopilot next runs"))),
-    limits, beforePay, walletBox, actions, msg);
+    refusal,
+    el("div", { class: "nt-folds" }, rateRow.el, limitsRow.el),
+    beforePay, walletBox, actions, msg);
   const body = el("div", { class: "card-b" }, form);
-  const basis = el("span", { class: "badge neutral", id: "pay-basis" }, "Estimate");
-  const section = el("section", { class: "card", "aria-labelledby": "pay-h" },
-    el("div", { class: "card-h" }, el("h2", { id: "pay-h" }, "Pay ", el("span", { class: "np-tagname", style: "font-size:17px" }, "@" + tag)), basis),
-    body,
-    el("div", { class: "card-f" }, el("span", { class: "small muted" }, "Your wallet asks before anything is sent. The final amount is set by Textile FX when the agent converts.")));
+  form.append(el("p", { class: "micro muted" }, "Your wallet asks before anything is sent."));
+  const section = el("section", { class: "card", "aria-labelledby": "pay-h" }, body);
 
   // ----- amount -----
   /** { cents, units (bigint, 6 dp), usd } or { error } */
@@ -391,9 +410,12 @@ function payCard(tag, entry, beforePay = null) {
     tokenEl.textContent = sellToken().symbol;
     const a = readAmount();
     const show = a.error && (P.touched || a.limit || amountIn.value.trim()) && !/^Loading/.test(a.error);
+    // a limit the contract or the agent would refuse goes in the refusal box (always in view); other mistakes under the amount
     amountHint.classList.toggle("err", !!show);
-    amountHint.textContent = show ? a.error : isNaira() ? `$1 to $${CAP}${perUsd() ? ` (up to ≈ ${formatCurrency(CAP * perUsd(), code())})` : ""}, up to 2 decimals.` : cngnHint();
+    amountHint.textContent = show && !a.limit ? a.error : "";
+    amountHint.hidden = !amountHint.textContent;
     amountIn.setAttribute("aria-invalid", String(!!show));
+    renderRefusal(a, show);
     sSend.textContent = a.cents > 0 && !a.error ? fmtSend(a.cents) : "—";
     const r = P.rate;
     let get = null, rateText = "—";
@@ -406,14 +428,41 @@ function payCard(tag, entry, beforePay = null) {
       else if (r.reverseRate) { rateText = `1 USD₮ = ${naira(1 / r.reverseRate)}`; if (a.cents > 0) get = usd((a.cents / 100) * r.reverseRate); }
       else if (isNaira() && !code()) { rateText = "No conversion"; if (a.cents > 0) get = usd(a.cents / 100); }
       else rateText = "Not published yet";
-      basis.textContent = r.fromPreview ? "Fees included" : "Before fees";
     } else if (P.rateFailed) rateText = "Rate unavailable";
     if (r || P.rateFailed) out.replaceChildren(get ?? "—");
     out.classList.toggle("over", !!a.error && a.cents > 0 && !/^Loading/.test(a.error));
     sRate.textContent = rateText;
+    rateRow.setSummary(rateSummary({ rateText: r || P.rateFailed ? rateText : null, fees: r ? (r.fromPreview ? "included" : "before") : null }));
+    limitsRow.setSummary(limitsLine());
+    cngnNote.textContent = isNaira() ? "" : cngnHint();
+    cngnNote.hidden = isNaira();
     renderToday();
     renderRoom();
     renderWallet();
+  }
+  /** "Up to $25", or "Up to about $12.50 today" when today's room (the agent's or the contract's) is lower. */
+  function limitsLine() {
+    if (!isNaira()) {
+      const rr = P.rate?.reverseRate;
+      return rr ? `Up to about ₦${ngnText(Math.floor(CNGN_CAP_USD / rr))}` : `Up to about $${CNGN_CAP_USD} in value`;
+    }
+    const alw = P.allowance && !P.allowance.error ? P.allowance : null;
+    const room = C && P.room && !P.room.error ? Number(P.room.room) / 1e6 : null;
+    const rooms = [alw?.leftUsd, room].filter((x) => x != null && Number.isFinite(x));
+    const left = rooms.length ? Math.min(...rooms) : null;
+    return limitsSummary({ capUsd: CAP, roomUsd: left, exact: Boolean(alw?.exact) && (room == null || room <= (alw?.leftUsd ?? Infinity)) });
+  }
+  /** What would block or delay this payment, in full: the contract's or the agent's refusal, or a payout that would wait. */
+  function renderRefusal(a, show) {
+    const alw = P.allowance && !P.allowance.error ? P.allowance : null;
+    let node = null;
+    if (show && a.limit) node = alertBox("err", "alert", el("p", {}, el("b", {}, "This payment would be refused. "), a.error));
+    else if (!a.error && alw && Number.isFinite(alw.globalLeftUsd) && a.usd > alw.globalLeftUsd + 0.005) {
+      node = alertBox("warn", "alert", el("p", {}, el("b", {}, "This payout would wait. "),
+        `The agent can pay out ${alw.exact ? "" : "about "}${dollars(alw.globalLeftUsd)} more today across everyone, so it pays this when there's room.`));
+    }
+    const key = node ? node.textContent : "";
+    if (refusal.dataset.key !== key) { refusal.dataset.key = key; refusal.replaceChildren(...(node ? [node] : [])); }
   }
 
   // ----- wallet -----
@@ -460,8 +509,8 @@ function payCard(tag, entry, beforePay = null) {
     fromLink.textContent = short(P.account);
     if (P.bal && sameAddr(P.bal.token, sellToken().address)) balCell.textContent = `${num2.format(Number(P.bal.units) / 1e6)} ${sellToken().symbol}`;
     else if (!balCell.querySelector(".skel")) balCell.replaceChildren(el("span", { class: "skel" }));
-    if (P.chainOk === false) { if (!netCell.querySelector(".badge")) netCell.replaceChildren(badge("Not Celo: switch when you pay", "warn")); }
-    else if (netCell.textContent !== "Celo mainnet") netCell.textContent = "Celo mainnet";
+    if (P.chainOk === false) { if (!netCell.querySelector(".badge")) netCell.replaceChildren(" ", badge("Not Celo: switches when you pay", "warn")); }
+    else if (netCell.firstChild) netCell.replaceChildren();
     const problem = walletProblem();
     const key = problem ? problem.kind + ":" + (problem.text ?? "") : "";
     if (key !== problemKey) {
@@ -694,11 +743,14 @@ function payCard(tag, entry, beforePay = null) {
       step("chain", "Waiting for Celo to confirm…", ""),
       step("agent", `The agent pays @${tag}`, "When autopilot next runs, after Celo confirms your payment."),
       step("paid", "Paid", ""));
-    const status = el("div", { "aria-live": "polite" });
+    // the calm confirmation: one big mark, one sentence, Done; the steps and the transaction sit in Details
+    const ok = successPanel();
+    const status = { replaceChildren: (...nodes) => ok.set({ alert: nodes }) }; // refusals and delays: always in view
     const source = el("p", { class: "micro muted" }); // where the status comes from: the agent's records or the chain
     const setSource = (fromAgent) => source.replaceChildren(sourceNote(fromAgent, "nt-source"));
-    const again = el("button", { class: "btn btn-secondary", type: "button" }, "Send another payment");
-    again.addEventListener("click", () => {
+    ok.details.append(list, source);
+    const done = el("button", { class: "btn btn-primary", type: "button" }, "Done");
+    done.addEventListener("click", () => {
       stop();
       try { sessionStorage.removeItem(PENDING_KEY(tag)); } catch { /* ignore */ }
       body.replaceChildren(form);
@@ -706,15 +758,17 @@ function payCard(tag, entry, beforePay = null) {
       renderForm();
       amountIn.focus();
     });
-    const h = el("h3", { style: "font-size:20px;font-weight:500" }, "Waiting for Celo to confirm…");
-    const lede = el("p", { class: "small soft mt-8", role: "status" }, `You sent ${sendText} to @${tag}. Keep this page open until Celo confirms it.`);
-    const box = el("div", { class: "nt-track" }, el("div", {}, h, lede), list, status, source, el("div", { class: "nt-actions" }, again));
-    body.replaceChildren(box);
-    focusHeading(h);
+    const statusLink = el("a", { class: "btn btn-secondary", href: `verify.html?tx=${p.hash}` }, "Check status", icon("right"));
+    const to = "@" + tag;
+    const gets = p.corridor === "cngn-usdt" ? "dollars" : currencyOf(String(p.corridor).replace(/^(usdt|forward)-/, ""))?.plural ?? "their money";
+    const slow = el("p", { class: "micro muted" });
+    ok.set({ state: "pending", title: successHeadline({ state: "pending", amount: sendText, to }), text: "Waiting for Celo to confirm. Usually a few seconds; keep this page open.", alert: slow, actions: [] });
+    body.replaceChildren(el("div", { class: "nt-track" }, ok.el));
+    focusHeading(ok.heading);
     if (scroll) requestAnimationFrame(() => scrollToNode(section));
     set("sent", "done");
     set("chain", "active", "Usually a few seconds.");
-    stopSlow = slowNotice(rows.chain.small, p.hash);
+    stopSlow = slowNotice(slow, p.hash);
 
     const clear = () => { try { sessionStorage.removeItem(PENDING_KEY(tag)); } catch { /* ignore */ } };
     (async () => {
@@ -724,35 +778,35 @@ function payCard(tag, entry, beforePay = null) {
       } catch (e) {
         stopSlow?.();
         if (stopped) return;
-        h.textContent = "Payment failed";
-        lede.textContent = "Nothing reached the agent.";
         set("chain", "err", errText(e), "Celo refused the transfer");
+        done.textContent = "Try again";
+        ok.set({ state: "failed", title: successHeadline({ state: "failed" }), text: errText(e), alert: null, actions: [done] });
         clear();
         return;
       }
       stopSlow?.();
       if (stopped) return;
       if (!rc) {
-        h.textContent = "Still waiting for Celo";
         set("chain", "", ["Not confirmed after five minutes. It may still go through. ", txLink(p.hash, "Check it on Celoscan")], "Waiting for Celo to confirm…");
+        ok.set({ title: "Still waiting for Celo", text: ["Not confirmed after five minutes. It may still go through. ", txLink(p.hash, "Check it on Celoscan")], alert: null });
         return;
       }
-      h.textContent = "Payment confirmed";
-      lede.textContent = `Celo confirmed your ${sendText} to @${tag}. You can close this page now; the payment still goes through.`;
       set("chain", "done", "Confirmed.", "Celo confirmed it");
       set("agent", "active", "When autopilot next runs.");
+      ok.set({ state: "done", title: successHeadline({ state: "done", amount: sendText, to }), alert: null,
+        text: `Celo confirmed it. The agent pays ${to} in ${gets} when autopilot next runs; you can close this page.`, actions: [done, statusLink] });
       const until = p.at + PAYOUT_WATCH_MS;
       let noted = "";
       const showPaid = (no, gotText) => {
         set("agent", "done", "Converted on Textile FX and sent.");
         set("paid", "done", "");
-        status.replaceChildren(el("div", { class: "nt-paid" }, el("span", { class: "nt-paid-icon" }, icon("check")),
-          el("div", {}, el("b", {}, `Paid · ${no}`),
-            gotText ? el("span", { class: "small soft" }, `@${tag} got ${gotText}. `) : null,
-            el("a", { class: "link small", href: `receipt.html#${no}` }, "Open receipt ", icon("right")))));
+        ok.set({ state: "paid", title: successHeadline({ state: "paid", to }), alert: null,
+          text: gotText ? `${to} got ${gotText}. Receipt ${no}.` : `Converted on Textile FX and sent. Receipt ${no}.`,
+          actions: [done, el("a", { class: "btn btn-secondary", href: `receipt.html#${no}` }, "Open receipt", icon("right"))] });
         toast(`@${tag} has been paid`);
         clear();
       };
+      const notPaid = (title) => ok.set({ state: "failed", title, text: "", actions: [done] });
       const depositUnits = BigInt(p.cents) * 10_000n; // what the payer sent, to tell this transfer from others in the tx
       while (!stopped && Date.now() < until) {
         if (document.visibilityState === "visible") {
@@ -768,6 +822,7 @@ function payCard(tag, entry, beforePay = null) {
             if (ev?.status === "refunded") {
               setSource(true);
               set("agent", "err", "Not paid: sent back to you.");
+              notPaid("Not paid: sent back to you");
               status.replaceChildren(alertBox("", "info", el("p", {}, refundedLine(ev))));
               clear();
               return;
@@ -775,6 +830,7 @@ function payCard(tag, entry, beforePay = null) {
             if (ev?.status === "refused") {
               setSource(true);
               set("agent", "err", "Not paid.");
+              notPaid(`${to} wasn't paid`);
               status.replaceChildren(alertBox("warn", "alert", el("p", {}, refusedNote(ev.reason))));
               // keep watching: a refund shows here as "Refunded"
             }
@@ -793,6 +849,7 @@ function payCard(tag, entry, beforePay = null) {
                 setSource(false);
                 const over = d.reason.kind === "over" || d.reason.kind === "day";
                 set("agent", "err", over ? "Above the limit — not paid automatically." : `${d.reason.text} — not paid.`);
+                notPaid(`${to} wasn't paid automatically`);
                 status.replaceChildren(alertBox("warn", "alert", el("p", {}, el("b", {}, `${d.reason.text}. `),
                   over ? `The agent's limits are ${LIMITS_TEXT}. ` : "", REFUSED_NOTE, " Your payment stays with the agent.")));
                 clear();
@@ -815,15 +872,21 @@ function payCard(tag, entry, beforePay = null) {
               status.replaceChildren(alertBox("warn", "alert", el("p", {}, el("b", {}, DELAYED_NOTE), " Your payment is safe with the agent and is paid once the owner retries it.")));
             } else if (ev?.status === "received") {
               setSource(true);
-              set("agent", "active", receivedStale(ev)
+              const line = receivedStale(ev)
                 ? `${SLOW_NOTE} The agent recorded your payment at ${watTime(Date.parse(ev.at))} but hasn't reported the payout yet.`
-                : `The agent has your payment and is paying @${tag} now.`);
+                : `The agent has your payment and is paying @${tag} now.`;
+              set("agent", "active", line);
+              ok.set({ text: line });
             }
           } catch { /* never let the tracker die: try again next round */ }
         }
         await sleep(PAYOUT_POLL_MS);
       }
-      if (!stopped) set("agent", "", "Not paid yet. The agent pays when autopilot next runs; check the Autopilot page, or come back later.");
+      if (!stopped) {
+        const line = "Not paid yet. The agent pays when autopilot next runs; check the Autopilot page, or come back later.";
+        set("agent", "", line);
+        ok.set({ text: line });
+      }
     })();
   }
 

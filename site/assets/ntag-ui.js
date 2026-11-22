@@ -9,6 +9,7 @@ import {
 import { LOKAL_TAGS, ZERO_ADDRESS, decodePayTagCall, readAvailability, readTagInfo } from "./lokal-contracts.js";
 import { avatar } from "./session.js";
 import { flagIcon } from "./currency-ui.js";
+import { drawQr, shareRow } from "./disclose.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 export const sameAddr = (a, b) => String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
@@ -547,75 +548,18 @@ export function revealCard(card, stamp = "Yours") {
 /** A card on its "stage" (floor shadow + glow), with an optional caption. */
 export const stage = (card, caption) => el("div", { class: "ntag-stage" }, card, caption ? el("p", { class: "ntag-caption" }, caption) : null);
 
-// ---------- QR code ----------
-/** QR as DOM SVG (no innerHTML, no data: URLs, works under the CSP). Same drawing as get-paid.js. */
-export function renderQr(box, text, label = "QR code of the link") {
-  const lib = globalThis.qrcode;
-  if (typeof lib !== "function") {
-    box.replaceChildren(el("p", { class: "small muted" }, "The QR code couldn't be drawn. Copy the link instead."));
-    return;
-  }
-  const qr = lib(0, "M");
-  qr.addData(text);
-  qr.make();
-  const n = qr.getModuleCount(), quiet = 4, size = n + quiet * 2;
-  let d = "";
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c + quiet} ${r + quiet}h1v1h-1z`;
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
-  svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", label);
-  svg.setAttribute("shape-rendering", "crispEdges");
-  const bg = document.createElementNS(SVG_NS, "rect");
-  bg.setAttribute("width", size); bg.setAttribute("height", size); bg.setAttribute("fill", "#fff");
-  const path = document.createElementNS(SVG_NS, "path");
-  path.setAttribute("d", d); path.setAttribute("fill", "#07120c");
-  svg.append(bg, path);
-  box.replaceChildren(svg);
-}
+// ---------- QR code and sharing ----------
+/** QR as DOM SVG (no innerHTML, no data: URLs, works under the CSP). The one drawing lives in disclose.js. */
+export const renderQr = drawQr;
 
-/** A QR-code glyph, drawn here because the shared icon sprite (identical on every page) has none. */
-function qrIcon() {
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("class", "i");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.8");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  for (const [x, y] of [[3.5, 3.5], [14, 3.5], [3.5, 14]]) {
-    const r = document.createElementNS(SVG_NS, "rect");
-    for (const [k, v] of [["x", x], ["y", y], ["width", 6.5], ["height", 6.5], ["rx", 1.2]]) r.setAttribute(k, String(v));
-    svg.append(r);
-  }
-  const p = document.createElementNS(SVG_NS, "path");
-  p.setAttribute("d", "M14 14h2.5v2.5H14zM18.5 14h2M20.5 18v2.5H18M14 20.5h1.5M6.75 6.75h.01M17.25 6.75h.01M6.75 17.25h.01");
-  svg.append(p);
-  return svg;
-}
-
-/** Link field + Copy, WhatsApp, Open and a QR toggle for a tag. */
-export function shareBlock(tag, { openLabel = "Open pay page" } = {}) {
+/** A tag's link: Share · Copy link (WhatsApp where the browser can't share), and "Show QR code" on demand. */
+export function shareBlock(tag) {
   const url = ntagUrl(tag);
-  const qrBox = el("div", { class: "nt-qr", id: `qr-${tag}`, hidden: true });
-  const qrBtn = el("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-expanded": "false", "aria-controls": `qr-${tag}` }, qrIcon(), "Show QR code");
-  qrBtn.addEventListener("click", () => {
-    const show = qrBox.hidden;
-    if (show && !qrBox.firstChild) renderQr(qrBox, url, `QR code for the @${tag} pay page`);
-    qrBox.hidden = !show;
-    qrBtn.setAttribute("aria-expanded", String(show));
-    qrBtn.lastChild.textContent = show ? "Hide QR code" : "Show QR code";
+  return shareRow({
+    url, title: `@${tag} on Lokal`, text: `Pay me in dollars on Celo and I receive my own local money. My Lokal tag is @${tag}.`,
+    whatsappText: decodeURIComponent(whatsappUrl(tag, url).split("?text=")[1]), qrLabel: `QR code for the @${tag} pay page`,
+    qrCaption: "Scan to open the pay page.",
   });
-  return el("div", { class: "nt-share" },
-    el("div", { class: "nt-linkfield" }, el("span", { title: url }, url.replace(/^https?:\/\//, "")),
-      el("button", { class: "btn btn-primary btn-sm", type: "button", dataset: { copy: url, copyLabel: "Link copied" } }, icon("copy"), "Copy link")),
-    el("div", { class: "row" },
-      el("a", { class: "btn btn-wa btn-sm", href: whatsappUrl(tag, url), target: "_blank", rel: "noopener" }, "Share on WhatsApp"),
-      el("a", { class: "btn btn-secondary btn-sm", href: url }, icon("right"), openLabel),
-      qrBtn),
-    qrBox);
 }
 
 // ---------- transactions ----------

@@ -296,7 +296,7 @@ function welcomeStep() {
     el("ul", { class: "gw-next" },
       el("li", {}, el("div", {}, el("b", {}, "Your dashboard"), el("p", {}, "Money received, your payments, links and settings.")), el("a", { class: "btn btn-primary", href: "app.html" }, "Open dashboard")),
       el("li", {}, el("div", {}, el("b", {}, "A default currency"), el("p", {}, "Optional. What your pay page shows first; payers can still choose.")), el("a", { class: "text-link", href: "app.html#settings" }, "Settings ", el("span", { class: "arrow", "aria-hidden": "true" }, "→"))),
-      el("li", {}, el("div", {}, el("b", {}, "A payment link"), el("p", {}, "Ask for an exact amount, by WhatsApp or QR code.")), el("a", { class: "text-link", href: "get-paid.html" }, "Get paid ", el("span", { class: "arrow", "aria-hidden": "true" }, "→"))),
+      el("li", {}, el("div", {}, el("b", {}, "A payment link"), el("p", {}, "Ask for an exact amount with a link you share.")), el("a", { class: "text-link", href: "get-paid.html" }, "Get paid ", el("span", { class: "arrow", "aria-hidden": "true" }, "→"))),
       el("li", {}, el("div", {}, el("b", {}, "Cash out"), el("p", {}, "How to get each currency to a bank.")), el("a", { class: "text-link", href: "cash-out.html" }, "Read the guide ", el("span", { class: "arrow", "aria-hidden": "true" }, "→")))));
   if (fresh) requestAnimationFrame(() => revealCard(card, "Claimed"));
 }

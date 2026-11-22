@@ -87,7 +87,7 @@ The site has three front doors (plus two public pages with the landing's chrome)
 | **Features** (`features.html`) | anyone who wants the whole list | **Everything Lokal does**: every working capability, listed plainly with a "try it" link, and one small "Coming soon" list for what isn't built yet (MiniPay mode, Pay with CELO, Pay for me). No status pills. Same top bar and footer as the landing. |
 | **Proof** (`proof.html`) | anyone checking | Every real payout read from Celo ([below](#proof)). Same top bar and footer as the landing. |
 | **Sign-up gateway** (`start.html`) | someone who wants to get paid | One calm step at a time with a progress line: **Connect** (the wallet shares its address; nothing signed) → **Sign in** (the free signed message, the same sign-in as before) → **Your tag** (the LokalTags contract answers as you type) → **Your name** (optional), then **one** `claim(tag, name)` transaction, simulated first → **Welcome** (your card, your link and QR, "Add <token> to your wallet", next steps). Signing up and signing in are the same flow: the wallet is the account, with no email or password. No currency is asked for. |
-| **Dashboard** (`app.html`) | the signed-in wallet | Your tag card and link (copy, WhatsApp, QR), quick actions (create a payment link, send money), **money received** (payouts to this wallet, per currency), **recent payments** (only yours), **your payment links** with their status, **Add to your wallet** for cNGN, IDRX, wARS, wCOP and USD₮ (`wallet_watchAsset`, after switching the wallet to Celo), and **settings**: display name (`setName`), default currency (`setReceiveToken`, optional) and release, each simulated before the wallet opens. |
+| **Dashboard** (`app.html`) | the signed-in wallet | Your tag card and link (Share, Copy link, the QR code on demand), quick actions (create a payment link, send money), **money received** (payouts to this wallet, per currency), **recent payments** (only yours), **your payment links** with their status, **Add to your wallet** for cNGN, IDRX, wARS, wCOP and USD₮ (`wallet_watchAsset`, after switching the wallet to Celo), and **settings** (folded until opened): display name (`setName`), default currency (`setReceiveToken`, optional) and release, each simulated before the wallet opens. |
 
 **Signed in on this device, `/` opens the dashboard.** `site/assets/gate.js` runs in the landing's `<head>` (a plain
 script, allowed by `script-src 'self'`), reads the saved sign-in and sends the browser to `app.html` before anything is
@@ -121,6 +121,19 @@ pressing anything scales it to 0.97 in 100 ms, the landing's sticky bar is the o
 (stronger lines) are honoured. No framework, no CDN, self-hosted fonts.
 
 Every payment screen shows the limits: **$25 per payment, $25 per person per day, $100 per day overall**.
+
+**Show what you need, hide what you might need.** The pay screens (a tag, a payment link, a pot) open on the
+essentials: what they receive ("They receive: **Naira** · Change", the recipient's default else naira; Change opens all
+five choices inline), the amount, the big "gets about" number and the Pay button. The rate, fees and route fold into one
+line ("1 USD₮ = ₦1,440.77 · fees included · Details"), the limits into "Up to $25 · Limits", and "Who am I paying?"
+into "@ada · tag 41 days old · paid 4 times ✓ · Details". Never folded: the amount they get, the Pay button, every
+warning (each one in full, with its reason) and any refusal the contract or the agent would make (over today's room is
+said in a red box above the folds). QR codes are drawn only when someone opens "Show QR code"; sharing is one Share
+button (the Web Share API on phones) plus Copy link, with a WhatsApp link only where the browser can't share. After a
+payment comes one calm confirmation (a big check, "10.00 USD₮ is on its way to @ada", Done and a status or receipt
+link) with the transaction in Details, and the dashboard's Settings sit folded at the bottom. The pieces and the rule of
+what is always shown live in `site/assets/disclose.js` (tested in `test/disclose.test.mjs`); `scripts/screenshots-simple.mjs`
+takes the before-and-after screenshots.
 
 ### Lokal tags: get paid at @yourname
 
@@ -214,9 +227,10 @@ the edge), with a static `rate.json` fallback refreshed every 30 minutes.
 
 ### "Who am I paying?"
 
-Every tag page shows, before paying: the tag's age, payments received through LokalTags (never who paid) and the
-owner (address, copy, Celoscan; the name is "set by the owner, not checked by anyone"). One-line warnings appear only
-when they apply, and none blocks payment: **first-time payee** (this browser's list of paid tags, kept only with the
+Every tag page shows, right above Pay: the tag's age, payments received through LokalTags (never who paid) and the
+owner (address, copy, Celoscan; the name is "set by the owner, not checked by anyone"). With no warning that is one
+line ("@ada · tag 41 days old · paid 4 times ✓") and the facts open under Details. Warnings appear only when they
+apply, always in full with their reason, and none blocks payment: **first-time payee** (this browser's list of paid tags, kept only with the
 privacy consent), **new tag** (24 h), **changed hands** (30 days), **lookalike** (one edit from a tag you paid, or a
 reserved name) and **name changed** (7 days). History comes from `eth_getLogs` by tag hash (Blockscout, else Forno in
 5,000-block chunks); a failed read says "Couldn't check". Code: `site/assets/trust.js`.
@@ -526,7 +540,7 @@ HTML, CSS and ES modules.
 | `scripts/screenshots.mjs` | screenshots of the landing (whole page and each section), Features, Proof, the gateway steps and the dashboard; `--front` for the first three only (Playwright; mocks only in its own browser) |
 | `contracts/` | Solidity contracts (`LokalTags`, `LokalPots`, `LokalText`), Hardhat + TypeScript tests, the one-command demo, the deploy script and ABIs (see [The contract has the final say](CONTRACTS.md#the-contract-has-the-final-say)) |
 | `docs/WHO-ENFORCES-WHAT.md` | every rule, and whether the contract, the agent or the site enforces it |
-| `test/` | 335 unit and integration tests (`node --test`) |
+| `test/` | 346 unit and integration tests (`node --test`) |
 | `.github/workflows/ci.yml` | tests, a syntax check of every script, and the site check on every push and pull request |
 | `.github/workflows/contracts.yml` | compiles and tests the contracts and runs the demo (every row asserted) whenever the contracts or the site's tag rules change |
 | `.github/workflows/pages.yml` | GitHub Pages mirror: deploys only after tests and the site check pass; refreshes the rate every 30 min (read-only, no secrets) |
@@ -542,7 +556,7 @@ security headers and cache rules.
 ## Tests
 
 ```powershell
-npm test                          # 335 tests, all passing
+npm test                          # 346 tests, all passing
 node scripts/check-site.mjs       # static site check
 ```
 
@@ -577,5 +591,6 @@ node scripts/check-site.mjs       # static site check
 | `test/ntag-cli-contract.test.mjs` | 2 | the `lokal` CLI on LokalTags: reading a tag, a refusal explained before signing |
 | `test/front-door.test.mjs` | 8 | the landing's redirect for signed-in visitors (never for `?about`, expired or disconnected sessions), Activity and dashboard gating, the gateway's first step, exact `wallet_watchAsset` params and the switch to Celo first, the "Yours" rows (no addresses in labels) and totals |
 | `test/trust.test.mjs` | 17 | "Who am I paying?": keccak and the tag hash against viem, the new event topics, age buckets, edit-distance and reserved-name lookalikes, paid tags only with consent, first-time with and without consent, owner-change detection (contract and legacy), every warning, "couldn't check" on failed or partial reads, Blockscout then Forno-chunk log reads |
+| `test/disclose.test.mjs` | 11 | the calm pay screens: what is always shown (the amount they get, Pay, warnings, refusals), the one-line rate, limits and "Who am I paying?" summaries, the starting currency, the Web Share fallback, honest success headlines, no QR drawn until asked |
 | `test/proof.test.mjs` | 8 | the Proof page: attribution detection, payouts from the agent's transactions, aggregation from fixture logs (agent-record and chain matching, corridors, totals, no addresses), one deposit per payout, named users (matched, mismatched, malformed), the reader and the empty `proof-users.json` |
 | `test/pots-site.test.mjs` | 14 | Pots on the site: calldata against the verified ABI, refusals in plain English, the title rules the contract enforces, caps and closing times, pot ids in links, the Spray Wall's rows (never a payer address), reading the logs (explorer first, then the chain), and who may open, see and close a pot |

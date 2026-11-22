@@ -18,6 +18,7 @@ import {
   readTagOf, readTagInfo, checkPotPayment, simulate, potUsdValue, decodeRevert, tokenAmountText, payoutRoute, decodePotPaid,
 } from "../assets/lokal-contracts.js";
 import { currencyPicker } from "../assets/currency-ui.js";
+import { currencyChoice, successPanel, successHeadline } from "../assets/disclose.js";
 import { injectedWallet, ensureCelo, explainWalletError, CELO_CHAIN } from "../assets/session.js";
 import { alertBox, plainError, sameAddr, waitForReceipt, noWalletHelp, noCeloAlert, celoBalance, slowNotice } from "../assets/ntag-ui.js";
 import {
@@ -113,7 +114,7 @@ function summaryCard() {
   const guests = el("b", { class: "num" }), left = el("b", {}), each = el("b", { class: "num" });
   const leftLabel = el("span", { class: "micro muted" }), closes = el("p", { class: "micro muted" });
   const taking = (st) => st === "open" || st === "full";
-  const share = el("div", { class: "card-f pot-share-f" }, el("span", { class: "label" }, "Share this pot"), potShare(S.id, S.info.title, { open: false }));
+  const share = el("div", { class: "card-f pot-share-f" }, el("span", { class: "label" }, "Share this pot"), potShare(S.id, S.info.title));
   const paint = () => {
     const st = potState(S.info, nowSec());
     meter.update(S.info);
@@ -259,8 +260,10 @@ function sprayForm() {
     const want = S.hostReceive === "usdt" ? "usd" : S.hostReceive;
     const value = only.includes(want) ? want : only.includes("cngn") && S.payCode === "cngn" ? "cngn" : "usd";
     picker = currencyPicker({ label: `What does ${hostName()} receive?`, value, remember: false, only,
-      extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮)" }], onChange: () => paint() });
-    pickerSlot.replaceChildren(picker.el);
+      extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮)" }], onChange: () => { choice.refresh(); paint(); } });
+    // "They receive: Naira · Change": the choices open inline on demand
+    const choice = currencyChoice({ picker, label: "They receive" });
+    pickerSlot.replaceChildren(choice.el);
     if (S.rate) picker.setAvailability({ ...S.rate.available, cngn: S.payCode === "cngn" ? true : S.rate.available.cngn });
   }
   const receiveCode = () => (picker.value === "usd" ? "usdt" : picker.value);
@@ -336,7 +339,7 @@ function sprayForm() {
     return null;
   }
   const fromLink = el("a", { class: "mono link" }), balCell = el("span", { class: "num" });
-  const walletInfo = el("ul", { class: "kv-list" }, el("li", {}, el("span", {}, "Spraying from"), fromLink), el("li", {}, el("span", {}, "Balance"), balCell));
+  const walletInfo = el("p", { class: "small soft nt-from" }, "Spraying from ", fromLink, " · ", balCell);
   const problemBox = el("div", {});
   let problemKey = "";
   function paintWallet(a) {
@@ -488,7 +491,19 @@ function sprayForm() {
       const landed = (rc.logs ?? []).filter((l) => decodePotPaid(l)).map((l) => sprayOf({ ...l, blockNumber: parseInt(l.blockNumber, 16) || 0, logIndex: parseInt(l.logIndex, 16) || 0, transactionHash: l.transactionHash ?? hash }, nowSec()));
       addSprays(landed);
       const gets = want === "usdt" ? "dollars" : currencyOf(want)?.plural;
-      msg.replaceChildren(alertBox("", "check", el("p", {}, el("b", {}, `You sprayed ${fmt(a.units)}.`), ` It's on the wall. The agent pays ${hostName()} in ${gets} when autopilot next runs. `, txLink(hash))));
+      // the calm confirmation in place of the form; Done brings the form back
+      msg.replaceChildren();
+      const ok = successPanel();
+      const done = el("button", { class: "btn btn-primary", type: "button" }, "Done");
+      done.addEventListener("click", () => { node.replaceChildren(...formKids); paint(); amountIn.focus(); });
+      ok.details.append(el("ul", { class: "kv-list" },
+        el("li", {}, el("span", {}, "You sprayed"), el("span", {}, `${fmt(a.units)} ${PAY[code].token}`)),
+        el("li", {}, el("span", {}, "From"), el("span", { class: "mono" }, short(from))),
+        el("li", {}, el("span", {}, "Transaction"), txLink(hash))));
+      ok.set({ state: "done", title: successHeadline({ state: "done", amount: fmt(a.units).replace(/\.00$/, ""), to: hostName() }),
+        text: `It's on the wall. The agent pays ${hostName()} in ${gets} when autopilot next runs.`, actions: [done] });
+      node.replaceChildren(ok.el);
+      requestAnimationFrame(() => ok.heading.focus({ preventScroll: true }));
       S.busy = false;
       S.info = await readPotInfo(S.id).catch(() => S.info);
       S.summary.paint();
@@ -505,8 +520,9 @@ function sprayForm() {
     el("div", { class: "field" }, el("span", { class: "label", id: "pay-with-l" }, "Spray with"), payGroup),
     el("div", { class: "field" }, el("label", { class: "label", for: "spray-amount" }, "How much?"),
       el("div", { class: "money" }, prefix, amountIn, tokenEl), quick, hint),
-    el("div", { class: "field" }, el("span", { class: "label" }, `What does ${hostName()} receive?`), pickerSlot, estimate),
+    el("div", { class: "field" }, pickerSlot, estimate),
     room, walletBox, actions, msg);
+  const formKids = [...node.childNodes];
   loadTokenFacts();
   refreshRoom();
   loadRate().then((r) => { S.rate = r; picker.setAvailability({ ...r.available, cngn: S.payCode === "cngn" ? true : r.available.cngn }); paint(); }).catch(() => paint());

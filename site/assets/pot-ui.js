@@ -1,7 +1,8 @@
 // The pieces of a pot that the dashboard and the public pot page both draw: the progress bar, the share block
-// (link, copy, WhatsApp, QR) and the notes on the Spray Wall. DOM only inside functions; styles in pots.css.
-import { el, icon, badge, currencyOf } from "./core.js";
-import { renderQr, reducedMotion } from "./ntag-ui.js";
+// (Share · Copy link, and the QR code on demand) and the notes on the Spray Wall. DOM only inside functions; styles in pots.css.
+import { el, badge, currencyOf } from "./core.js";
+import { reducedMotion } from "./ntag-ui.js";
+import { shareRow } from "./disclose.js";
 import { flagIcon } from "./currency-ui.js";
 import { tokenAmountText, tokenOfCode } from "./lokal-contracts.js";
 import { potProgress, potUrl, potWhatsappUrl, usd6Text, noteTilt, agoText, POT_STATE_LABEL } from "./pots.js";
@@ -28,46 +29,19 @@ export function potMeter(info, { size = "lg" } = {}) {
 /** A state badge for a pot ("Open", "Full", "Closed by the host", "Ended"). */
 export const potBadge = (state) => badge(...(POT_STATE_LABEL[state] ?? ["Unknown", "neutral"]));
 
-/** The QR-code glyph (the shared icon sprite has none). */
-function qrGlyph() {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  for (const [k, v] of [["class", "i"], ["viewBox", "0 0 24 24"], ["aria-hidden", "true"], ["fill", "none"], ["stroke", "currentColor"], ["stroke-width", "1.8"], ["stroke-linecap", "round"], ["stroke-linejoin", "round"]]) svg.setAttribute(k, v);
-  const p = document.createElementNS(ns, "path");
-  p.setAttribute("d", "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2.5v2.5H14zM18.5 14h1.5M20 18v2h-2M14 20h1.5");
-  svg.append(p);
-  return svg;
-}
-
 /**
- * Link field + Copy, WhatsApp, Open and a QR toggle for a pot. qr: "toggle" (a button shows it) or "open" (drawn at
- * once, larger, for the moment a pot is created).
+ * A pot's link: Share · Copy link (Copy link · WhatsApp where the browser can't share), and "Show QR code", drawn only
+ * when someone opens it (also right after a pot is created: the host asks for the QR when the guests are there).
+ * opts.link: false leaves out the link line (a host's pot row already links the pot).
  */
-export function potShare(id, title, { qr = "toggle", openLabel = "Open pot page", open = true } = {}) {
+export function potShare(id, title, { link = true } = {}) {
   const url = potUrl(id);
-  const qrBox = el("div", { class: `nt-qr pot-qr${qr === "open" ? " lg" : ""}`, id: `pot-qr-${id}`, hidden: qr !== "open" });
-  const label = `QR code for the pot “${title}”`;
-  let qrBtn = null;
-  if (qr === "open") renderQr(qrBox, url, label);
-  else {
-    qrBtn = el("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-expanded": "false", "aria-controls": `pot-qr-${id}` }, qrGlyph(), el("span", {}, "Show QR code"));
-    qrBtn.addEventListener("click", () => {
-      const show = qrBox.hidden;
-      if (show && !qrBox.firstChild) renderQr(qrBox, url, label);
-      qrBox.hidden = !show;
-      qrBtn.setAttribute("aria-expanded", String(show));
-      qrBtn.lastChild.textContent = show ? "Hide QR code" : "Show QR code";
-    });
-  }
-  return el("div", { class: "nt-share pot-share" },
-    qr === "open" ? qrBox : null,
-    el("div", { class: "nt-linkfield" }, el("span", { title: url }, url.replace(/^https?:\/\//, "")),
-      el("button", { class: "btn btn-primary btn-sm", type: "button", dataset: { copy: url, copyLabel: "Pot link copied" } }, icon("copy"), "Copy link")),
-    el("div", { class: "row" },
-      el("a", { class: "btn btn-wa btn-sm", href: potWhatsappUrl(title, url), target: "_blank", rel: "noopener" }, "Share on WhatsApp"),
-      open ? el("a", { class: "btn btn-secondary btn-sm", href: url }, icon("right"), openLabel) : null,
-      qrBtn),
-    qr === "open" ? null : qrBox);
+  const text = `${title}: spray in dollars or naira on Celo, from any wallet.`;
+  const wa = decodeURIComponent(potWhatsappUrl(title, url).split("?text=")[1]);
+  const node = shareRow({ url, title, text, whatsappText: wa, copyLabel: "Pot link copied", link,
+    qrLabel: `QR code for the pot “${title}”`, qrCaption: "Guests scan this to open the pot." });
+  node.classList.add("pot-share");
+  return node;
 }
 
 const PAY_LABEL = { usdt: "USD₮", cngn: "cNGN" };
