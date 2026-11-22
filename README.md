@@ -20,6 +20,36 @@ Demo video (coming soon) ·
 
 Built for **Agents Open for Business** on Celo, **Track 3: Stablecoin Corridors (Textile FX)**. Celo mainnet only.
 
+| Pay a tag | Your dashboard and the bell | A pot's page |
+|---|---|---|
+| ![Paying @ada: "They receive: Naira · Change", the amount they get, one-line rate and limits, Pay](docs/assets/pay.jpg) | ![The dashboard with the notification bell open: money received, a payment to your tag, a spray into your pot, a refund](docs/assets/dashboard.jpg) | ![A wedding pot: $37.50 sprayed of $100 by 11 guests, share link, QR code on demand](docs/assets/pot.jpg) |
+
+## Try it in 60 seconds
+
+1. Open **[lokalpay.vercel.app](https://lokalpay.vercel.app)** and type an amount into the converter: you see what
+   someone gets in naira, rupiah and pesos at Textile FX's live rate.
+2. Press **Get started**, connect a Celo wallet (MetaMask or MiniPay), sign a free message and claim your **@tag**.
+   No email, no password: your wallet is your account.
+3. Open any tag's page, e.g. `lokalpay.vercel.app/@deekamix`. Choose what they receive, see the exact amount and
+   "Who am I paying?", and pay $1 to $25 USD₮ with one signature.
+4. Check the **[Proof page](https://lokalpay.vercel.app/proof.html)** and the receipt: every payout is read live from
+   Celo, with both transactions and the attribution tag.
+
+## What you can do
+
+- **Pay a Lokal tag** (`/@name`): the payer picks naira, rupiah, Argentine or Colombian pesos, or dollars.
+- **Get paid by link:** ask for an exact amount; share it, with a QR code when you need one. One link, one payout.
+- **Pots:** one link for many guests (weddings, birthdays, group gifts), with a live Spray Wall; close or delete
+  them from your dashboard.
+- **A private dashboard:** your tag, money received, your links and pots, and a bell for incoming payments.
+- **"Who am I paying?":** the tag's age and history before you pay, with warnings for first-time payees, new tags
+  and lookalike names.
+- **Receipts, Proof and Verify:** a receipt for every payout, rebuilt from the chain; a public list of every real
+  payout; a checker for any transaction's attribution tag.
+- **Refunds:** a payment the agent can't pay goes back to the exact wallet it came from, with an RF- receipt.
+- **Cash-out guide:** a checked route from each currency to a bank.
+- **The `lokal` command:** `lokal send ada 10 --to rupiah` from PowerShell, with an encrypted wallet on your PC.
+
 ## What's real, with receipts
 
 Each row links to its proof on Celo. Everything Lokal does is on the
@@ -32,7 +62,7 @@ Each row links to its proof on Celo. Everything Lokal does is on the
 | Contract admin handed to a separate wallet (two-step) | **Live** | [accepted tx](https://celoscan.io/tx/0xbee2dd85e15c4fb664397f06e1a0a932214c6c6a65aaa3aa99e599905c2ec3a6) |
 | First Lokal tag claimed through LokalTags | **Live** | [claim tx](https://celoscan.io/tx/0x4ae77beb9f14d14a1c39525e617a0d6cc50fd08fab68d07a2f3106c8f5e0aeec) |
 | ERC-8004 identity, agentId 10079, card updated to Lokal | **Live** | [register tx](https://celoscan.io/tx/0x080d54275f02a722a3b0daa408f02a1af760e29f9e39092a9a48d22b964cf62e) · [card update tx](https://celoscan.io/tx/0x30d6545ebb388ce73111eb05cb9c7e49ac6ae55f620e9140561bcf68a1e9f966) |
-| Payouts in naira, rupiah and pesos; tags, links, pots, refunds, "Who am I paying?" | **Built, not yet used on mainnet** | 360 tests and 135 contract tests, run on every push |
+| Payouts in naira, rupiah and pesos; tags, links, pots, refunds, "Who am I paying?" | **Built, not yet used on mainnet** | 372 tests and 135 contract tests, run on every push |
 | First real user payout | **Pending** | It will be listed here and on the [Proof page](https://lokalpay.vercel.app/proof.html) with its transactions |
 
 Every transaction the agent sends, and every one the site asks a wallet to send, ends with the ERC-8021 attribution
@@ -102,6 +132,15 @@ chain: [docs/PROTOCOL.md](docs/PROTOCOL.md#currencies).
   status, and the attribution tag on every transaction so its activity can be counted.
 - **Built for real people.** Pay by @tag, link or the `lokal` command from MiniPay or MetaMask; recipients get local
   money in their own wallet, and a [cash-out guide](https://lokalpay.vercel.app/cash-out.html) for each currency.
+
+## Why Celo and Textile FX
+
+Celo gives sub-cent fees, fast finality and MiniPay on millions of phones in the countries Lokal serves. Textile FX
+gives firm-quoted liquidity for real local stablecoins on Celo (cNGN, IDRX, wARS and wCOP), so every conversion is
+priced up front and settled onchain, and the payer sees the exact amount before signing.
+
+**Built with:** Solidity 0.8.30 + OpenZeppelin 5 · Hardhat + TypeScript · Node.js + viem · plain HTML, CSS and ES
+modules (no framework) · Vercel · Textile FX RFQ · ERC-8004 (identity and ratings) · ERC-8021 (attribution).
 
 ## Run it
 
