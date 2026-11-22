@@ -323,7 +323,7 @@ for (const width of [390, 1440]) {
     await settle(page, 600);
     await save(page.locator(".pot-spray"), `pots-4a-spray-form-${width}`);
     await page.click("button:has-text('Spray $')");
-    await page.waitForSelector("text=You sprayed", { timeout: 30000 });
+    await page.waitForSelector(".pot-spray .ok-panel", { timeout: 30000 });
     await page.locator(".pot-wall").scrollIntoViewIfNeeded();
     await settle(page, 450); // mid-celebration: the new note settling, a few notes still fluttering
     await save(page.locator(".pot-wall"), `pots-4b-spray-landing-${width}`);

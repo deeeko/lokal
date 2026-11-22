@@ -102,19 +102,23 @@
   <header class="page-head container">
     <span class="eyebrow">Get paid</span>
     <h1 class="page-title">Get paid to your own <em>wallet</em></h1>
-    <p class="lead">For someone in Nigeria being paid from abroad, or anyone who wants to be paid in dollars. Make a payment link from your wallet. When the payer sends the exact amount, the agent converts it on Textile FX and pays your wallet.</p>
+    <p class="lead">Make a payment link from your wallet. When the payer sends the exact amount, the agent pays your wallet in the money you choose.</p>
   </header>
 
   <div class="container stack">
     <section class="card" aria-labelledby="how-h">
-      <div class="card-h"><h2 id="how-h">How it works</h2></div>
-      <div class="card-b">
+      <div class="card-b" style="padding-top:6px;padding-bottom:6px">
+        <div class="dc">
+        <button class="dc-toggle" type="button" aria-expanded="false" aria-controls="how-panel"><span class="dc-sum"><b id="how-h">How it works</b> · four steps, one transaction</span><span class="dc-more"><span class="dc-more-text">Show</span><svg class="i dc-chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>
+        <div class="dc-panel" id="how-panel" hidden><div class="dc-inner">
         <ol class="steps">
           <li><h3>Connect your wallet</h3><p>MiniPay, MetaMask or any Celo wallet. The payout goes to this wallet.</p></li>
           <li><h3>Fill in your request</h3><p>Choose what you receive (naira, rupiah, pesos or dollars), the amount, your name and how long the link works.</p></li>
           <li><h3>Approve one transaction</h3><p>Your wallet writes the request to Celo. It sends no money, only a few cents of CELO as the network fee.</p></li>
-          <li><h3>Share your link</h3><p>Send it by WhatsApp or show the QR code. When the payer sends the exact amount, the agent pays you.</p></li>
+          <li><h3>Share your link</h3><p>Send it in a chat or show the QR code. When the payer sends the exact amount, the agent pays you.</p></li>
         </ol>
+        </div></div>
+        </div>
       </div>
     </section>
 
@@ -126,7 +130,7 @@
           <div id="wallet-box" aria-live="polite"></div>
 
           <div class="field">
-            <span class="label" id="corridor-label">You receive</span>
+            <span class="sr-only" id="corridor-label">What you receive</span>
             <div id="currency-slot"></div>
             <p class="hint" id="corridor-hint" aria-live="polite">The payer sends USD₮. You get naira (cNGN).</p>
           </div>
@@ -179,26 +183,19 @@
         <div class="card-h"><h2 id="done-h" tabindex="-1">Your link is ready</h2><span class="badge ok"><span class="dot"></span>Registered onchain</span></div>
         <div class="card-b stack">
           <p class="soft" id="done-lead"></p>
-          <div class="field">
-            <span class="label" id="link-label">Your payment link</span>
-            <div class="code">
-              <pre id="link-text" aria-labelledby="link-label"></pre>
-              <button class="icon-btn" type="button" id="link-copy-icon" aria-label="Copy link" data-copy-label="Link copied"><svg class="i"><use href="#i-copy"/></svg></button>
-            </div>
+          <!-- Share · Copy link (or Copy link · WhatsApp), then "Show QR code": drawn only when opened -->
+          <div id="done-share"></div>
+          <div class="dc boxed">
+            <button class="dc-toggle" type="button" aria-expanded="false" aria-controls="done-details"><span class="dc-sum" id="done-sum"></span><span class="dc-more"><span class="dc-more-text">Details</span><svg class="i dc-chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>
+            <div class="dc-panel" id="done-details" hidden><div class="dc-inner">
+              <ul class="kv-list">
+                <li><span>Payer sends</span><span id="d-send" class="num"></span></li>
+                <li><span>Paid to</span><span id="d-wallet"></span></li>
+                <li><span>Expires</span><span id="d-exp" class="num"></span></li>
+                <li><span>Registration</span><span id="d-tx"></span></li>
+              </ul>
+            </div></div>
           </div>
-          <div class="row">
-            <button class="btn btn-primary" type="button" id="link-copy" data-copy-label="Link copied"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg>Copy link</button>
-            <a class="btn btn-secondary" id="link-wa" href="#"><svg class="i" aria-hidden="true"><use href="#i-ext"/></svg>Share on WhatsApp</a>
-            <a class="btn btn-secondary" id="link-open" href="#">Open link<svg class="i" aria-hidden="true"><use href="#i-right"/></svg></a>
-          </div>
-          <div id="link-qr" class="qr"></div>
-          <p class="small muted" style="text-align:center">The payer can scan this to open your link.</p>
-          <ul class="kv-list">
-            <li><span>Payer sends</span><span id="d-send" class="num"></span></li>
-            <li><span>Paid to</span><span id="d-wallet"></span></li>
-            <li><span>Expires</span><span id="d-exp" class="num"></span></li>
-            <li><span>Registration</span><span id="d-tx"></span></li>
-          </ul>
         </div>
         <div class="card-f">
           <span class="small muted">Need another amount or a new payer?</span>
@@ -223,8 +220,10 @@
         </section>
 
         <section class="card" aria-labelledby="limits-h">
-          <div class="card-h"><h2 id="limits-h">How you get paid</h2></div>
-          <div class="card-b">
+          <div class="card-b" style="padding-top:6px;padding-bottom:6px">
+            <div class="dc">
+            <button class="dc-toggle" type="button" aria-expanded="false" aria-controls="limits-panel"><svg class="i"><use href="#i-shield"/></svg><span class="dc-sum"><b id="limits-h">How you get paid</b> · up to $25, to this wallet only</span><span class="dc-more"><span class="dc-more-text">Details</span><svg class="i dc-chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>
+            <div class="dc-panel" id="limits-panel" hidden><div class="dc-inner">
             <ul class="checks" style="grid-template-columns:minmax(0,1fr)">
               <li><svg class="i"><use href="#i-check"/></svg><span>The payout goes <b>straight to the wallet that created the link</b>. Your wallet signs the request, so nobody can change where it pays.</span></li>
               <li><svg class="i"><use href="#i-check"/></svg><span>Within the limits: <b>$25 per payment</b> · <b>$25 per person per day</b> · <b>$100 per day overall</b>. A payment over a limit waits or is refused, and isn't paid out. <a class="link" href="docs.html#limits">How the limits work</a></span></li>
@@ -232,7 +231,9 @@
               <li><svg class="i"><use href="#i-check"/></svg><span>The payer must use <b>a different wallet</b>. The agent won't pay a link from the wallet that created it.</span></li>
               <li><svg class="i"><use href="#i-check"/></svg><span>Only one active link can use each amount. If yours is taken, this page offers the nearest free one.</span></li>
             </ul>
-            <p class="small muted mt-16">The agent pays while its autopilot is running. This site never holds money or keys: the payer sends from their own wallet, and the agent converts and pays yours. <a class="link" href="autopilot.html">About autopilot</a></p>
+            <p class="small muted">The agent pays while its autopilot is running. This site never holds money or keys: the payer sends from their own wallet, and the agent converts and pays yours. <a class="link" href="autopilot.html">About autopilot</a></p>
+            </div></div>
+            </div>
           </div>
         </section>
       </div>

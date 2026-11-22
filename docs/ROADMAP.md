@@ -22,7 +22,7 @@ Three labels, used here and in the README's "What's real" table. The site lists 
 
 **Done**
 
-- [x] Agent on Celo mainnet, 335 tests passing (plus 135 contract tests)
+- [x] Agent on Celo mainnet, 360 tests passing (plus 135 contract tests)
 - [x] Live Textile price previews for all three corridors
 - [x] ERC-8004 identity registered (agentId 10079)
 - [x] Payment links, Get paid, autopilot, two stablecoin corridors plus CELO, receipts and onchain reviews

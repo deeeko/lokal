@@ -23,6 +23,7 @@ import { ntagCard, stage, shareBlock, contractEntry, greeting, alertBox, plainEr
 import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 import { sharedActivity, receivedTotals } from "../assets/my-activity.js";
 import { addToWalletRow } from "../assets/wallet-assets.js";
+import { wireDisclosure, chevron, receiveName } from "../assets/disclose.js";
 import { dashboardView, potsView, canClosePot } from "../assets/front-door.js";
 
 initChrome();
@@ -83,7 +84,7 @@ function heroSection(s) {
     stage(card, "Tap the card to copy your link."),
     el("div", { class: "dash-hero-copy" },
       el("h2", { id: "hero-h", class: "dash-h2" }, "People pay you at ", el("span", { class: "np-tagname" }, "@" + tag)),
-      el("p", { class: "soft" }, "Share your link. Payers send dollars and choose what you receive; the agent converts it on Textile FX and pays this wallet."),
+      el("p", { class: "soft" }, "Payers send dollars and choose what you receive; the agent pays this wallet."),
       shareBlock(tag),
       el("div", { class: "dash-actions" },
         el("a", { class: "btn btn-secondary btn-sm", href: "get-paid.html" }, icon("link"), "Create a payment link"),
@@ -156,7 +157,7 @@ function linksSection(s) {
     body.removeAttribute("aria-busy");
     if (!mine.length) {
       body.replaceChildren(el("div", { class: "dash-empty" }, el("p", { class: "dash-empty-title" }, "No payment links yet"),
-        el("p", { class: "small soft" }, "A payment link asks for an exact amount, in the currency you choose. Share it by WhatsApp or QR code.")));
+        el("p", { class: "small soft" }, "A payment link asks for an exact amount, in the currency you choose. Share it in any chat.")));
       return;
     }
     const LABEL = { active: ["Active", "ok"], "in-use": ["Amount in use", "warn"], expired: ["Expired", "neutral"], invalid: ["Not valid", "err"] };
@@ -288,7 +289,17 @@ function settingsSection(s) {
     } catch (e) { D.busy = false; agree.disabled = false; relBtn.disabled = !agree.checked; relBtn.textContent = `Release @${tag}`; relMsg.replaceChildren(alertBox("err", "alert", el("p", {}, errText(e)))); }
   });
 
-  return section("settings", "Settings",
+  // folded: a heading with one button; the three settings open on demand (open at once on app.html#settings)
+  const toggle = el("button", { class: "dc-toggle dash-settings-toggle", type: "button", "aria-expanded": "false", "aria-controls": "settings-panel" },
+    el("span", { class: "dc-sum" }, el("b", {}, "Settings"), el("span", { class: "micro muted" }, ` · display name, default currency${D.entry?.receive ? ` (${receiveName(D.entry.receive)})` : ""}, release @${tag}`)),
+    el("span", { class: "dc-more" }, el("span", { class: "dc-more-text" }, "Show"), chevron()));
+  toggle.dataset.closedLabel = "Show"; toggle.dataset.openLabel = "Hide";
+  const panel = el("div", { class: "dc-panel", id: "settings-panel", hidden: true });
+  const sec = el("section", { class: "card dash-card dash-settings-card", id: "settings", "aria-labelledby": "settings-h" },
+    el("h2", { id: "settings-h", class: "dash-settings-h" }, toggle), panel);
+  const dc = wireDisclosure(toggle, panel, { onToggle: (open) => { D.settingsOpen = open; } });
+  if (D.settingsOpen || location.hash === "#settings") dc.open({ instant: true });
+  panel.append(
     el("div", { class: "card-b dash-settings" },
       el("div", { class: "dash-set" },
         el("h3", { class: "label" }, el("label", { for: "set-name" }, "Display name")),
@@ -303,6 +314,7 @@ function settingsSection(s) {
         el("label", { class: "toggle", for: "rel-agree" }, agree, `I understand payments to @${tag} stop working.`),
         el("div", { class: "row" }, relBtn), relMsg)),
     el("div", { class: "card-f" }, el("span", { class: "micro muted" }, "Your tag, name and default currency are public on the LokalTags contract."), linkRow("account.html", "Switch to another tag")));
+  return sec;
 }
 
 // ---------- pots: open one, share it, watch it fill, close it (LokalPots calls from your own wallet) ----------
@@ -369,13 +381,11 @@ function potRow(s, p, reload) {
   const st = potState(p, now);
   const meter = potMeter(p, { size: "sm" });
   const url = potUrl(p.potId);
-  const qrBox = el("div", {});
-  const share = el("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-expanded": "false" }, icon("link"), "Share");
-  share.addEventListener("click", () => {
-    const open = !qrBox.firstChild;
-    qrBox.replaceChildren(...(open ? [potShare(p.potId, p.title, { qr: "open", open: false })] : []));
-    share.setAttribute("aria-expanded", String(open));
-  });
+  // Share opens Share · Copy link and "Show QR code" (the QR is drawn only when that is opened too)
+  const shareId = `pot-share-${p.potId}`;
+  const qrBox = el("div", { class: "dc-panel pot-row-share", id: shareId, hidden: true });
+  const share = el("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-expanded": "false", "aria-controls": shareId }, icon("link"), "Share");
+  wireDisclosure(share, qrBox, { render: (panel) => panel.append(el("div", { class: "dc-inner" }, potShare(p.potId, p.title, { link: false }))) });
   const msg = el("div", { "aria-live": "polite" });
   const end = el("div", { class: "dash-list-end" },
     el("button", { class: "icon-btn sm", type: "button", "aria-label": `Copy the link to ${p.title}`, dataset: { copy: url, copyLabel: "Pot link copied" } }, icon("copy")),
@@ -522,8 +532,8 @@ function createPotForm(s, { onDone, onCancel }) {
           el("div", { class: "pot-made-copy" },
             el("span", { class: "eyebrow" }, `Pot #${created.potId} is open`),
             el("h3", { class: "dash-h2" }, el("bdi", {}, created.title)),
-            el("p", { class: "soft" }, "Share the link or the QR code.")),
-          potShare(created.potId, created.title, { qr: "open" })));
+            el("p", { class: "soft" }, "Share it with your guests. The QR code is there when you need it.")),
+          potShare(created.potId, created.title)));
         onDone(created.potId);
       } else {
         panel.replaceChildren(alertBox("", "check", el("p", {}, "Your pot is open. It shows in the list below in a moment.")));

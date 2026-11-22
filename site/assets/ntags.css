@@ -470,3 +470,108 @@ button.ntag-card, a.ntag-card { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .nt-g-step { transition: none; }
 }
+/* =====================================================================
+   Disclosures (assets/disclose.js): show what you need, hide what you might need.
+   A summary row with "Details" on the right opens a panel with a calm height + opacity
+   ease; with reduced motion it opens at once. Warnings, refusals, the amount they get and
+   the Pay button are never inside one of these.
+   ===================================================================== */
+.dc { display: grid; min-width: 0; }
+.dc-toggle {
+  appearance: none; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; min-width: 0; margin: 0;
+  padding: 10px 0; border: 0; border-radius: 10px; background: none; color: var(--text-2); font: inherit; font-size: var(--fs-small);
+  line-height: 1.4; text-align: left; cursor: pointer;
+}
+.dc-toggle > svg.i:first-child { flex: none; width: 16px; height: 16px; color: var(--text-3); }
+.dc-sum { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.dc-sum b { color: var(--text); font-weight: 500; }
+.dc-more {
+  display: inline-flex; align-items: center; gap: 4px; flex: none; margin-left: auto; padding: 4px 4px 4px 10px; border-radius: var(--r-pill);
+  color: var(--text); font-weight: 500; white-space: nowrap; transition: background-color 120ms ease, transform 120ms var(--ease);
+}
+.dc-chev { width: 16px; height: 16px; color: var(--text-3); transition: transform var(--t-calm) var(--calm); }
+.dc-toggle[aria-expanded="true"] .dc-chev { transform: rotate(180deg); }
+.dc-toggle:hover .dc-more { background: var(--surface-2); }
+.dc-toggle:active .dc-more { transform: scale(.97); transition: transform var(--t-press) ease-out; }
+.dc-toggle:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+.dc-toggle.compact { width: auto; justify-self: start; padding: 6px 0; min-height: 40px; }
+.dc-toggle.compact .dc-more { margin-left: 0; padding-left: 0; }
+.dc-toggle.compact:hover .dc-more { background: none; color: var(--mint-ink); }
+.dc-panel { overflow: hidden; transition: height var(--t-calm) var(--calm), opacity var(--t-calm) var(--calm); }
+.dc-panel:not(.is-moving) { overflow: visible; }
+.dc-inner { display: grid; gap: 12px; padding: 4px 0 8px; min-width: 0; }
+.dc-inner > .kv-list { margin: 0; }
+.dc-qr .dc-inner { justify-items: start; }
+.dc-qr .nt-qr { animation: none; }
+.dc-qr-cap { margin: 0; }
+/* a quiet frame for summary rows that sit inside a form */
+.dc.boxed { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.dc.boxed + .dc.boxed { border-top: 0; }
+
+/* the share row: link, Share · Copy link (or Copy link · WhatsApp), Show QR code */
+a.nt-linkfield { text-decoration: none; padding: 11px 14px; }
+a.nt-linkfield:hover span { text-decoration: underline; text-underline-offset: 3px; }
+a.nt-linkfield:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+.nt-share { gap: 10px; }
+.nt-share-btns { gap: 10px; }
+.nt-share-btns .btn { flex: 1 1 0; justify-content: center; min-width: 0; max-width: 220px; }
+
+/* "They receive: Naira · Change" */
+.cc { display: grid; gap: 4px; min-width: 0; }
+.cc-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; font-size: 15px; color: var(--text-2); }
+.cc-name { color: var(--text); font-weight: 600; }
+.cc-flag { display: inline-flex; }
+.cc-dot { color: var(--text-3); }
+.cc-change { font-size: 14px; color: var(--mint-ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(111, 240, 176, .4); min-height: 32px; }
+.cc-change:hover { color: var(--text); }
+.cc-change:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; border-radius: 4px; }
+.cc-panel .dc-inner { padding-top: 8px; }
+
+/* "Who am I paying?" folded to one line when nothing warns; warnings always open */
+.trust-line .dc-toggle > svg.i:first-child { color: var(--mint); }
+.trust-line .trust-ok { color: var(--mint); font-weight: 600; }
+.trust-line.has-warn { display: grid; gap: 6px; }
+
+/* a refusal the contract or the agent would make: always in view */
+.nt-refusal:empty { display: none; }
+
+/* the calm confirmation after a payment */
+.ok-panel { display: grid; justify-items: center; gap: 10px; padding: 18px 0 4px; text-align: center; }
+.ok-mark {
+  display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; margin-bottom: 6px;
+  background: var(--mint); color: var(--on-light); box-shadow: 0 0 0 10px rgba(111, 240, 176, .1);
+  animation: ok-in var(--t-calm) var(--calm) both;
+}
+.ok-mark svg.i { width: 34px; height: 34px; stroke-width: 2.6; }
+.ok-panel[data-state="pending"] .ok-mark { background: none; box-shadow: none; border: 3px solid var(--line-strong); border-top-color: var(--celo); border-right-color: var(--celo); animation: nt-spin .9s linear infinite; }
+.ok-panel[data-state="failed"] .ok-mark { background: rgba(255, 143, 128, .14); color: var(--err); box-shadow: 0 0 0 10px rgba(255, 143, 128, .06); }
+.ok-title { margin: 0; font-size: clamp(22px, 3vw, 28px); font-weight: 500; letter-spacing: -0.01em; line-height: 1.2; overflow-wrap: anywhere; }
+.ok-title:focus { outline: none; }
+.ok-title:focus-visible { outline: 2px solid var(--mint); outline-offset: 4px; border-radius: 6px; }
+.ok-text { margin: 0; max-width: 46ch; color: var(--text-2); font-size: 15px; }
+.ok-alert { width: 100%; text-align: left; }
+.ok-alert:empty { display: none; }
+.ok-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 6px; }
+.ok-actions .btn { min-width: 140px; }
+.ok-details { width: 100%; justify-items: center; text-align: left; }
+.ok-details .dc-inner { width: 100%; justify-items: stretch; }
+@keyframes ok-in { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 640px) {
+  .nt-share-btns .btn { max-width: none; }
+  .ok-actions { width: 100%; }
+  .ok-actions .btn { flex: 1 1 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dc-panel, .dc-chev, .dc-more { transition: none; }
+  .dc-toggle:active .dc-more { transform: none; }
+  .ok-mark { animation: none; }
+  .ok-panel[data-state="pending"] .ok-mark { animation: nt-spin 2.4s linear infinite; }
+}
+
+/* the pay form: the essentials, then the folded rows */
+.nt-folds { display: grid; }
+.nt-from { margin: 0; }
+.nt-from .badge { margin-left: 6px; }
+.ok-details > .dc-toggle { justify-self: center; }
+.hide-empty:empty { display: none; }

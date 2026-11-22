@@ -7,6 +7,7 @@ import {
 import { currencyPicker } from "../assets/currency-ui.js";
 import { ensureCelo as ensureCeloOn, explainWalletError, CELO_CHAIN } from "../assets/session.js";
 import { isDesktop, noWalletHelp } from "../assets/ntag-ui.js";
+import { bindDisclosures, currencyChoice, shareRow } from "../assets/disclose.js";
 
 initChrome();
 
@@ -137,10 +138,12 @@ async function refreshRegs() {
 // ---------- rendering ----------
 function renderCorridor() {
   const off = isNaira() && state.rate && !perUsd();
+  // a currency that would be refused is said in full under the line; the rest waits behind "Change"
   $("#corridor-hint").classList.toggle("err", Boolean(off));
-  setText($("#corridor-hint"), off
-    ? `${cur().label} isn't available on Textile FX right now. A payment would be refused until it is, so choose another currency or try later.`
-    : isNaira() ? `The payer sends USD₮. You get ${cur().plural} (${cur().token}). Using MiniPay? Choose dollars (USD₮); MiniPay doesn't show local tokens yet.` : "The payer sends cNGN. You get USD₮ (dollars), which MiniPay shows.");
+  setText($("#corridor-hint"), off ? `${cur().label} isn't available on Textile FX right now. A payment would be refused until it is, so choose another currency or try later.` : "");
+  $("#corridor-hint").hidden = !off;
+  setText(choiceHint, isNaira() ? `The payer sends USD₮. You get ${cur().plural} (${cur().token}). Using MiniPay? Choose dollars (USD₮); MiniPay doesn't show local tokens yet.` : "The payer sends cNGN. You get USD₮ (dollars), which MiniPay shows.");
+  choice.refresh();
   setText($("#amount-token"), sellSym());
 }
 
@@ -458,47 +461,17 @@ function showDone(hash, reg, from) {
   $("#form-card").hidden = true;
   $("#sum-card").hidden = true;
   $("#done-card").hidden = false;
-  setText($("#done-lead"), `Share this link with the person paying you. They send exactly ${send} on Celo, and the agent pays your wallet in ${isNaira() ? `${cur().plural} (${cur().token})` : "dollars (USD₮)"}.`);
-  setText($("#link-text"), url);
-  $("#link-copy").dataset.copy = url;
-  $("#link-copy-icon").dataset.copy = url;
-  $("#link-open").href = url;
-  const msg = `Hi, you can pay me ${send} on Celo with this link${reg.m ? ` (${reg.m})` : ""}: ${url}`;
-  $("#link-wa").href = "https://wa.me/?text=" + encodeURIComponent(msg);
+  setText($("#done-lead"), `Share it with the person paying you. They send exactly ${send}; the agent pays your wallet in ${isNaira() ? cur().plural : "dollars"}.`);
+  const text = `Hi, you can pay me ${send} on Celo with this link${reg.m ? ` (${reg.m})` : ""}.`;
+  $("#done-share").replaceChildren(shareRow({ url, title: "Pay me with Lokal", text, whatsappText: `${text} ${url}`,
+    qrLabel: "QR code of your payment link", qrCaption: "The payer can scan this to open your link." }));
+  setText($("#done-sum"), `${send} · expires ${lagosTime(reg.e * 1000)} WAT`);
   setText($("#d-send"), send);
   $("#d-wallet").replaceChildren(el("a", { class: "mono link", href: celoscanAddr(from), title: from }, short(from)));
   setText($("#d-exp"), `${lagosTime(reg.e * 1000)} WAT`);
   $("#d-tx").replaceChildren(el("a", { class: "link", href: celoscanTx(hash), title: hash }, short(hash), " ", icon("ext")));
-  renderQr($("#link-qr"), url);
   showMsg();
   $("#done-h").focus();
-}
-
-/** QR as DOM SVG (no innerHTML, no data: URLs, works under the CSP). Same drawing as pay.js. */
-function renderQr(box, text) {
-  const lib = globalThis.qrcode;
-  if (typeof lib !== "function") {
-    box.replaceChildren(el("p", { class: "small muted" }, "The QR code couldn't be drawn. Copy the link instead."));
-    return;
-  }
-  const qr = lib(0, "M");
-  qr.addData(text);
-  qr.make();
-  const n = qr.getModuleCount(), quiet = 4, size = n + quiet * 2;
-  let d = "";
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c + quiet} ${r + quiet}h1v1h-1z`;
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
-  svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", "QR code of your payment link");
-  svg.setAttribute("shape-rendering", "crispEdges");
-  const bg = document.createElementNS(ns, "rect");
-  bg.setAttribute("width", size); bg.setAttribute("height", size); bg.setAttribute("fill", "#fff");
-  const path = document.createElementNS(ns, "path");
-  path.setAttribute("d", d); path.setAttribute("fill", "#07120c");
-  svg.append(bg, path);
-  box.replaceChildren(svg);
 }
 
 function resetForm() {
@@ -526,7 +499,12 @@ const picker = currencyPicker({
     update();
   },
 });
-$("#currency-slot").replaceChildren(picker.el);
+// "You receive: Naira · Change": the full picker opens inline on demand
+const choice = currencyChoice({ picker, label: "You receive" });
+const choiceHint = el("p", { class: "hint" });
+choice.el.querySelector(".dc-inner").append(choiceHint);
+$("#currency-slot").replaceChildren(choice.el);
+bindDisclosures(document);
 state.corridor = picker.value === "usd" ? "cngn-usdt" : `usdt-${picker.value}`;
 amountIn.addEventListener("input", () => { state.userTyped = true; update(); });
 amountIn.addEventListener("blur", () => { state.touched.add("amount"); update(); });

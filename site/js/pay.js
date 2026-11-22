@@ -6,6 +6,7 @@ import {
   CURRENCIES, currencyOfCorridor, formatCurrency,
 } from "../assets/core.js";
 import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
+import { bindDisclosures, qrDisclosure, successPanel, successHeadline, rateSummary, limitsSummary } from "../assets/disclose.js";
 import { ensureCelo, explainWalletError } from "../assets/session.js";
 import {
   agentStatus, depositStatus, allowanceFromStatus, globalFromStatus, receivedStale, statusFinal, sourceNote, refusedNote, refundedLine, refundedText,
@@ -193,8 +194,9 @@ function initLink(req) {
   setText($("#l-name"), req.name);
   const to = isReg ? `${req.name}'s wallet` : req.name;
   setText($("#l-lead"), inNaira
-    ? `Send USD₮ on Celo. The agent converts it on Textile FX and pays ${to} in ${cur.plural} (${cur.token}).`
-    : `Send cNGN on Celo. The agent converts it on Textile FX and pays ${to} in dollars (USD₮).`);
+    ? `Send USD₮ on Celo; the agent pays ${to} in ${cur.plural}.`
+    : `Send cNGN on Celo; the agent pays ${to} in dollars.`);
+  bindDisclosures(document);
 
   if (isReg) {
     $("#l-who").hidden = false;
@@ -203,6 +205,8 @@ function initLink(req) {
     w.href = celoscanAddr(req.recipient);
     setText(w, short(req.recipient));
     w.title = req.recipient;
+    setText($("#w-wallet-full"), short(req.recipient));
+    $("#w-wallet-full").title = req.recipient;
     $("#w-wallet-copy").dataset.copy = req.recipient;
     setText($("#w-time"), `${lagosTime(req.created)} WAT`);
     $("#w-reg").href = celoscanTx(req.id);
@@ -235,14 +239,16 @@ function initLink(req) {
   if (!isReg) setText($("#l-id"), req.id);
   if (req.note) { $("#l-note-row").hidden = false; setText($("#l-note"), req.note); }
 
-  // pay options
+  // pay options: "Open in wallet" up front when this browser has no wallet; the rest under "Other ways to pay"
   $("#l-open").href = uri;
+  $("#l-open-alt").href = uri;
   $("#l-uri-copy").dataset.copy = uri;
   $("#l-manual-copy").dataset.copy = AGENT;
   setText($("#l-manual-addr"), AGENT);
-  $("#l-manual-text").replaceChildren("Send exactly ", el("b", { class: "num" }, sendText), " on the Celo network to the agent's address below. Use the ",
+  $("#l-manual-text").replaceChildren("Or send exactly ", el("b", { class: "num" }, sendText), " on the Celo network to the agent's address below. Use the ",
     el("a", { class: "link", href: celoscanAddr(sell.address) }, `${sell.symbol} token on Celo`), ", not one on another network.");
-  renderQr(uri);
+  // the QR code is drawn only when someone opens it
+  $("#l-qr-slot").replaceChildren(qrDisclosure(uri, "QR code of the wallet payment link", { caption: "Scan with a Celo wallet camera. It fills in the token, amount and address." }).el);
 
   // live rate -> approximate amount received
   loadRate().then((r) => {
@@ -264,6 +270,7 @@ function initLink(req) {
       setText($("#l-receive"), "—");
       setText($("#l-rate"), "Not published yet");
     }
+    setText($("#l-rate-sum"), rateSummary({ rateText: $("#l-rate").textContent, fees: r.fromPreview ? "included" : "before" }));
     if (usdValue !== null && usdValue > CAP) {
       $("#l-notice").append(el("div", { class: "alert warn mt-16" }, icon("alert"),
         el("span", {}, `This is over the agent's $${CAP} per-payment limit, so autopilot won't pay it out. Ask for a smaller request before sending.`)));
@@ -275,6 +282,7 @@ function initLink(req) {
   }).catch(() => {
     setText($("#l-receive"), "—");
     setText($("#l-rate"), "Unavailable");
+    setText($("#l-rate-sum"), "Rate unavailable");
     $("#l-notice").append(el("div", { class: "alert mt-16" }, icon("info"),
       el("span", {}, "Couldn't load the exchange rate, so the amount received isn't shown. The agent takes a fresh firm quote when it pays.")));
   });
@@ -313,12 +321,14 @@ function initLink(req) {
     renderRegNote();
     const inUse = regNow() === "in-use";
     // pay options stay visible only while the link is open, unpaid and (for #tx= links) not taken by an earlier link
-    const canPay = canPayNow();
-    $("#l-actions").hidden = !canPay;
-    $("#l-manual").hidden = !canPay;
-    $("#l-qr-card").hidden = !canPay;
+    // and never while a payment from this tab is on its way (no second payment by accident)
+    const canPay = canPayNow() && !sentActive();
+    $("#l-actions").hidden = !canPay || Boolean(eth);
+    $("#l-open-alt").hidden = !eth;
+    $("#l-other").hidden = !canPay;
     $("#l-amount-hint").hidden = !canPay;
-    $("#l-room").hidden = !canPay;
+    $("#l-limits").hidden = !canPayNow();
+    $("#l-room-warn").hidden = !canPayNow();
     renderWallet();
 
     const expBadge = $("#l-exp-badge");
@@ -416,7 +426,7 @@ function initLink(req) {
   function tickCountdown() {
     const left = req.exp - Date.now();
     setText($("#l-countdown"), left > 0 ? countdown(left) : "Expired");
-    if (left <= 0 && !$("#l-actions").hidden) render();
+    if (left <= 0 && !$("#l-other").hidden) render();
   }
 
   async function check() {
@@ -518,17 +528,18 @@ function initLink(req) {
       const line = person === null
         ? `The agent can pay out ${about}${fmt(room)} more today, across everyone.`
         : `${req.name} can receive ${about}${fmt(room)} more today.`;
-      const kids = [el("p", { class: "hint mt-8" }, line, " Limits count the last 24 hours. ", sourceNote(exact))];
+      box.replaceChildren(el("p", { class: "hint" }, line, " Limits count the last 24 hours. ", sourceNote(exact)));
+      setText($("#l-limits-sum"), limitsSummary({ capUsd: CAP, roomUsd: room, exact }));
+      // over today's room: the agent would refuse it (one person) or hold it (everyone). Never folded away.
       if (payUsd != null && payUsd > room + 0.005) {
         const personOver = person !== null && payUsd > WALLET_DAILY_CAP - person + 0.005;
-        kids.push(el("div", { class: "alert warn mt-8" }, icon("alert"), el("span", {}, el("b", {}, `This payment (about ${fmt(payUsd)}) would go over today's limit. `),
+        $("#l-room-warn").replaceChildren(el("div", { class: "alert warn" }, icon("alert"), el("span", {}, el("b", {}, `This payment (about ${fmt(payUsd)}) would go over today's limit. `),
           personOver
             ? `The agent refuses a payment that takes one person over $${WALLET_DAILY_CAP} in 24 hours, so it wouldn't be paid out. Wait until ${req.name}'s earlier payouts are more than a day old, or ask for a smaller link.`
             : `The agent pays at most $${DAILY_CAP} in 24 hours across everyone, so this payout would wait until there's room. Consider paying later.`)));
-      }
-      box.replaceChildren(...kids);
+      } else $("#l-room-warn").replaceChildren();
     } catch {
-      box.replaceChildren(); // the limits line above still applies; the agent checks them before paying
+      box.replaceChildren(); // the limits line still applies; the agent checks them before paying
     }
   }
 
@@ -536,8 +547,8 @@ function initLink(req) {
   const eth = window.ethereum ?? null;
   const PENDING_KEY = `np-linkpay:${req.id}`;
   const W = { account: null, chainOk: null, bal: null, celo: null, busy: false, msg: null, sent: null };
-  const openBtn = $("#l-open");
-  if (eth) { openBtn.classList.replace("btn-primary", "btn-secondary"); }
+  /** A payment from this tab that is pending or confirmed: the pay options stay away so it is never sent twice. */
+  const sentActive = () => Boolean(W.sent) && W.sent.phase !== "failed";
 
   const plain = (message) => Object.assign(new Error(message), { plain: true }); // our own explanation, shown as is
   const setMsg = (kind, text) => { W.msg = text ? { kind, text } : null; renderWallet(); };
@@ -564,15 +575,13 @@ function initLink(req) {
   function renderWallet() {
     const box = $("#l-wallet");
     if (!box) return;
-    if (W.sent) return box.replaceChildren(trackView());
+    if (W.sent) { const v = trackView(); if (box.firstChild !== v) box.replaceChildren(v); return; }
     if (!eth || !canPayNow()) return box.replaceChildren();
     const parts = [];
     if (W.account) {
       const balText = W.bal !== null ? `${num2.format(Number(W.bal) / 1e6)} ${sell.symbol}` : el("span", { class: "skel" });
-      parts.push(el("ul", { class: "kv-list" },
-        el("li", {}, el("span", {}, "Paying from"), el("a", { class: "mono link", href: celoscanAddr(W.account), title: W.account }, short(W.account))),
-        el("li", {}, el("span", {}, "Balance"), el("span", { class: "num" }, balText)),
-        el("li", {}, el("span", {}, "Network"), W.chainOk === false ? badge("Not Celo: switches when you pay", "warn") : el("span", {}, "Celo mainnet"))));
+      parts.push(el("p", { class: "small soft nt-from" }, "Paying from ", el("a", { class: "mono link", href: celoscanAddr(W.account), title: W.account }, short(W.account)),
+        " · ", el("span", { class: "num" }, balText), W.chainOk === false ? badge("Not Celo: switches when you pay", "warn") : null));
     }
     const problem = walletProblem();
     if (problem) parts.push(el("div", { class: `alert ${problem.kind}` }, icon("alert"), el("span", {}, problem.text)));
@@ -585,7 +594,7 @@ function initLink(req) {
       btn = el("button", { class: "btn btn-primary btn-lg", type: "button", disabled: W.busy || problem?.kind === "err" }, W.busy ? "Check your wallet…" : `Pay ${sendText}`);
       btn.addEventListener("click", submit);
     }
-    parts.push(el("div", { class: "row" }, btn, W.account ? null : el("span", { class: "small muted" }, "Or use one of the options below.")));
+    parts.push(el("div", { class: "row" }, btn));
     box.replaceChildren(...parts);
   }
 
@@ -644,22 +653,56 @@ function initLink(req) {
     }
   }
 
+  /**
+   * The calm confirmation for a payment sent from this tab: one big mark, one sentence, Done and the status. The steps
+   * and the transaction sit in Details; a refusal is shown in full. Built once per payment and updated in place.
+   */
+  let okView = null;
+  const recvWord = inNaira ? cur.plural : "dollars";
   function trackView() {
     const p = W.sent;
+    if (!okView || okView.sent !== p) {
+      const ui = successPanel();
+      const done = el("button", { class: "btn btn-primary", type: "button" }, "Done");
+      done.addEventListener("click", () => { okView.dismissed = true; renderWallet(); $("#status-h").scrollIntoView?.({ block: "nearest" }); });
+      const again = el("button", { class: "btn btn-primary", type: "button" }, icon("refresh"), "Try again");
+      again.addEventListener("click", () => { W.sent = null; okView = null; try { sessionStorage.removeItem(PENDING_KEY); } catch { /* ignore */ } render(); });
+      const status = el("a", { class: "btn btn-secondary", href: `verify.html?tx=${p.hash}` }, "Check status", icon("right"));
+      okView = { sent: p, ui, done, again, status, dismissed: false, steps: el("ol", { class: "pay-track" }), small: null };
+      ui.details.append(okView.steps);
+      requestAnimationFrame(() => ui.heading.focus({ preventScroll: true }));
+    }
+    const { ui, done, again, status, steps } = okView;
+    if (okView.dismissed && p.phase !== "failed") {
+      // after Done: one quiet line, never the pay button again for this payment
+      okView.small ??= el("p", { class: "small soft" });
+      okView.small.replaceChildren(icon("check"), ` You sent ${sendText}. `, txLink(p.hash));
+      return okView.small;
+    }
     const row = (state, title, sub) => el("li", { class: state }, el("span", { "aria-hidden": "true" }, state === "done" ? icon("check") : state === "err" ? icon("x") : ""), el("div", {}, el("b", {}, title), sub ? el("span", { class: "small" }, sub) : null));
-    const chain = p.phase === "confirmed" ? row("done", "Confirmed on Celo", ["The agent pays ", req.name, " when autopilot next runs. The status on this page updates by itself."])
+    const chain = p.phase === "confirmed" ? row("done", "Confirmed on Celo", ["The agent pays ", req.name, " when autopilot next runs."])
       : p.phase === "failed" ? row("err", "The payment failed on Celo", ["Nothing was sent to the agent; only the network fee was spent. ", txLink(p.hash)])
       : p.phase === "slow" ? row("", "Not confirmed yet", ["It can still go through. ", txLink(p.hash, "Check it on Celoscan")])
       : row("active", "Waiting for Celo to confirm…", ["Usually a few seconds. ", txLink(p.hash)]);
-    const kids = [el("ol", { class: "pay-track" }, row("done", `Sent ${sendText} from your wallet`, [el("span", { class: "mono" }, short(p.from)), " · ", txLink(p.hash)]), chain)];
+    steps.replaceChildren(row("done", `Sent ${sendText} from your wallet`, [el("span", { class: "mono" }, short(p.from)), " · ", txLink(p.hash)]), chain);
+    const to = req.name;
     if (p.phase === "failed") {
-      const again = el("button", { class: "btn btn-secondary btn-sm", type: "button" }, icon("refresh"), "Try again");
-      again.addEventListener("click", () => { W.sent = null; try { sessionStorage.removeItem(PENDING_KEY); } catch { /* ignore */ } render(); });
-      kids.push(el("div", { class: "row" }, again));
-    } else if (p.phase !== "confirmed") {
-      kids.push(el("p", { class: "small muted" }, "Don't send it again while this is pending."));
+      ui.set({ state: "failed", title: successHeadline({ state: "failed" }), text: "Nothing was sent to the agent; only the network fee was spent.", actions: [again] });
+    } else if (p.phase === "pending" || p.phase === "slow") {
+      ui.set({ state: "pending", title: p.phase === "slow" ? "Still waiting for Celo" : successHeadline({ state: "pending", amount: sendText, to }),
+        text: p.phase === "slow" ? ["It can still go through. ", txLink(p.hash, "Check it on Celoscan")] : "Waiting for Celo to confirm. Usually a few seconds; don't send it again.", actions: [] });
+    } else if (state.payout) {
+      const href = isReg ? `receipt.html#p=${state.payout.hash}` : `receipt.html#p=${state.payout.hash}&r=${req.id}`;
+      ui.set({ state: "paid", title: successHeadline({ state: "paid", to }), text: `The agent paid ${to} in ${recvWord}.`, alert: null,
+        actions: [done, el("a", { class: "btn btn-secondary", href }, "Open receipt", icon("right"))] });
+    } else if (refused() || selfPaid()) {
+      ui.set({ state: "failed", title: `${to} wasn't paid`, text: "", actions: [done],
+        alert: el("div", { class: "alert err" }, icon("alert"), el("span", {}, refunded() ? refundedText(state.agent) : selfPaid() ? "This payment came from the wallet the link pays, so the agent won't pay it out." : refusedNote(state.agent.reason))) });
+    } else {
+      ui.set({ state: "done", title: successHeadline({ state: "done", amount: sendText, to }), alert: null,
+        text: `Celo confirmed it. The agent pays ${to} in ${recvWord} when autopilot next runs; this page updates by itself.`, actions: [done, status] });
     }
-    return el("div", { class: "pay-wallet" }, ...kids);
+    return ui.el;
   }
   async function track() {
     const p = W.sent;
@@ -767,34 +810,6 @@ async function findPayout(tokenAddr, deposit, recipient = null) {
     found = t; // newest first, so the last match is the earliest
   }
   return found && { hash: found.transaction_hash, to: found.to?.hash, ts: found.ts };
-}
-
-/** Draw the QR code as DOM SVG (no innerHTML, no data: URLs, so it works under the page's CSP). */
-function renderQr(text) {
-  const box = $("#l-qr");
-  const lib = globalThis.qrcode;
-  if (typeof lib !== "function") {
-    box.replaceChildren(el("p", { class: "small muted" }, "The QR code couldn't be drawn. Use \"Open in wallet\" or send it by hand."));
-    return;
-  }
-  const qr = lib(0, "M");
-  qr.addData(text);
-  qr.make();
-  const n = qr.getModuleCount(), quiet = 4, size = n + quiet * 2;
-  let d = "";
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c + quiet} ${r + quiet}h1v1h-1z`;
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
-  svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", "QR code of the wallet payment link");
-  svg.setAttribute("shape-rendering", "crispEdges");
-  const bg = document.createElementNS(ns, "rect");
-  bg.setAttribute("width", size); bg.setAttribute("height", size); bg.setAttribute("fill", "#fff");
-  const path = document.createElementNS(ns, "path");
-  path.setAttribute("d", d); path.setAttribute("fill", "#07120c");
-  svg.append(bg, path);
-  box.replaceChildren(svg);
 }
 
 // =====================================================================
