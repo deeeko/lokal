@@ -529,6 +529,8 @@ a.nt-linkfield:focus-visible { outline: 2px solid var(--mint); outline-offset: 2
 
 /* "Who am I paying?" folded to one line when nothing warns; warnings always open */
 .trust-line .dc-toggle > svg.i:first-child { color: var(--mint); }
+/* with a warning showing, the shield is neutral: green would read as "all clear" */
+.trust-line.has-warn .dc-toggle > svg.i:first-child { color: var(--text-3); }
 .trust-line .trust-ok { color: var(--mint); font-weight: 600; }
 .trust-line.has-warn { display: grid; gap: 6px; }
 
