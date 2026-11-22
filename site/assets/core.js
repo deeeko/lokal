@@ -1052,4 +1052,8 @@ export function initChrome() {
   if (document.getElementById("sb-user") || document.getElementById("nav-user")) {
     import("./session.js").then((m) => m.initUserChip()).catch(() => { /* the static "Sign in" link stays */ });
   }
+  // the notification bell (signed in only): the app top bar's slot, or the landing / Features / Proof top bar (not the gateway)
+  if (document.getElementById("nav-bell") || document.getElementById("lp-signin")) {
+    import("./bell.js").then((m) => m.initBell()).catch(() => { /* no bell; the page works the same */ });
+  }
 }

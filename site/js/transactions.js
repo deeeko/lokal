@@ -3,7 +3,7 @@
 // still has a public receipt on receipt.html, and the chain itself is public on Celoscan.)
 import { receiptNo, celoscanTx, lagosTime, short, el, badge, icon, toast, download, $, initChrome } from "../assets/core.js";
 import { getSession, onSessionChange, watchSession } from "../assets/session.js";
-import { loadMyActivity } from "../assets/my-activity.js";
+import { sharedActivity } from "../assets/my-activity.js";
 import { activityVisible } from "../assets/front-door.js";
 
 initChrome();
@@ -77,7 +77,7 @@ async function load(force = false) {
   Object.assign(mine, { address: s.address, rows: null, more: false, loading: true, failed: false });
   render();
   try {
-    const { rows, more } = await loadMyActivity(s.address);
+    const { rows, more } = await sharedActivity(s.address, { force });
     if (gen !== mine.gen) return;
     Object.assign(mine, { rows, more });
   } catch {

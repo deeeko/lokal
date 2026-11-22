@@ -2,6 +2,16 @@
 
 Newest first. This was the README's progress log; it moved here when the README was cut to one page.
 
+## 2026-11-22: a notification bell
+
+- **Notification bell** (top right when signed in, on every app page and the landing, Features and Proof top bars):
+  a count of new incoming payments (1–9, then 9+) and a small dropdown of the latest five: money received, payments to
+  your tag, sprays into your pots and refunds, each linking to its receipt, Activity, the pot or the refund
+  transaction. Payers are never named. It checks on load, then every minute while the tab is visible, sharing one
+  read with the dashboard and Activity; only a "last seen" time per wallet is kept (`np-notif-seen`, in the privacy policy).
+- Tests for the event-to-item mapping, the unread count with and without storage, the polling rhythm and the gating;
+  `scripts/screenshots-bell.mjs` takes the bell and its dropdown at 390 px and 1440 px.
+
 ## 2026-11-21: a six-section landing, a Features page and a one-page README
 
 - **Landing** ([the website](ARCHITECTURE.md#the-website-landing-sign-up-dashboard)): six sections with one job each:

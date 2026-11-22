@@ -134,3 +134,27 @@ export function receivedTotals(rows) {
   }
   return [...by.values()].sort((a, b) => b.count - a.count);
 }
+
+// ---------- one read per minute, shared by everything on the page ----------
+// The dashboard, Activity and the notification bell can all ask for the same wallet's rows on one page. They share one
+// read (or one read in flight) for SHARED_MS, kept in memory only: nothing is stored, and a new page reads afresh.
+export const SHARED_MS = 60_000;
+const shared = new Map(); // lowercased address -> { at, maxPages, promise }
+/**
+ * loadMyActivity through the shared cache: a read of at least `maxPages` pages made in the last `ttl` ms (or still in
+ * flight) answers instead of a new one. `force` reads again. A failed read is forgotten at once, so a retry reads again.
+ */
+export function sharedActivity(address, { maxPages = 3, force = false, ttl = SHARED_MS, now = Date.now, load = loadMyActivity } = {}) {
+  const key = lc(address);
+  const hit = shared.get(key);
+  if (!force && hit && hit.maxPages >= maxPages && now() - hit.at < ttl) return hit.promise;
+  const entry = { at: now(), maxPages, promise: null };
+  entry.promise = Promise.resolve().then(() => load(address, { maxPages })).catch((e) => {
+    if (shared.get(key) === entry) shared.delete(key);
+    throw e;
+  });
+  shared.set(key, entry);
+  return entry.promise;
+}
+/** Forgets every shared read (tests, sign-out). */
+export const clearSharedActivity = () => shared.clear();

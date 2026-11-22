@@ -21,6 +21,13 @@ export const SIGNED_IN_PAGES = Object.freeze(["app.html", "transactions.html", "
 /** Activity shows rows only to a signed-in wallet (and only that wallet's own rows). */
 export const activityVisible = (session) => signedIn(session);
 
+/**
+ * The notification bell (assets/bell.js): only for a signed-in wallet, about that wallet's own incoming payments. It
+ * sits in the app top bar on every app page, and in the landing, Features and Proof top bars when a session exists.
+ * Signed out, nothing is rendered and nothing is read.
+ */
+export const bellVisible = (session) => signedIn(session);
+
 /** What the dashboard shows: "signed-out" | "loading" | "no-tag" | "tag". tag: undefined while unknown, null when none. */
 export function dashboardView(session, tag) {
   if (!signedIn(session)) return "signed-out";

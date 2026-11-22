@@ -112,6 +112,8 @@ Your activity, Receipts, Verify, Agent and Autopilot; Docs groups Docs, Cash out
 checked by their own rules (Proof and Features must carry the landing's footer links, and the landing must link both). Below 1100 px the app top bar is a full-width bar whose height is reserved, so it never sits
 on top of page content.
 
+**Notification bell.** Signed in, a bell sits top right (the app top bar's `#nav-bell` slot, alone at the top right on desktop, and the landing, Features and Proof top bars): a count of new incoming payments (1–9, then 9+) and a small dropdown of the latest five (payouts to you → receipt, payments to your tag → Activity, sprays into your pots → the pot, refunds → the refund transaction), never naming a payer; `site/assets/notifications.js` builds them from the same reads as the dashboard (one shared read a minute, polled only while the tab is visible) and keeps only a "last seen" time per wallet (`np-notif-seen`).
+
 **Design.** A deeper, calmer green ground (`#06110c`, raised `#0a1a12`, frames `#0c1f16`), text that clears WCAG AA,
 and Celo yellow (`#fcff52`) only for the one filled action, the cursive *lokal* and the arrows of text links. General
 Sans Light for big display lines (tight tracking), General Sans for body (no tracking), Sentient Italic for the one

@@ -21,7 +21,7 @@ import {
 import { potMeter, potBadge, potShare } from "../assets/pot-ui.js";
 import { ntagCard, stage, shareBlock, contractEntry, greeting, alertBox, plainError, waitForReceipt, sameAddr } from "../assets/ntag-ui.js";
 import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
-import { loadMyActivity, receivedTotals } from "../assets/my-activity.js";
+import { sharedActivity, receivedTotals } from "../assets/my-activity.js";
 import { addToWalletRow } from "../assets/wallet-assets.js";
 import { dashboardView, potsView, canClosePot } from "../assets/front-door.js";
 
@@ -590,7 +590,7 @@ async function render() {
   root.replaceChildren(...[note, hero, pots,
     el("div", { class: "dash-grid" }, received, recent, linksSection(s), walletSection()),
     view === "tag" ? settingsSection(s) : null].filter(Boolean));
-  const loadActivity = () => loadMyActivity(s.address).then(({ rows }) => {
+  const loadActivity = (force = false) => sharedActivity(s.address, { force }).then(({ rows }) => {
     if (my !== seq) return;
     received.fill(rows, false); recent.fill(rows, false, loadActivity);
   }).catch(() => { if (my !== seq) return; received.fill([], true); recent.fill([], true, loadActivity); });

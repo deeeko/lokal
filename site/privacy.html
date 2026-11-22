@@ -85,6 +85,7 @@
       <a href="get-paid.html">Get paid</a>
       <a href="transactions.html" data-also="receipt.html verify.html agent.html autopilot.html">Activity</a>
     </div>
+    <div class="nav-bell" id="nav-bell" hidden></div>
     <div class="nav-user" id="nav-user"><a class="nav-user-btn signed-out" href="start.html" aria-label="Sign in with your wallet"><svg class="i"><use href="#i-user"/></svg><span>Sign in</span></a></div>
     <button class="icon-btn menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar"><svg class="i"><use href="#i-menu"/></svg></button>
   </nav>
@@ -127,6 +128,7 @@
       <ul>
         <li><strong>Your privacy choice</strong> is saved so we don't keep asking.</li>
         <li><strong>Your sign-in</strong>, if you sign in (see above).</li>
+        <li><strong>When you last opened your notifications</strong>, if you're signed in: one time per wallet (<code>np-notif-seen</code>), so the bell counts only what's new. No amounts, no payments, nobody else's address. It works like the sign-in, so it's kept whatever your privacy choice; if your browser blocks storage, everything simply shows as new on each visit.</li>
         <li><strong>Your Lokal tag</strong>, if you're signed in: the tag your wallet holds is kept for 5 minutes in this tab's session storage, so each page doesn't look it up again. It's public anyway and is deleted when you close the tab or sign out.</li>
         <li><strong>Your layout</strong> (sidebar open or collapsed), <strong>the last currency you picked</strong> (naira, rupiah or pesos) and <strong>the Lokal tags you've paid from this browser</strong> (just the tags, so a tag page can warn you about a first-time payee or a lookalike tag) are saved <em>only if you say "Sure"</em>. Saying "No thanks" deletes them.</li>
       </ul>

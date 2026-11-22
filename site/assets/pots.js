@@ -239,9 +239,9 @@ export function parseBlockscoutLogs(json) {
     blockNumber: hexNum(r.blockNumber), logIndex: hexNum(r.logIndex), transactionHash: r.transactionHash, timeStamp: hexNum(r.timeStamp),
   }));
 }
-/** The Blockscout URL for LokalPots logs with these topics (topic0 first; null = any). */
-export function blockscoutLogsUrl(topics, fromBlock = LOKAL_POTS_BLOCK) {
-  const q = new URLSearchParams({ module: "logs", action: "getLogs", address: LOKAL_POTS, fromBlock: String(fromBlock), toBlock: "latest" });
+/** The Blockscout URL for a contract's logs with these topics (topic0 first; null = any): LokalPots unless `address` says otherwise. */
+export function blockscoutLogsUrl(topics, fromBlock = LOKAL_POTS_BLOCK, address = LOKAL_POTS) {
+  const q = new URLSearchParams({ module: "logs", action: "getLogs", address, fromBlock: String(fromBlock), toBlock: "latest" });
   const set = topics.map((t, i) => [i, t]).filter(([, t]) => t != null);
   for (const [i, t] of set) q.set(`topic${i}`, t);
   for (let k = 1; k < set.length; k++) q.set(`topic${set[k - 1][0]}_${set[k][0]}_opr`, "and");

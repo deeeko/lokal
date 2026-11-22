@@ -70,6 +70,8 @@ for (const page of pages) {
     }
     if (!/\sid="sb-user"/.test(html)) fail(`${page}: sidebar is missing the user chip slot (id="sb-user")`);
     if (!/\sid="nav-user"/.test(html)) fail(`${page}: top bar is missing the sign-in button slot (id="nav-user")`);
+    // the notification bell's slot sits right before the account button, hidden until a session exists (assets/bell.js)
+    if (!/<div class="nav-bell" id="nav-bell" hidden><\/div>\s*<div class="nav-user" id="nav-user">/.test(html)) fail(`${page}: top bar is missing the notification bell slot (<div class="nav-bell" id="nav-bell" hidden></div> before #nav-user)`);
     // signed out, the user chip leads to the sign-up gateway; the footer leads back to the landing ("About Lokal")
     if (!/<div class="sb-user" id="sb-user"><a [^>]*href="(?:\/lokal\/)?start\.html"/.test(html)) fail(`${page}: the signed-out user chip should link to start.html (the sign-up gateway)`);
     if (!/<footer class="site-footer">[^]*?href="(?:\/lokal\/)?index\.html\?about"/.test(html)) fail(`${page}: the footer should link "About Lokal" (index.html?about)`);
