@@ -41,11 +41,26 @@ const money2 = (n) => {
  * the agent's and the contract's) is lower than one payment's cap. capUsd: one payment's cap; roomUsd: room today
  * (null when unknown); exact: whether the room is exact.
  */
-export function limitsSummary({ capUsd, roomUsd = null, exact = false }) {
+export function limitsSummary({ capUsd, roomUsd = null, exact = false, unchecked = false }) {
+  // unchecked: today's room couldn't be read (the agent's or the contract's); that is said in the line, never folded
+  const tail = unchecked ? " · couldn't check today's limit" : "";
   if (roomUsd != null && Number.isFinite(roomUsd) && roomUsd < capUsd - 0.005) {
-    return roomUsd < 1 ? "No room left today" : `Up to ${exact ? "" : "about "}${money2(roomUsd)} today`;
+    return (roomUsd < 1 ? "No room left today" : `Up to ${exact ? "" : "about "}${money2(roomUsd)} today`) + tail;
   }
-  return `Up to ${money2(capUsd)}`;
+  return `Up to ${money2(capUsd)}` + tail;
+}
+
+/**
+ * The link's state badge with the time left, so the deadline is always in view: { text, kind } for badge(text, kind).
+ * "Open · 2 d left", "Open · 5 h left", "Open · 12 min left" (warn under 10 minutes), "Open · under 1 min left",
+ * "Expired". Always rounded down, so it never promises more time than there is.
+ */
+export function expiryBadge(leftMs) {
+  const s = Math.floor(Number(leftMs) / 1000);
+  if (!(s > 0)) return { text: "Expired", kind: "err" };
+  const d = Math.floor(s / 86400), h = Math.floor(s / 3600), m = Math.floor(s / 60);
+  const left = d >= 1 ? `${d} d` : h >= 1 ? `${h} h` : m >= 1 ? `${m} min` : "under 1 min";
+  return { text: `Open · ${left} left`, kind: s < 600 ? "warn" : "neutral" };
 }
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -72,6 +87,11 @@ export function trustSummary(tag, a, ago = null) {
 }
 /** The trust card's warnings are never folded: true when the card must stay open (any warning at all). */
 export const trustMustShow = (a) => Boolean(a?.warnings?.length);
+/** The checks that couldn't run, in words, always in view: "Couldn't check: owner changes, name changes." or null. */
+export function unknownChecksText(a) {
+  const u = a?.unknown ?? [];
+  return u.length ? `Couldn't check: ${u.map((c) => c.short).join(", ")}.` : null;
+}
 
 /** What a payer's choice is called: "Naira", "Rupiah", "Peso (AR)", "Peso (CO)", "Dollars". */
 export function receiveName(code) {
@@ -83,6 +103,13 @@ export function defaultReceive({ receive = null, currency = null } = {}) {
   if (receive === "usdt") return "usd";
   return currencyOf(currency) ? currency : "cngn";
 }
+/**
+ * The accessible name of the "Change" / "Done" button on the currency line. It starts with the visible word (WCAG
+ * 2.5.3, label in name): "Change (They receive: Naira)", "Change (You receive: Dollars)", "Done choosing the currency".
+ */
+export function choiceButtonLabel({ open = false, label = "They receive", code } = {}) {
+  return open ? "Done choosing the currency" : `Change (${label}: ${receiveName(code)})`;
+}
 
 // ---------- sharing ----------
 /** True when this browser has the Web Share API (mostly phones). */
@@ -92,11 +119,15 @@ export const shareActions = (canShare) => (canShare ? ["share", "copy"] : ["copy
 /** After navigator.share() fails: "none" when the person closed the share sheet, else "copy" (fall back to copying). */
 export const shareFallback = (err) => (err?.name === "AbortError" ? "none" : "copy");
 
-/** The calm confirmation's headline: "10.00 USD₮ is on its way to @ada" (or the honest version for each step). */
+/**
+ * The calm confirmation's headline: "10.00 USD₮ is on its way to @ada" (or the honest version for each step).
+ * "held": sent, but the page already knew the payout would wait or be refused, so nothing is promised.
+ */
 export function successHeadline({ state, amount, to }) {
   if (state === "pending") return `Sending ${amount} to ${to}…`;
   if (state === "paid") return `${to} has been paid`;
   if (state === "failed") return "The payment didn't go through";
+  if (state === "held") return `Sent, but ${to} may not be paid yet`;
   return `${amount} is on its way to ${to}`;
 }
 
@@ -143,6 +174,8 @@ export function wireDisclosure(button, panel = document.getElementById(button.ge
   const textNode = button.querySelector(".dc-more-text");
   const set = (open, instant = false) => {
     if (open && !rendered) { rendered = true; opts.render(panel); }
+    // a closing panel takes no focus and is out of the accessibility tree while it fades (hidden comes at the end)
+    panel.inert = !open;
     button.setAttribute("aria-expanded", String(open));
     if (textNode && labels.closed && labels.open) textNode.textContent = open ? labels.open : labels.closed;
     if (instant) panel.hidden = !open; else animate(panel, open);
@@ -273,11 +306,11 @@ export function currencyChoice({ picker, label = "They receive", id } = {}) {
   const btn = el("button", { class: "linklike cc-change", type: "button", "aria-expanded": "false", "aria-controls": pid }, "Change");
   const panel = el("div", { class: "dc-panel cc-panel", id: pid, hidden: true }, el("div", { class: "dc-inner" }, picker.el));
   const line = el("p", { class: "cc-line" }, el("span", { class: "cc-label" }, label + ":"), flag, name, el("span", { class: "cc-dot", "aria-hidden": "true" }, "·"), btn);
-  const api = wireDisclosure(btn, panel, { onToggle: (open) => { btn.textContent = open ? "Done" : "Change"; btn.setAttribute("aria-label", open ? "Close the currency choices" : `Change what they receive (now ${receiveName(picker.value)})`); } });
+  const api = wireDisclosure(btn, panel, { onToggle: (open) => { btn.textContent = open ? "Done" : "Change"; btn.setAttribute("aria-label", choiceButtonLabel({ open, label, code: picker.value })); } });
   const refresh = () => {
     name.textContent = receiveName(picker.value);
     flag.replaceChildren(el("span", { class: `cur-flag cur-flag-${picker.value === "usdt" ? "usd" : picker.value}`, "aria-hidden": "true" }));
-    if (!api.isOpen()) btn.setAttribute("aria-label", `Change what they receive (now ${receiveName(picker.value)})`);
+    if (!api.isOpen()) btn.setAttribute("aria-label", choiceButtonLabel({ open: false, label, code: picker.value }));
   };
   refresh();
   return { el: el("div", { class: "cc" }, line, panel), refresh, open: api.open, close: api.close };
@@ -300,14 +333,17 @@ export function successPanel({ detailsLabel = "Details" } = {}) {
   return {
     el: root, heading, details: details.inner,
     set({ state, title, text: t, actions: acts, alert: al } = {}) {
-      if (state) {
+      if (state && root.dataset.state !== state) {
         root.dataset.state = state;
-        mark.replaceChildren(state === "pending" ? "" : state === "failed" ? icon("x") : icon("check"));
+        mark.replaceChildren(state === "pending" ? "" : state === "failed" ? icon("x") : state === "held" ? icon("alert") : icon("check"));
       }
       if (title != null) heading.textContent = title;
-      if (t != null) text.replaceChildren(...[].concat(t));
-      if (al !== undefined) alert.replaceChildren(...[].concat(al ?? []));
-      if (acts) actions.replaceChildren(...acts.filter(Boolean));
+      // the sentence and the alert are live regions: the same words again are not re-announced (pages poll every 10 s)
+      const words = (nodes) => nodes.map((n) => (typeof n === "string" ? n : n?.textContent ?? "")).join("");
+      if (t != null) { const next = [].concat(t); if (!next.every((n) => typeof n === "string") || words(next) !== text.textContent) text.replaceChildren(...next); }
+      if (al !== undefined) { const next = [].concat(al ?? []), w = words(next); if (!w || w !== alert.textContent) alert.replaceChildren(...next); }
+      // the same buttons stay where they are, so keyboard focus on one survives an update
+      if (acts) { const next = acts.filter(Boolean); if (next.length !== actions.childNodes.length || next.some((n, i) => actions.childNodes[i] !== n)) actions.replaceChildren(...next); }
     },
   };
 }

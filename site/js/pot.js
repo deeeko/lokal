@@ -500,8 +500,18 @@ function sprayForm() {
         el("li", {}, el("span", {}, "You sprayed"), el("span", {}, `${fmt(a.units)} ${PAY[code].token}`)),
         el("li", {}, el("span", {}, "From"), el("span", { class: "mono" }, short(from))),
         el("li", {}, el("span", {}, "Transaction"), txLink(hash))));
-      ok.set({ state: "done", title: successHeadline({ state: "done", amount: fmt(a.units).replace(/\.00$/, ""), to: hostName() }),
-        text: `It's on the wall. The agent pays ${hostName()} in ${gets} when autopilot next runs.`, actions: [done] });
+      // the estimate already said the currency isn't quoting on Textile FX: the confirmation promises nothing then
+      const r = S.rate;
+      const unquoted = code === "usdt" && want !== "usdt" && !(r?.rates?.[want] && r.available[want]);
+      if (unquoted) {
+        ok.set({ state: "held", title: successHeadline({ state: "held", to: hostName() }),
+          alert: alertBox("warn", "alert", el("p", {}, el("b", {}, "This payout may be refused. "),
+            `${currencyOf(want).label} isn't quoting on Textile FX right now. If it still isn't when the agent pays, the agent refuses the payout (it never pays another currency) and the money stays with the agent.`)),
+          text: "It's on the wall, but read the warning: this payout may not be paid.", actions: [done] });
+      } else {
+        ok.set({ state: "done", title: successHeadline({ state: "done", amount: fmt(a.units).replace(/\.00$/, ""), to: hostName() }),
+          text: `It's on the wall. The agent pays ${hostName()} in ${gets} when autopilot next runs.`, actions: [done] });
+      }
       node.replaceChildren(ok.el);
       requestAnimationFrame(() => ok.heading.focus({ preventScroll: true }));
       S.busy = false;

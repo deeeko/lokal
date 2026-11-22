@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
   SAFETY_CRITICAL, ON_DEMAND, alwaysShown, summaryLine, rateSummary, limitsSummary, tagAgeText, trustSummary, trustMustShow,
-  receiveName, defaultReceive, canWebShare, shareActions, shareFallback, successHeadline,
+  receiveName, defaultReceive, canWebShare, shareActions, shareFallback, successHeadline, unknownChecksText, expiryBadge,
+  choiceButtonLabel,
 } from "../site/assets/disclose.js";
 import { assessTag, agoText } from "../site/assets/trust.js";
 
@@ -47,6 +48,21 @@ test("limitsSummary: one payment's cap, or today's smaller room", () => {
   assert.equal(limitsSummary({ capUsd: 25, roomUsd: 12.999 }), "Up to about $12.99 today", "rounded down, never up");
   assert.equal(limitsSummary({ capUsd: 25, roomUsd: 0.4 }), "No room left today");
   assert.equal(limitsSummary({ capUsd: 25, roomUsd: NaN }), "Up to $25");
+  // a room that couldn't be read is said in the line itself, never only behind "Limits"
+  assert.equal(limitsSummary({ capUsd: 25, unchecked: true }), "Up to $25 · couldn't check today's limit");
+  assert.equal(limitsSummary({ capUsd: 25, roomUsd: 12.5, unchecked: true }), "Up to about $12.50 today · couldn't check today's limit");
+});
+
+test("expiryBadge keeps the time left in view, rounded down, a warning under 10 minutes", () => {
+  const MIN = 60_000, HOUR = 60 * MIN;
+  assert.deepEqual(expiryBadge(47 * HOUR + 59 * MIN), { text: "Open · 1 d left", kind: "neutral" });
+  assert.deepEqual(expiryBadge(5 * HOUR + 30 * MIN), { text: "Open · 5 h left", kind: "neutral" });
+  assert.deepEqual(expiryBadge(59 * MIN + 59_000), { text: "Open · 59 min left", kind: "neutral" });
+  assert.deepEqual(expiryBadge(10 * MIN), { text: "Open · 10 min left", kind: "neutral" });
+  assert.deepEqual(expiryBadge(10 * MIN - 1000), { text: "Open · 9 min left", kind: "warn" });
+  assert.deepEqual(expiryBadge(59_999), { text: "Open · under 1 min left", kind: "warn" });
+  assert.deepEqual(expiryBadge(20_000), { text: "Open · under 1 min left", kind: "warn" });
+  for (const ms of [999, 0, -5000, NaN]) assert.deepEqual(expiryBadge(ms), { text: "Expired", kind: "err" }, String(ms));
 });
 
 test("tagAgeText turns trust.js agoText into a tag's age", () => {
@@ -92,6 +108,24 @@ test("Who am I paying?: any warning keeps the card open, and the line never clai
   assert.equal(trustSummary("ada", null).ok, false);
 });
 
+test("Who am I paying?: the checks that couldn't run are named, for the line that is always in view", () => {
+  assert.equal(unknownChecksText(assess()), null, "every check ran");
+  const noConsent = assess({ consent: false, paidTags: [] });
+  assert.ok(noConsent.warnings.length, "the first-time warning shows too");
+  assert.equal(unknownChecksText(noConsent), "Couldn't check: tags you've paid.");
+  // a tag claimed 3 days ago whose holder history couldn't be read: owner and name changes are unknown
+  const since = NOW - 3 * DAY;
+  const blind = assessTag({ tag: "ada", entry: { owner: OWNER, since, name: "Ada", source: "contract" }, history: null, legacyClaims: null,
+    paid: { consent: false, tags: [] }, nowSec: NOW });
+  assert.equal(unknownChecksText(blind), "Couldn't check: owner changes, tags you've paid, name changes.");
+  assert.equal(unknownChecksText(null), null);
+  const read = (f) => fs.readFileSync(new URL(`../site/${f}`, import.meta.url), "utf8");
+  // the tag page puts that line outside the folded "Who am I paying?" facts, next to the warnings or under the line
+  const tag = read("js/tag.js");
+  assert.match(tag, /a\.warnings\.map\(warn\)\), unknownLine\)/);
+  assert.match(tag, /\}\)\.el, unknownLine\]\.filter\(Boolean\)/);
+});
+
 test("the currency line: names and the starting choice (the recipient's preference, else naira)", () => {
   assert.equal(receiveName("cngn"), "Naira");
   assert.equal(receiveName("idrx"), "Rupiah");
@@ -105,6 +139,10 @@ test("the currency line: names and the starting choice (the recipient's preferen
   assert.equal(defaultReceive({}), "cngn");
   assert.equal(defaultReceive({ currency: "nope" }), "cngn");
   assert.equal(defaultReceive(), "cngn");
+  // the Change / Done button's accessible name starts with the word on it, and names the page's own label
+  assert.equal(choiceButtonLabel({ open: false, label: "They receive", code: "cngn" }), "Change (They receive: Naira)");
+  assert.equal(choiceButtonLabel({ open: false, label: "You receive", code: "usd" }), "Change (You receive: Dollars)");
+  assert.match(choiceButtonLabel({ open: true, label: "You receive", code: "idrx" }), /^Done /);
 });
 
 test("sharing: the Web Share API where it exists, else Copy link and WhatsApp", () => {
@@ -125,6 +163,22 @@ test("the success headline is honest about each step", () => {
   assert.equal(successHeadline({ state: "done", amount: "10.00 USD₮", to: "@ada" }), "10.00 USD₮ is on its way to @ada");
   assert.equal(successHeadline({ state: "paid", to: "@ada" }), "@ada has been paid");
   assert.equal(successHeadline({ state: "failed" }), "The payment didn't go through");
+  // the page already knew the payout would wait or be refused: nothing is promised
+  assert.equal(successHeadline({ state: "held", amount: "10.00 USD₮", to: "@ada" }), "Sent, but @ada may not be paid yet");
+  assert.doesNotMatch(successHeadline({ state: "held", amount: "10.00 USD₮", to: "@ada" }), /on its way|has been paid/);
+});
+
+test("the confirmations speak only for the payer's own payment, and link to it honestly", () => {
+  const read = (f) => fs.readFileSync(new URL(`../site/${f}`, import.meta.url), "utf8");
+  const pay = read("js/pay.js"), tag = read("js/tag.js");
+  // verify.html only checks the attribution tag; it never shows whether the agent paid
+  for (const [name, src] of [["pay.js", pay], ["tag.js", tag]]) {
+    assert.doesNotMatch(src, /verify\.html\?tx=/, name);
+    assert.doesNotMatch(src, /"Check status"/, name);
+  }
+  // the link's first matching deposit decides "paid" or "refused" only when it is this tab's own transaction
+  assert.match(pay, /const mine = Boolean\(state\.deposit\) && sameAddr\(state\.deposit\.hash, p\.hash\)/);
+  assert.match(pay, /else if \(state\.deposit && !mine\)/);
 });
 
 test("the pay pages draw no QR code until someone asks for one", () => {

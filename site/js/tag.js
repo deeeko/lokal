@@ -10,7 +10,7 @@ import {
 } from "../assets/lokal-contracts.js";
 import { currencyPicker } from "../assets/currency-ui.js";
 import {
-  disclosure, currencyChoice, successPanel, successHeadline, rateSummary, limitsSummary, trustSummary, defaultReceive,
+  disclosure, currencyChoice, successPanel, successHeadline, rateSummary, limitsSummary, trustSummary, defaultReceive, unknownChecksText,
 } from "../assets/disclose.js";
 import { getSession, explainWalletError, injectedWallet, ensureCelo, CELO_CHAIN } from "../assets/session.js";
 import {
@@ -199,13 +199,13 @@ function whoCard(tag, entry) {
     const p = a.payments;
     const paid = el("span", { title: p.state === "ok" ? "Through LokalTags, to this owner. Payers aren't shown." : p.reason },
       p.state !== "ok" ? "Couldn't check" : p.count === 0 ? "None yet" : `${p.count}${p.capped ? "+" : ""} since ${dayMonthYear(p.since ?? a.age.since)}`);
-    const facts = [
-      el("ul", { class: "kv-list" },
-        el("li", {}, el("span", {}, "Tag age"), el("span", {}, age)),
-        el("li", {}, el("span", {}, "Payments received"), paid),
-        el("li", {}, el("span", {}, "Owner"), owner)),
-      a.unknown.length ? el("p", { class: "micro muted trust-unknown" }, `Couldn't check: ${a.unknown.map((u) => u.short).join(", ")}.`) : null,
-    ];
+    const facts = el("ul", { class: "kv-list" },
+      el("li", {}, el("span", {}, "Tag age"), el("span", {}, age)),
+      el("li", {}, el("span", {}, "Payments received"), paid),
+      el("li", {}, el("span", {}, "Owner"), owner));
+    // a check that couldn't run is never folded either: which ones, in words, next to the warnings or under the line
+    const unknownText = unknownChecksText(a);
+    const unknownLine = unknownText ? el("p", { class: "micro muted trust-unknown" }, unknownText) : null;
     if (a.warnings.length) {
       // a warning is never folded: each one in full (with its reason), then the facts on demand
       const warn = (c) => el("li", {}, icon("alert"), el("span", {}, el("span", { class: "sr-only" }, "Warning: "), c.title,
@@ -213,17 +213,17 @@ function whoCard(tag, entry) {
       root.classList.add("has-warn");
       root.replaceChildren(
         el("div", { class: "trust-alert", role: "alert" }, el("p", { class: "trust-head" }, el("b", {}, `Before you pay @${tag}`)),
-          el("ul", { class: "trust-warns" }, a.warnings.map(warn))),
+          el("ul", { class: "trust-warns" }, a.warnings.map(warn)), unknownLine),
         disclosure({ lead: icon("shield"), summary: "Who am I paying?", content: facts, cls: "boxed" }).el);
       return;
     }
     root.classList.remove("has-warn");
     const line = trustSummary(tag, a, a.age.since ? a.age.text.replace(/^Claimed /, "") : null);
-    root.replaceChildren(disclosure({
+    root.replaceChildren(...[disclosure({
       lead: icon("shield"), cls: "boxed",
       summary: [line.text, line.ok ? el("span", { class: "trust-ok" }, " ", el("span", { "aria-hidden": "true" }, "✓"), el("span", { class: "sr-only" }, "Every check passed.")) : null],
       content: facts,
-    }).el);
+    }).el, unknownLine].filter(Boolean));
   }
   return { el: root, show };
 }
@@ -442,25 +442,30 @@ function payCard(tag, entry, beforePay = null) {
   }
   /** "Up to $25", or "Up to about $12.50 today" when today's room (the agent's or the contract's) is lower. */
   function limitsLine() {
+    // a room that couldn't be read is said in the line itself, not only behind "Limits"
+    const unchecked = Boolean(P.allowance?.error) || Boolean(C && P.room?.error);
     if (!isNaira()) {
       const rr = P.rate?.reverseRate;
-      return rr ? `Up to about ₦${ngnText(Math.floor(CNGN_CAP_USD / rr))}` : `Up to about $${CNGN_CAP_USD} in value`;
+      return (rr ? `Up to about ₦${ngnText(Math.floor(CNGN_CAP_USD / rr))}` : `Up to about $${CNGN_CAP_USD} in value`) + (unchecked ? " · couldn't check today's limit" : "");
     }
     const alw = P.allowance && !P.allowance.error ? P.allowance : null;
     const room = C && P.room && !P.room.error ? Number(P.room.room) / 1e6 : null;
     const rooms = [alw?.leftUsd, room].filter((x) => x != null && Number.isFinite(x));
     const left = rooms.length ? Math.min(...rooms) : null;
-    return limitsSummary({ capUsd: CAP, roomUsd: left, exact: Boolean(alw?.exact) && (room == null || room <= (alw?.leftUsd ?? Infinity)) });
+    return limitsSummary({ capUsd: CAP, roomUsd: left, exact: Boolean(alw?.exact) && (room == null || room <= (alw?.leftUsd ?? Infinity)), unchecked });
+  }
+  /** Why this payout would wait (over the agent's total for today across everyone), or null. */
+  function waitNote(a) {
+    const alw = P.allowance && !P.allowance.error ? P.allowance : null;
+    if (a.error || !alw || !Number.isFinite(alw.globalLeftUsd) || !(a.usd > alw.globalLeftUsd + 0.005)) return null;
+    return `The agent can pay out ${alw.exact ? "" : "about "}${dollars(alw.globalLeftUsd)} more today across everyone, so it pays this when there's room.`;
   }
   /** What would block or delay this payment, in full: the contract's or the agent's refusal, or a payout that would wait. */
   function renderRefusal(a, show) {
-    const alw = P.allowance && !P.allowance.error ? P.allowance : null;
     let node = null;
+    const wait = waitNote(a);
     if (show && a.limit) node = alertBox("err", "alert", el("p", {}, el("b", {}, "This payment would be refused. "), a.error));
-    else if (!a.error && alw && Number.isFinite(alw.globalLeftUsd) && a.usd > alw.globalLeftUsd + 0.005) {
-      node = alertBox("warn", "alert", el("p", {}, el("b", {}, "This payout would wait. "),
-        `The agent can pay out ${alw.exact ? "" : "about "}${dollars(alw.globalLeftUsd)} more today across everyone, so it pays this when there's room.`));
-    }
+    else if (wait) node = alertBox("warn", "alert", el("p", {}, el("b", {}, "This payout would wait. "), wait));
     const key = node ? node.textContent : "";
     if (refusal.dataset.key !== key) { refusal.dataset.key = key; refusal.replaceChildren(...(node ? [node] : [])); }
   }
@@ -615,7 +620,7 @@ function payCard(tag, entry, beforePay = null) {
       const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from, to: token.address, value: "0x0", data }] });
       if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
       rememberPaid(tag);
-      const pending = { hash, from, corridor, cents: a.cents, owner: entry.owner, since: entry.since, at: Date.now() };
+      const pending = { hash, from, corridor, cents: a.cents, owner: entry.owner, since: entry.since, at: Date.now(), held: waitNote(a) };
       try { sessionStorage.setItem(PENDING_KEY(tag), JSON.stringify(pending)); } catch { /* storage blocked: tracking works until the page closes */ }
       P.busy = false;
       track(pending, { scroll: true });
@@ -702,7 +707,7 @@ function payCard(tag, entry, beforePay = null) {
       const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from, to: LOKAL_TAGS, value: "0x0", data }] });
       if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
       rememberPaid(tag);
-      const pending = { hash, from, corridor, payCode, cents: a.cents, owner: entry.owner, since: entry.since, at: Date.now(), contract: true };
+      const pending = { hash, from, corridor, payCode, cents: a.cents, owner: entry.owner, since: entry.since, at: Date.now(), contract: true, held: waitNote(a) };
       try { sessionStorage.setItem(PENDING_KEY(tag), JSON.stringify(pending)); } catch { /* storage blocked: tracking works until the page closes */ }
       P.busy = false;
       track(pending, { scroll: true });
@@ -745,7 +750,7 @@ function payCard(tag, entry, beforePay = null) {
       step("paid", "Paid", ""));
     // the calm confirmation: one big mark, one sentence, Done; the steps and the transaction sit in Details
     const ok = successPanel();
-    const status = { replaceChildren: (...nodes) => ok.set({ alert: nodes }) }; // refusals and delays: always in view
+    const status = { replaceChildren: (...nodes) => ok.set({ alert: nodes }) }; // refusals and delays: always in view (said once)
     const source = el("p", { class: "micro muted" }); // where the status comes from: the agent's records or the chain
     const setSource = (fromAgent) => source.replaceChildren(sourceNote(fromAgent, "nt-source"));
     ok.details.append(list, source);
@@ -758,7 +763,8 @@ function payCard(tag, entry, beforePay = null) {
       renderForm();
       amountIn.focus();
     });
-    const statusLink = el("a", { class: "btn btn-secondary", href: `verify.html?tx=${p.hash}` }, "Check status", icon("right"));
+    // the payer's own transaction; the payout's status stays on this tracker (verify.html only checks the attribution tag)
+    const chainLink = el("a", { class: "btn btn-secondary", href: celoscanTx(p.hash), target: "_blank", rel: "noopener" }, "View on Celoscan", icon("ext"));
     const to = "@" + tag;
     const gets = p.corridor === "cngn-usdt" ? "dollars" : currencyOf(String(p.corridor).replace(/^(usdt|forward)-/, ""))?.plural ?? "their money";
     const slow = el("p", { class: "micro muted" });
@@ -787,14 +793,24 @@ function payCard(tag, entry, beforePay = null) {
       stopSlow?.();
       if (stopped) return;
       if (!rc) {
+        // the tracker stops here: a way back to the form (Done clears the saved payment), never a dead end
         set("chain", "", ["Not confirmed after five minutes. It may still go through. ", txLink(p.hash, "Check it on Celoscan")], "Waiting for Celo to confirm…");
-        ok.set({ title: "Still waiting for Celo", text: ["Not confirmed after five minutes. It may still go through. ", txLink(p.hash, "Check it on Celoscan")], alert: null });
+        done.textContent = "Back to the form";
+        ok.set({ state: "held", title: "Still waiting for Celo", text: "Not confirmed after five minutes. It may still go through, so only send it again if Celoscan shows it failed.",
+          alert: null, actions: [done, chainLink] });
         return;
       }
       set("chain", "done", "Confirmed.", "Celo confirmed it");
       set("agent", "active", "When autopilot next runs.");
-      ok.set({ state: "done", title: successHeadline({ state: "done", amount: sendText, to }), alert: null,
-        text: `Celo confirmed it. The agent pays ${to} in ${gets} when autopilot next runs; you can close this page.`, actions: [done, statusLink] });
+      if (p.held) {
+        // the page said before sending that this payout would wait: the confirmation says so too, and promises nothing
+        ok.set({ state: "held", title: successHeadline({ state: "held", to }),
+          alert: alertBox("warn", "alert", el("p", {}, el("b", {}, "This payout may wait. "), p.held)),
+          text: `Celo confirmed it. The agent pays ${to} in ${gets} when there's room; you can close this page.`, actions: [done, chainLink] });
+      } else {
+        ok.set({ state: "done", title: successHeadline({ state: "done", amount: sendText, to }), alert: null,
+          text: `Celo confirmed it. The agent pays ${to} in ${gets} when autopilot next runs; you can close this page.`, actions: [done, chainLink] });
+      }
       const until = p.at + PAYOUT_WATCH_MS;
       let noted = "";
       const showPaid = (no, gotText) => {
@@ -806,7 +822,9 @@ function payCard(tag, entry, beforePay = null) {
         toast(`@${tag} has been paid`);
         clear();
       };
-      const notPaid = (title) => ok.set({ state: "failed", title, text: "", actions: [done] });
+      // the outcome in the role=status sentence too, so it is announced
+      const notPaid = (title, sentence) => ok.set({ state: "failed", title, text: sentence, actions: [done] });
+      let refusedShown = false; // "refused" is final for the payout: nothing after it may say the agent will still pay
       const depositUnits = BigInt(p.cents) * 10_000n; // what the payer sent, to tell this transfer from others in the tx
       while (!stopped && Date.now() < until) {
         if (document.visibilityState === "visible") {
@@ -822,15 +840,16 @@ function payCard(tag, entry, beforePay = null) {
             if (ev?.status === "refunded") {
               setSource(true);
               set("agent", "err", "Not paid: sent back to you.");
-              notPaid("Not paid: sent back to you");
+              notPaid("Not paid: sent back to you", `${to} wasn't paid. The agent sent your payment back to you.`);
               status.replaceChildren(alertBox("", "info", el("p", {}, refundedLine(ev))));
               clear();
               return;
             }
-            if (ev?.status === "refused") {
+            if (ev?.status === "refused" && !refusedShown) {
+              refusedShown = true;
               setSource(true);
               set("agent", "err", "Not paid.");
-              notPaid(`${to} wasn't paid`);
+              notPaid(`${to} wasn't paid`, `${to} wasn't paid: the agent refused this payment.`);
               status.replaceChildren(alertBox("warn", "alert", el("p", {}, refusedNote(ev.reason))));
               // keep watching: a refund shows here as "Refunded"
             }
@@ -849,7 +868,7 @@ function payCard(tag, entry, beforePay = null) {
                 setSource(false);
                 const over = d.reason.kind === "over" || d.reason.kind === "day";
                 set("agent", "err", over ? "Above the limit — not paid automatically." : `${d.reason.text} — not paid.`);
-                notPaid(`${to} wasn't paid automatically`);
+                notPaid(`${to} wasn't paid automatically`, `${to} wasn't paid automatically. Your payment stays with the agent.`);
                 status.replaceChildren(alertBox("warn", "alert", el("p", {}, el("b", {}, `${d.reason.text}. `),
                   over ? `The agent's limits are ${LIMITS_TEXT}. ` : "", REFUSED_NOTE, " Your payment stays with the agent.")));
                 clear();
@@ -882,7 +901,8 @@ function payCard(tag, entry, beforePay = null) {
         }
         await sleep(PAYOUT_POLL_MS);
       }
-      if (!stopped) {
+      if (!stopped && refusedShown) set("agent", "err", "Not paid. No refund yet; come back later to check.");
+      else if (!stopped) {
         const line = "Not paid yet. The agent pays when autopilot next runs; check the Autopilot page, or come back later.";
         set("agent", "", line);
         ok.set({ text: line });

@@ -532,8 +532,9 @@ a.nt-linkfield:focus-visible { outline: 2px solid var(--mint); outline-offset: 2
 .trust-line .trust-ok { color: var(--mint); font-weight: 600; }
 .trust-line.has-warn { display: grid; gap: 6px; }
 
-/* a refusal the contract or the agent would make: always in view */
-.nt-refusal:empty { display: none; }
+/* a refusal the contract or the agent would make: always in view. Empty, it takes no room but stays in the
+   accessibility tree (never display:none), so a refusal added later is announced by its live region. */
+.nt-refusal:empty, .ok-alert:empty, .hide-empty:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* the calm confirmation after a payment */
 .ok-panel { display: grid; justify-items: center; gap: 10px; padding: 18px 0 4px; text-align: center; }
@@ -545,12 +546,12 @@ a.nt-linkfield:focus-visible { outline: 2px solid var(--mint); outline-offset: 2
 .ok-mark svg.i { width: 34px; height: 34px; stroke-width: 2.6; }
 .ok-panel[data-state="pending"] .ok-mark { background: none; box-shadow: none; border: 3px solid var(--line-strong); border-top-color: var(--celo); border-right-color: var(--celo); animation: nt-spin .9s linear infinite; }
 .ok-panel[data-state="failed"] .ok-mark { background: rgba(255, 143, 128, .14); color: var(--err); box-shadow: 0 0 0 10px rgba(255, 143, 128, .06); }
+.ok-panel[data-state="held"] .ok-mark { background: rgba(255, 204, 122, .14); color: var(--warn); box-shadow: 0 0 0 10px rgba(255, 204, 122, .06); }
 .ok-title { margin: 0; font-size: clamp(22px, 3vw, 28px); font-weight: 500; letter-spacing: -0.01em; line-height: 1.2; overflow-wrap: anywhere; }
 .ok-title:focus { outline: none; }
 .ok-title:focus-visible { outline: 2px solid var(--mint); outline-offset: 4px; border-radius: 6px; }
 .ok-text { margin: 0; max-width: 46ch; color: var(--text-2); font-size: 15px; }
 .ok-alert { width: 100%; text-align: left; }
-.ok-alert:empty { display: none; }
 .ok-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 6px; }
 .ok-actions .btn { min-width: 140px; }
 .ok-details { width: 100%; justify-items: center; text-align: left; }
@@ -574,4 +575,3 @@ a.nt-linkfield:focus-visible { outline: 2px solid var(--mint); outline-offset: 2
 .nt-from { margin: 0; }
 .nt-from .badge { margin-left: 6px; }
 .ok-details > .dc-toggle { justify-self: center; }
-.hide-empty:empty { display: none; }

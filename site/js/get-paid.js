@@ -138,11 +138,12 @@ async function refreshRegs() {
 // ---------- rendering ----------
 function renderCorridor() {
   const off = isNaira() && state.rate && !perUsd();
-  // a currency that would be refused is said in full under the line; the rest waits behind "Change"
+  // a currency that would be refused, or one MiniPay can't show, is said in full under the line; the rest waits behind "Change"
   $("#corridor-hint").classList.toggle("err", Boolean(off));
-  setText($("#corridor-hint"), off ? `${cur().label} isn't available on Textile FX right now. A payment would be refused until it is, so choose another currency or try later.` : "");
-  $("#corridor-hint").hidden = !off;
-  setText(choiceHint, isNaira() ? `The payer sends USD₮. You get ${cur().plural} (${cur().token}). Using MiniPay? Choose dollars (USD₮); MiniPay doesn't show local tokens yet.` : "The payer sends cNGN. You get USD₮ (dollars), which MiniPay shows.");
+  setText($("#corridor-hint"), off ? `${cur().label} isn't available on Textile FX right now. A payment would be refused until it is, so choose another currency or try later.`
+    : isNaira() ? "Using MiniPay? Choose dollars (USD₮); MiniPay doesn't show local tokens yet." : "");
+  $("#corridor-hint").hidden = !off && !isNaira();
+  setText(choiceHint, isNaira() ? `The payer sends USD₮. You get ${cur().plural} (${cur().token}).` : "The payer sends cNGN. You get USD₮ (dollars), which MiniPay shows.");
   choice.refresh();
   setText($("#amount-token"), sellSym());
 }

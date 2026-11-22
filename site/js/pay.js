@@ -6,11 +6,11 @@ import {
   CURRENCIES, currencyOfCorridor, formatCurrency,
 } from "../assets/core.js";
 import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
-import { bindDisclosures, qrDisclosure, successPanel, successHeadline, rateSummary, limitsSummary } from "../assets/disclose.js";
+import { bindDisclosures, qrDisclosure, successPanel, successHeadline, rateSummary, limitsSummary, expiryBadge } from "../assets/disclose.js";
 import { ensureCelo, explainWalletError } from "../assets/session.js";
 import {
   agentStatus, depositStatus, allowanceFromStatus, globalFromStatus, receivedStale, statusFinal, sourceNote, refusedNote, refundedLine, refundedText,
-  DELAYED_NOTE, SLOW_NOTE,
+  DELAYED_NOTE, SLOW_NOTE, focusHeading,
 } from "../assets/ntag-ui.js";
 
 initChrome();
@@ -217,6 +217,9 @@ function initLink(req) {
   }
   const regNote = el("div", { "aria-live": "polite" });
   $("#l-notice").append(regNote);
+  // what the page already knows would hold or refuse the payout (shown in full above); the confirmation then promises nothing
+  const risks = { currency: false, cap: false, room: false };
+  const atRisk = () => risks.currency || risks.cap || risks.room;
 
   // amount + where to send
   $("#l-amount").value = exactAmount(req.amount);
@@ -259,6 +262,7 @@ function initLink(req) {
       setText($("#l-receive"), pu ? formatCurrency(Number(req.amount) * pu, cur.code) : "—");
       setText($("#l-rate"), pu ? `1 USD₮ = ${formatCurrency(pu, cur.code, cur.code === "cngn" ? 2 : cur.places)}` : `${cur.label}: not available right now`);
       if (!pu) {
+        risks.currency = true;
         $("#l-notice").append(el("div", { class: "alert warn mt-16" }, icon("alert"),
           el("span", {}, `${cur.label} isn't available on Textile FX right now. A payment sent now would be refused (never paid in another currency) and stay with the agent. Try again later.`)));
       }
@@ -272,13 +276,15 @@ function initLink(req) {
     }
     setText($("#l-rate-sum"), rateSummary({ rateText: $("#l-rate").textContent, fees: r.fromPreview ? "included" : "before" }));
     if (usdValue !== null && usdValue > CAP) {
+      risks.cap = true;
       $("#l-notice").append(el("div", { class: "alert warn mt-16" }, icon("alert"),
         el("span", {}, `This is over the agent's $${CAP} per-payment limit, so autopilot won't pay it out. Ask for a smaller request before sending.`)));
     }
     // cNGN is valued in dollars at the rate (the reverse preview when published); other local money at its own rate
     const usdOfNgn = (n) => (r.reverseRate ? n * r.reverseRate : n / r.rate);
     const usdOfLocal = (code, n) => (code === "cngn" ? usdOfNgn(n) : r.rates[code] ? n / r.rates[code] : 0);
-    renderRoom(usdValue ?? usdOfNgn(Number(req.amount)), usdOfLocal);
+    // a payment already sent from this tab (a reload) gets the honest headline as soon as the risks are known
+    renderRoom(usdValue ?? usdOfNgn(Number(req.amount)), usdOfLocal).then(() => { if (W.sent) render(); });
   }).catch(() => {
     setText($("#l-receive"), "—");
     setText($("#l-rate"), "Unavailable");
@@ -328,13 +334,10 @@ function initLink(req) {
     $("#l-other").hidden = !canPay;
     $("#l-amount-hint").hidden = !canPay;
     $("#l-limits").hidden = !canPayNow();
-    $("#l-room-warn").hidden = !canPayNow();
+    // a payout that would wait or be refused stays in view while this tab's payment is on its way
+    $("#l-room-warn").hidden = !canPayNow() && !(sentActive() && !state.payout);
     renderWallet();
-
-    const expBadge = $("#l-exp-badge");
-    if (state.deposit || inUse) expBadge.replaceChildren();
-    else if (expired()) expBadge.replaceChildren(badge("Expired", "err"));
-    else expBadge.replaceChildren(badge("Open", "neutral"));
+    renderExpBadge();
 
     // header badge
     let b;
@@ -423,9 +426,19 @@ function initLink(req) {
     if (state.deposit && !state.error) msg.append(el("p", { class: "micro muted mt-8" }, sourceNote(Boolean(state.agent) && !state.payoutFromChain, "nt-source")));
   }
 
+  /** The state badge with the time left ("Open · 12 min left"), so the deadline is in view, not only in Details. */
+  function renderExpBadge() {
+    const box = $("#l-exp-badge");
+    const b = state.deposit || regNow() === "in-use" ? null : expiryBadge(req.exp - Date.now());
+    const key = b ? `${b.kind}:${b.text}` : "";
+    if (box.dataset.key === key) return;
+    box.dataset.key = key;
+    box.replaceChildren(...(b ? [badge(b.text, b.kind)] : []));
+  }
   function tickCountdown() {
     const left = req.exp - Date.now();
     setText($("#l-countdown"), left > 0 ? countdown(left) : "Expired");
+    renderExpBadge();
     if (left <= 0 && !$("#l-other").hidden) render();
   }
 
@@ -531,7 +544,8 @@ function initLink(req) {
       box.replaceChildren(el("p", { class: "hint" }, line, " Limits count the last 24 hours. ", sourceNote(exact)));
       setText($("#l-limits-sum"), limitsSummary({ capUsd: CAP, roomUsd: room, exact }));
       // over today's room: the agent would refuse it (one person) or hold it (everyone). Never folded away.
-      if (payUsd != null && payUsd > room + 0.005) {
+      risks.room = payUsd != null && payUsd > room + 0.005;
+      if (risks.room) {
         const personOver = person !== null && payUsd > WALLET_DAILY_CAP - person + 0.005;
         $("#l-room-warn").replaceChildren(el("div", { class: "alert warn" }, icon("alert"), el("span", {}, el("b", {}, `This payment (about ${fmt(payUsd)}) would go over today's limit. `),
           personOver
@@ -664,15 +678,27 @@ function initLink(req) {
     if (!okView || okView.sent !== p) {
       const ui = successPanel();
       const done = el("button", { class: "btn btn-primary", type: "button" }, "Done");
-      done.addEventListener("click", () => { okView.dismissed = true; renderWallet(); $("#status-h").scrollIntoView?.({ block: "nearest" }); });
+      // the panel is replaced by one line: focus moves to the Status card it points to, never to <body>
+      done.addEventListener("click", () => { okView.dismissed = true; renderWallet(); const h = $("#status-h"); focusHeading(h); h.scrollIntoView?.({ block: "nearest" }); });
+      // back to the pay options (after a failure, or a payment Celo never confirmed): focus goes to the new Pay button
+      const reset = () => {
+        W.sent = null; okView = null;
+        try { sessionStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
+        render();
+        const b = $("#l-wallet button") ?? $("#l-open");
+        if (b && !b.closest("[hidden]")) b.focus(); else focusHeading($("#send-h"));
+      };
       const again = el("button", { class: "btn btn-primary", type: "button" }, icon("refresh"), "Try again");
-      again.addEventListener("click", () => { W.sent = null; okView = null; try { sessionStorage.removeItem(PENDING_KEY); } catch { /* ignore */ } render(); });
-      const status = el("a", { class: "btn btn-secondary", href: `verify.html?tx=${p.hash}` }, "Check status", icon("right"));
-      okView = { sent: p, ui, done, again, status, dismissed: false, steps: el("ol", { class: "pay-track" }), small: null };
+      again.addEventListener("click", reset);
+      const back = el("button", { class: "btn btn-secondary", type: "button" }, "Back to the pay options");
+      back.addEventListener("click", reset);
+      // the payer's own transaction; the link's status updates on this page (verify.html only checks the attribution tag)
+      const status = el("a", { class: "btn btn-secondary", href: celoscanTx(p.hash), target: "_blank", rel: "noopener" }, "View on Celoscan", icon("ext"));
+      okView = { sent: p, ui, done, again, back, status, dismissed: false, steps: el("ol", { class: "pay-track" }), small: null };
       ui.details.append(okView.steps);
       requestAnimationFrame(() => ui.heading.focus({ preventScroll: true }));
     }
-    const { ui, done, again, status, steps } = okView;
+    const { ui, done, again, back, status, steps } = okView;
     if (okView.dismissed && p.phase !== "failed") {
       // after Done: one quiet line, never the pay button again for this payment
       okView.small ??= el("p", { class: "small soft" });
@@ -686,11 +712,22 @@ function initLink(req) {
       : row("active", "Waiting for Celo to confirm…", ["Usually a few seconds. ", txLink(p.hash)]);
     steps.replaceChildren(row("done", `Sent ${sendText} from your wallet`, [el("span", { class: "mono" }, short(p.from)), " · ", txLink(p.hash)]), chain);
     const to = req.name;
+    // the link's deposit is the FIRST matching one: it speaks for this payment only when it is this payment
+    const mine = Boolean(state.deposit) && sameAddr(state.deposit.hash, p.hash);
     if (p.phase === "failed") {
       ui.set({ state: "failed", title: successHeadline({ state: "failed" }), text: "Nothing was sent to the agent; only the network fee was spent.", actions: [again] });
-    } else if (p.phase === "pending" || p.phase === "slow") {
-      ui.set({ state: "pending", title: p.phase === "slow" ? "Still waiting for Celo" : successHeadline({ state: "pending", amount: sendText, to }),
-        text: p.phase === "slow" ? ["It can still go through. ", txLink(p.hash, "Check it on Celoscan")] : "Waiting for Celo to confirm. Usually a few seconds; don't send it again.", actions: [] });
+    } else if (p.phase === "pending") {
+      ui.set({ state: "pending", title: successHeadline({ state: "pending", amount: sendText, to }),
+        text: "Waiting for Celo to confirm. Usually a few seconds; don't send it again.", actions: [] });
+    } else if (p.phase === "slow") {
+      // still watched (more slowly), with a way back if the wallet dropped or replaced the transaction
+      ui.set({ state: "pending", title: "Still waiting for Celo",
+        text: "It can still go through, so only pay again if Celoscan shows it failed.", actions: [status, back] });
+    } else if (state.deposit && !mine) {
+      ui.set({ state: "held", title: "Another payment reached this link first", actions: [done, status],
+        text: "Celo confirmed your payment, but an earlier payment of the same amount was matched to this link.",
+        alert: el("div", { class: "alert warn" }, icon("alert"), el("span", {}, "Only the first matching deposit is paid out, so yours may not be paid out automatically and stays with the agent. ",
+          txLink(state.deposit.hash, "See the other payment"))) });
     } else if (state.payout) {
       const href = isReg ? `receipt.html#p=${state.payout.hash}` : `receipt.html#p=${state.payout.hash}&r=${req.id}`;
       ui.set({ state: "paid", title: successHeadline({ state: "paid", to }), text: `The agent paid ${to} in ${recvWord}.`, alert: null,
@@ -698,6 +735,10 @@ function initLink(req) {
     } else if (refused() || selfPaid()) {
       ui.set({ state: "failed", title: `${to} wasn't paid`, text: "", actions: [done],
         alert: el("div", { class: "alert err" }, icon("alert"), el("span", {}, refunded() ? refundedText(state.agent) : selfPaid() ? "This payment came from the wallet the link pays, so the agent won't pay it out." : refusedNote(state.agent.reason))) });
+    } else if (atRisk()) {
+      // the page warned before paying that this payout would wait or be refused: no promise here
+      ui.set({ state: "held", title: successHeadline({ state: "held", to }), alert: null,
+        text: "Celo confirmed it. Read the warning above: this payout may wait or be refused. This page updates by itself.", actions: [done, status] });
     } else {
       ui.set({ state: "done", title: successHeadline({ state: "done", amount: sendText, to }), alert: null,
         text: `Celo confirmed it. The agent pays ${to} in ${recvWord} when autopilot next runs; this page updates by itself.`, actions: [done, status] });
@@ -706,9 +747,12 @@ function initLink(req) {
   }
   async function track() {
     const p = W.sent;
-    for (let i = 0; i < 72 && W.sent === p; i++) { // about 3 minutes
+    // every 2.5 s for about 3 minutes, then "slow" and every 15 s for up to an hour after sending, so the panel
+    // follows a payment that confirms late
+    for (let i = 0; W.sent === p; i++) {
       let rc = null;
       try { rc = await loadReceipt(p.hash); } catch { /* RPC hiccup: try again */ }
+      if (W.sent !== p) return;
       if (rc) {
         p.phase = rc.status === "0x1" ? "confirmed" : "failed";
         try { if (p.phase === "failed") sessionStorage.removeItem(PENDING_KEY); else sessionStorage.setItem(PENDING_KEY, JSON.stringify(p)); } catch { /* ignore */ }
@@ -716,9 +760,10 @@ function initLink(req) {
         if (p.phase === "confirmed") { clearTimeout(timer); check(); }
         return;
       }
-      await new Promise((res) => setTimeout(res, 2500));
+      if (i === 71 && p.phase === "pending") { p.phase = "slow"; render(); }
+      if (Date.now() - p.at > 3600_000) return;
+      await new Promise((res) => setTimeout(res, i < 71 ? 2500 : 15_000));
     }
-    if (W.sent === p) { p.phase = "slow"; render(); }
   }
 
   if (eth) {
