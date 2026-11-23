@@ -151,7 +151,8 @@ export function makeHandler(opts = {}) {
       await getAgentStore().replace(record);
       agentMemo = { readAt: now(), stored: { heartbeat: hb, lastSeen: record.lastSeen }, latestAt: Date.parse(hb.at) };
       return res.status(200).json({ ok: true, stored: 1 });
-    } catch {
+    } catch (e) {
+      console.error("status: heartbeat write failed:", e?.name ?? "", String(e?.message ?? e).slice(0, 200));
       return res.status(503).json(UNAVAILABLE);
     }
   }
@@ -226,10 +227,12 @@ export function makeHandler(opts = {}) {
           memo = { at: now(), got: { data: summary, etag: null } };
           return done(changed);
         } catch (e) {
-          if (!(e instanceof StaleWriteError) || attempt >= 2) throw e;
+          if (!(e instanceof StaleWriteError) || attempt >= 4) throw e;
+          await new Promise((r) => setTimeout(r, 300 * (attempt + 1))); // let the store's read catch up before merging again
         }
       }
-    } catch {
+    } catch (e) {
+      console.error("status: report write failed:", e?.name ?? "", String(e?.message ?? e).slice(0, 200)); // no secrets in here
       return res.status(503).json(UNAVAILABLE);
     }
   }
