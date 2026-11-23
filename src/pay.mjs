@@ -54,14 +54,31 @@ export async function confirm(question) {
  * Everything pay() touches outside this file: the wallet, Textile, the attribution check, the prompt and the log.
  * Tests replace entries (a fake chain, fake quotes) and put them back afterwards; nothing else changes them.
  */
-export const payDeps = { loadAccount, makeClients, preview, firmQuote, submit, verifyTx, confirm, log: (e) => log(e) };
+export const payDeps = { loadAccount, makeClients, preview, firmQuote, submit, verifyTx, confirm, log: (e) => log(e), balanceDeltaAtBlock: (...a) => balanceDeltaAtBlock(...a) };
 
 /** USD values (the caps): always 6-decimal USDT units. */
 const fmt = (units) => formatUnits(units, 6);
 /** An amount of `token` (one of TOKENS) as a decimal string, exact, in that token's own decimals. */
 export const fmtToken = (units, token) => formatUnits(BigInt(units), token.decimals);
-export const balanceOf = (pub, token, owner) =>
-  pub.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [owner] });
+export const balanceOf = (pub, token, owner, blockNumber) =>
+  pub.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [owner], ...(blockNumber != null ? { blockNumber } : {}) });
+
+/**
+ * The balance change of `token` for `owner` across exactly one block (the swap's): the balance AT that block minus
+ * the balance at the block before. Reading both at fixed blocks means a public RPC node that is a few blocks behind
+ * can't make a delivered swap look like "nothing arrived" (a read of "latest" on a lagging node returns the old
+ * balance). A node that hasn't reached the block yet errors; we wait and ask again, then give up loudly.
+ */
+export async function balanceDeltaAtBlock(pub, token, owner, block, { tries = 6, waitMs = 2000, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const [before, after] = await Promise.all([balanceOf(pub, token, owner, block - 1n), balanceOf(pub, token, owner, block)]);
+      return after - before;
+    } catch (e) { last = e; if (i < tries - 1) await sleep(waitMs); }
+  }
+  throw new Error(`Couldn't read the balance at the swap's block ${block}: ${last?.shortMessage ?? last?.message ?? last}`);
+}
 
 /** Sum of the ERC-20 Transfer events of `token` to `owner` in a transaction's logs. */
 export const transfersTo = (logs, token, owner) =>
@@ -270,8 +287,11 @@ export async function pay({ to, amount, corridor = "usdt-cngn", execute = false,
 
     // 4. Pay out exactly what the swap delivered: the measured balance change of the BUY token, never more than
     //    the swap's own Transfer events to the agent (so a deposit landing at the same moment is never paid on).
-    const buyAfter = await balanceOf(pub, buy.address, account.address);
-    const delta = buyAfter - buyBefore;
+    // Read at the swap's own block (a lagging RPC node can't hide a delivered swap). A receipt always carries its
+    // block number on a real chain; without one, fall back to "now minus before the swap".
+    const delta = sr.blockNumber != null
+      ? await payDeps.balanceDeltaAtBlock(pub, buy.address, account.address, BigInt(sr.blockNumber))
+      : (await balanceOf(pub, buy.address, account.address)) - buyBefore;
     const received = measuredReceived(delta, transfersTo(sr.logs, buy.address, account.address));
     if (received <= 0n) throw new Error(`Swap succeeded but no ${buy.symbol} was received. Check ${hashes.swap}.`);
     if (c.usd === "buy") assertWithinCap(fmt(received), MAX_USD); // never pay out more dollars than the cap

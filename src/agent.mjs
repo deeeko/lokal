@@ -70,6 +70,7 @@ import { acquireLock } from "./lock.mjs";
 import { age, loadRefunds, refundDeposit, refundRows, saveRefunds } from "./refund.mjs";
 import { makeAlerter } from "./alerts.mjs";
 import { runDoctor } from "./doctor.mjs";
+import { settleContract } from "./settle.mjs";
 
 const [cmd, ...rest] = process.argv.slice(2);
 const flag = (n) => { const i = rest.indexOf(`--${n}`); return i >= 0 ? rest[i + 1] : undefined; };
@@ -597,6 +598,16 @@ async function main() {
       }
       const n = rows.filter((r) => r.status === "refundable").length;
       console.log(`${rows.length} deposit(s); ${n} refundable now.`);
+      break;
+    }
+    case "settle": {
+      // A contract payment whose swap went through but whose payout was never sent: pay exactly what that swap delivered.
+      const key = flag("contract") ?? positional()[0];
+      if (!key || !/^0x[0-9a-fA-F]{64}:\d+$/.test(key)) throw new Error("Usage: settle --contract TX:EVENTLOGINDEX [--execute] [--yes]  (the key autopilot printed)");
+      const account = loadAccount();
+      const { pub, wallet } = makeClients(account);
+      await settleContract({ key: key.toLowerCase().replace(/^0x/, "0x"), execute: has("execute"), yes: has("yes"),
+        deps: { account, pub, wallet, confirm, lock: () => takeLock("settle --execute") } });
       break;
     }
     case "refund": {
