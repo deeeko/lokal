@@ -2,6 +2,22 @@
 
 Newest first. This was the README's progress log; it moved here when the README was cut to one page.
 
+## 2026-11-23: pay in rupiah or pesos, they get dollars
+
+- **Three reverse corridors**, `idrx-usdt`, `wars-usdt` and `wcop-usdt`, next to `cngn-usdt`: the payer sends IDRX,
+  wARS or wCOP and the recipient gets USD₮ ([PROTOCOL.md](PROTOCOL.md#currencies)). A `TagPaid` or `PotPaid` in one
+  of them with "dollars" chosen (or the recipient's default being dollars, or a pot) now pays out through the matching
+  corridor instead of being refused. Amounts keep each token's own decimals (IDRX 2, wARS and wCOP 18) to the last
+  unit; the caps are counted in USD from the preview and the firm quote; a live preview under $1 is a permanent
+  refusal. They are for contract payments and the operator's `pay` / `quote`; payment links, Get paid and legacy
+  memos are unchanged (USD₮ and cNGN only).
+- **"You pay with: USD₮ · Change"** on tag and pot pages: pick "Dollars" and pay with USD₮, cNGN, IDRX, wARS or wCOP
+  (whatever the agent pays out). The estimate and the limits use the paid token's decimals, its reverse rate and the
+  contract's per-token limits; the contract's dry run still runs before the wallet opens. The quote page offers the
+  reverse quotes too, and the rate feed now carries `reverseRates` for every currency.
+- Status events now cover contract payments in any Lokal token. New tests for the corridors, every routing pair, the
+  cap valuation, the $1 floor and the site's pay-with tokens and estimates.
+
 ## 2026-11-23: Renamed to LokalPay
 
 - **The product is now LokalPay** everywhere a person reads its name: every page's title, meta and share tags, the

@@ -1,7 +1,7 @@
 // The payout flow, for every corridor (one flow, any configured local token):
 //   preview -> firm quote -> approve SELL token -> swap -> pay out the BUY token to the recipient.
 //   usdt-cngn (default): sell USDT, pay cNGN.   usdt-idrx / usdt-wars / usdt-wcop: sell USDT, pay IDRX / wARS / wCOP.
-//   cngn-usdt: sell cNGN, pay USDT.
+//   cngn-usdt: sell cNGN, pay USDT.   idrx-usdt / wars-usdt / wcop-usdt: sell IDRX / wARS / wCOP, pay USDT.
 // Every amount is read and written with its own token's decimals (USDT 6, cNGN 6, IDRX 2, wARS 18, wCOP 18); the USD
 // values the caps use are always 6-decimal USDT units. A local currency Textile isn't quoting is refused with the code
 // currency_unavailable: the payment is never paid in another currency.
@@ -18,7 +18,7 @@ import {
 import { loadAccount, makeClients } from "./chain.mjs";
 import {
   assertDailyCap, assertNotSelfPayment, assertRecipient, assertSlippage, assertWalletCap, assertWithinCap, dailyUsedUnits,
-  getCorridor, measuredReceived, notQuoting, parseAmount, parseContacts, refusal, resolveContact, walletUsedUnits,
+  getCorridor, getPayoutCorridor, measuredReceived, notQuoting, parseAmount, parseContacts, refusal, resolveContact, walletUsedUnits,
 } from "./guards.mjs";
 import { receiptLink, receiptNo, receiptNoLink } from "./requests.mjs";
 import { firmQuote, preview, submit } from "./textile.mjs";
@@ -116,9 +116,9 @@ function ownWallets() {
  */
 export async function preflight({ to, amount, corridor = "usdt-cngn", agent, recipientAddress, payer } = {}) {
   if (recipientAddress != null) return preflightRegistration({ amount, corridor, agent, recipientAddress, payer });
-  const c = getCorridor(corridor);
+  const c = getPayoutCorridor(corridor);
   const { contacts, own } = loadContacts();
-  const amountStr = parseAmount(amount);
+  const amountStr = parseAmount(amount, c.sellToken.decimals);
   const sellAmount = parseUnits(amountStr, c.sellToken.decimals);
   // usdt-<currency>: the amount itself is the USD value, so check the caps before asking anyone for a price.
   if (c.usd === "sell") checkCaps(sellAmount);
@@ -139,8 +139,8 @@ export async function preflight({ to, amount, corridor = "usdt-cngn", agent, rec
  * recipient (permanent refusals first), then the per-payout, rolling daily and per-wallet caps and a live preview.
  */
 async function preflightRegistration({ amount, corridor, agent, recipientAddress, payer }) {
-  const c = getCorridor(corridor);
-  const amountStr = parseAmount(amount);
+  const c = getPayoutCorridor(corridor);
+  const amountStr = parseAmount(amount, c.sellToken.decimals);
   const sellAmount = parseUnits(amountStr, c.sellToken.decimals);
   const recipient = registrationRecipient(recipientAddress, { agent: agent ?? AGENT_ADDRESS, payer, own: ownWallets() });
   if (c.usd === "sell") registrationCaps(sellAmount, recipient);

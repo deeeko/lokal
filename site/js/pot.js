@@ -16,13 +16,14 @@ import {
 import {
   LOKAL_POTS, approveData, payPotData, currencyRef, readPotInfo, readPotRemaining, readUnitsPerUsd, readTokenLimits, readAllowance,
   readTagOf, readTagInfo, checkPotPayment, simulate, potUsdValue, decodeRevert, tokenAmountText, payoutRoute, decodePotPaid,
+  payWithTokens, paySymbol, payDecimals, unitsFromCents, usdPerUnit, payUsdValue, localPayError,
 } from "../assets/lokal-contracts.js";
 import { currencyPicker } from "../assets/currency-ui.js";
 import { currencyChoice, successPanel, successHeadline } from "../assets/disclose.js";
 import { injectedWallet, ensureCelo, explainWalletError, CELO_CHAIN } from "../assets/session.js";
-import { alertBox, plainError, sameAddr, waitForReceipt, noWalletHelp, noCeloAlert, celoBalance, slowNotice } from "../assets/ntag-ui.js";
+import { alertBox, plainError, sameAddr, waitForReceipt, noWalletHelp, noCeloAlert, celoBalance, slowNotice, CNGN_CAP_USD } from "../assets/ntag-ui.js";
 import {
-  potIdFrom, potState, timeLeftText, closeText, usd6Text, sprayRoom, sprayError, maxUnitsForUsd6, receiveChoices, QUICK_AMOUNTS,
+  potIdFrom, potState, timeLeftText, closeText, usd6Text, sprayRoom, sprayError, maxUnitsForUsd6, QUICK_AMOUNTS,
   sprayToken, loadPotSprays, pollPotSprays, mergeSprays, sprayOf, agoText,
 } from "../assets/pots.js";
 import { potMeter, potBadge, potShare, sprayNote, flutter } from "../assets/pot-ui.js";
@@ -41,7 +42,8 @@ const isHash = (h) => /^0x[0-9a-fA-F]{64}$/.test(String(h));
 const errText = (e) => (e?.plain ? e.message : explainWalletError(e));
 const nowSec = () => Math.floor(Date.now() / 1000);
 const txLink = (hash, text = "View on Celoscan") => el("a", { class: "link", href: celoscanTx(hash), target: "_blank", rel: "noopener" }, text, " ", icon("ext"));
-const PAY = { usdt: { label: "Dollars", token: "USD₮", flag: "usd" }, cngn: { label: "Naira", token: "cNGN", flag: "cngn" } };
+/** The amount the form starts on for each token (about $2). */
+const START_AMOUNT = { usdt: "2", cngn: "3000", idrx: "40000", wars: "4000", wcop: "8000" };
 
 const S = {
   id: null, info: null, host: null, hostTag: null, hostReceive: null, sprays: [], toBlock: 0, alive: true,
@@ -228,14 +230,9 @@ function sprayCard() {
 }
 
 function sprayForm() {
-  // pay with: dollars (USD₮, any currency for the host) or naira (cNGN, the host gets naira or dollars)
-  const payBtns = ["usdt", "cngn"].map((code) => {
-    const b = el("button", { type: "button", class: "cur-chip", "aria-pressed": String(code === S.payCode), dataset: { code } },
-      el("span", { class: `cur-flag cur-flag-${PAY[code].flag}`, "aria-hidden": "true" }), el("span", {}, `${PAY[code].label} (${PAY[code].token})`));
-    b.addEventListener("click", () => setPay(code));
-    return b;
-  });
-  const payGroup = el("div", { class: "segmented pot-pay", role: "group", "aria-labelledby": "pay-with-l" }, payBtns);
+  // what the host gets first ("They receive: Dollars · Change"), then what the guest pays with ("You pay with: USD₮ ·
+  // Change"): USD₮ for any currency; for dollars also cNGN, IDRX, wARS or wCOP; for a local currency also that token
+  const paySlot = el("div", {});
   const amountIn = el("input", { id: "spray-amount", type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false", size: "4", value: "2", "aria-describedby": "spray-hint" });
   const tokenEl = el("span", { class: "token" }, "USD₮");
   const prefix = el("span", { class: "pot-cur", "aria-hidden": "true" }, "$");
@@ -256,26 +253,44 @@ function sprayForm() {
 
   let picker = null;
   function buildPicker() {
-    const only = receiveChoices(S.payCode);
     const want = S.hostReceive === "usdt" ? "usd" : S.hostReceive;
-    const value = only.includes(want) ? want : only.includes("cngn") && S.payCode === "cngn" ? "cngn" : "usd";
-    picker = currencyPicker({ label: `What does ${hostName()} receive?`, value, remember: false, only,
-      extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮)" }], onChange: () => { choice.refresh(); paint(); } });
+    picker = currencyPicker({ label: `What does ${hostName()} receive?`, value: want ?? "usd", remember: false,
+      extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮)" }],
+      onChange: () => {
+        choice.refresh();
+        const opts = payChoices();
+        if (!opts.includes(S.payCode)) setPay(opts[0]);
+        buildPay();
+        paint();
+      } });
     // "They receive: Naira · Change": the choices open inline on demand
     const choice = currencyChoice({ picker, label: "They receive" });
     pickerSlot.replaceChildren(choice.el);
-    if (S.rate) picker.setAvailability({ ...S.rate.available, cngn: S.payCode === "cngn" ? true : S.rate.available.cngn });
+    if (S.rate) picker.setAvailability(S.rate.available);
   }
   const receiveCode = () => (picker.value === "usd" ? "usdt" : picker.value);
+  const payChoices = () => payWithTokens(receiveCode(), "pot").map((t) => t.code);
+  let payChoice = null;
+  function buildPay() {
+    const opts = payChoices();
+    const payPicker = currencyPicker({
+      label: "What do you pay with?", value: S.payCode, remember: false,
+      options: opts.map((c) => ({ code: c, label: paySymbol(c), flag: c === "usdt" ? "usd" : c, title: c === "usdt" ? "USD₮ (dollars)" : `${paySymbol(c)} (${currencyOf(c).name})` })),
+      onChange: (c) => { setPay(c); payChoice.refresh(); },
+    });
+    payChoice = currencyChoice({ picker: payPicker, label: "You pay with", nameOf: paySymbol });
+    for (const n of payChoice.el.querySelectorAll(".cc-change, .cc-dot")) n.style.display = opts.length > 1 ? "" : "none";
+    paySlot.replaceChildren(payChoice.el);
+  }
   const token = () => sprayToken(S.payCode);
   const fmt = (u) => tokenAmountText(u, token());
+  /** One cent of the paid token in base units (amounts typed here have at most 2 decimals). */
+  const centUnits = () => 10n ** BigInt(payDecimals(S.payCode) - 2);
 
   function setPay(code) {
     if (code === S.payCode || S.busy) return;
     S.payCode = code;
-    for (const b of payBtns) b.setAttribute("aria-pressed", String(b.dataset.code === code));
-    amountIn.value = code === "cngn" ? "3000" : "2";
-    buildPicker();
+    amountIn.value = START_AMOUNT[code] ?? "2";
     loadTokenFacts().then(() => refreshRoom());
     refreshBalance();
     paint();
@@ -285,12 +300,19 @@ function sprayForm() {
   function readAmount() {
     const p = parseMoneyInput(amountIn.value);
     if (p.error) return { error: p.error };
-    const units = BigInt(p.cents) * 10_000n; // USD₮ and cNGN both have 6 decimals
+    const units = unitsFromCents(p.cents, S.payCode); // in the paid token's own decimals (USD₮ 6, IDRX 2, wARS 18 ...)
     const rpu = S.rpu[S.payCode];
+    if (rpu === 0n) return { units, error: `LokalPots doesn't take ${paySymbol(S.payCode)} right now. Pay with another token.` };
     if (!rpu) return { units, error: "Loading the contract's rate…" };
     const usd6 = potUsdValue(units, rpu);
     const r = S.remaining ? sprayRoom(S.remaining) : null;
-    const error = sprayError({ units, usd6, limits: S.limits[S.payCode], room: r, fmt });
+    // a local token the agent converts into dollars: Textile's ~$1 minimum and the agent's per-payment cap, at today's rate
+    const swap = S.payCode !== "usdt" && receiveCode() === "usdt";
+    const local = swap ? localPayError(payUsdValue(S.payCode, p.cents, S.rate), CNGN_CAP_USD, (u) => {
+      const k = usdPerUnit(S.payCode, S.rate);
+      return k ? formatCurrency(Math.floor(u / k.usdPer), S.payCode) : `$${u}`;
+    }) : null;
+    const error = sprayError({ units, usd6, limits: S.limits[S.payCode], room: r, fmt }) ?? local;
     return error ? { units, usd6, error } : { units, usd6 };
   }
   function paintQuick() {
@@ -298,11 +320,12 @@ function sprayForm() {
     const r = S.remaining ? sprayRoom(S.remaining) : null;
     const lim = S.limits[S.payCode];
     const most = rpu && r ? maxUnitsForUsd6(r.room, rpu) : null;
-    const opts = QUICK_AMOUNTS[S.payCode].map((n) => BigInt(n) * 1_000_000n).filter((u) => (!lim || u >= lim.min) && (most == null || u <= most));
-    if (most != null && most > 0n && lim && most >= lim.min && !opts.some((u) => u === most)) opts.push(most - (most % 10_000n)); // "the most you can"
+    const one = 10n ** BigInt(payDecimals(S.payCode));
+    const opts = (QUICK_AMOUNTS[S.payCode] ?? []).map((n) => BigInt(n) * one).filter((u) => (!lim || u >= lim.min) && (most == null || u <= most));
+    if (most != null && most > 0n && lim && most >= lim.min && !opts.some((u) => u === most)) opts.push(most - (most % centUnits())); // "the most you can"
     quick.replaceChildren(...opts.map((u) => {
       const b = el("button", { type: "button", class: "pot-quick-btn" }, fmt(u).replace(/\.00$/, ""));
-      b.addEventListener("click", () => { amountIn.value = (Number(u) / 1e6).toFixed(2).replace(/\.00$/, ""); S.touched = true; paint(); amountIn.focus(); });
+      b.addEventListener("click", () => { amountIn.value = (Number(u / centUnits()) / 100).toFixed(2).replace(/\.00$/, ""); S.touched = true; paint(); amountIn.focus(); });
       return b;
     }));
   }
@@ -318,8 +341,10 @@ function sprayForm() {
       else if (r?.rates?.[want] && r.available[want]) text = `${hostName()} gets about ${formatCurrency(usd * r.rates[want], want)} (${currencyOf(want).token}).`;
       else text = `${currencyOf(want).label} isn't quoting on Textile FX right now, so the agent couldn't convert it. Pick another currency.`;
     } else {
-      if (want === "cngn") text = `${hostName()} gets ${tokenAmountText(a.units, token())} in naira, passed straight through.`;
-      else if (r?.reverseRate) text = `${hostName()} gets about $${num2.format(Math.floor((Number(a.units) / 1e6) * r.reverseRate * 100) / 100)} (USD₮).`;
+      const k = usdPerUnit(S.payCode, r);
+      const amt = Number(a.units) / 10 ** payDecimals(S.payCode);
+      if (want === S.payCode) text = `${hostName()} gets ${tokenAmountText(a.units, token())} in ${currencyOf(want).plural}, passed straight through.`;
+      else if (k) text = `${hostName()} gets about $${num2.format(Math.floor(amt * k.usdPer * 100) / 100)} (USD₮).`;
       else text = `${hostName()} gets dollars (USD₮), converted on Textile FX.`;
     }
     estimate.textContent = text;
@@ -334,7 +359,7 @@ function sprayForm() {
   function walletProblem(a) {
     if (!S.account) return null;
     if (sameAddr(S.account, S.host)) return { kind: "err", text: "This is the host's own wallet: a host can't spray into their own pot. Connect a different wallet." };
-    if (!a.error && S.bal && sameAddr(S.bal.token, token()) && S.bal.units < a.units) return { kind: "warn", text: `This wallet has ${fmt(S.bal.units)} in ${PAY[S.payCode].token}, less than the ${fmt(a.units)} you're spraying.` };
+    if (!a.error && S.bal && sameAddr(S.bal.token, token()) && S.bal.units < a.units) return { kind: "warn", text: `This wallet has ${fmt(S.bal.units)} in ${paySymbol(S.payCode)}, less than the ${fmt(a.units)} you're spraying.` };
     if (S.celo === 0n && !S.celoAnyway) return { kind: "celo" };
     return null;
   }
@@ -351,7 +376,7 @@ function sprayForm() {
     }
     if (!S.account) { walletBox.replaceChildren(); if (actions.firstChild !== connectBtn) actions.replaceChildren(connectBtn); return; }
     fromLink.href = celoscanAddr(S.account); fromLink.title = S.account; fromLink.textContent = short(S.account);
-    if (S.bal && sameAddr(S.bal.token, token())) balCell.textContent = `${fmt(S.bal.units)} ${PAY[S.payCode].token}`;
+    if (S.bal && sameAddr(S.bal.token, token())) balCell.textContent = `${fmt(S.bal.units)} ${paySymbol(S.payCode)}`;
     else balCell.replaceChildren(el("span", { class: "skel" }));
     const problem = walletProblem(a);
     const key = problem ? problem.kind + (problem.text ?? "") : "";
@@ -368,8 +393,8 @@ function sprayForm() {
   }
   function paint() {
     const a = readAmount();
-    tokenEl.textContent = PAY[S.payCode].token;
-    prefix.textContent = S.payCode === "cngn" ? "₦" : "$";
+    tokenEl.textContent = paySymbol(S.payCode);
+    prefix.textContent = S.payCode === "usdt" ? "$" : currencyOf(S.payCode).symbol;
     const show = a.error && (S.touched || amountIn.value.trim()) && !/^Loading/.test(a.error);
     hint.classList.toggle("err", Boolean(show));
     hint.textContent = show ? a.error : "";
@@ -453,7 +478,7 @@ function sprayForm() {
       await ensureCelo(eth);
       S.chainOk = true;
       const [bal] = await readContract(t, "0x70a08231", ["address"], [from], ["uint256"]);
-      if (bal < a.units) throw plainError(`This wallet has ${fmt(bal)} in ${PAY[code].token}, less than ${fmt(a.units)}. Nothing was sent.`);
+      if (bal < a.units) throw plainError(`This wallet has ${fmt(bal)} in ${paySymbol(code)}, less than ${fmt(a.units)}. Nothing was sent.`);
       // the contract's own dry run: every cap and rule, before anything is signed
       const chk = await checkPotPayment({ potId: S.id, token: t, amount: a.units, payer: from });
       if (!chk.ok) throw plainError(chk.message);
@@ -497,7 +522,7 @@ function sprayForm() {
       const done = el("button", { class: "btn btn-primary", type: "button" }, "Done");
       done.addEventListener("click", () => { node.replaceChildren(...formKids); paint(); amountIn.focus(); });
       ok.details.append(el("ul", { class: "kv-list" },
-        el("li", {}, el("span", {}, "You sprayed"), el("span", {}, `${fmt(a.units)} ${PAY[code].token}`)),
+        el("li", {}, el("span", {}, "You sprayed"), el("span", {}, `${fmt(a.units)} ${paySymbol(code)}`)),
         el("li", {}, el("span", {}, "From"), el("span", { class: "mono" }, short(from))),
         el("li", {}, el("span", {}, "Transaction"), txLink(hash))));
       // the estimate already said the currency isn't quoting on Textile FX: the confirmation promises nothing then
@@ -526,16 +551,17 @@ function sprayForm() {
   }
 
   buildPicker();
+  buildPay();
   const node = el("div", { class: "card-b stack pot-form" },
-    el("div", { class: "field" }, el("span", { class: "label", id: "pay-with-l" }, "Spray with"), payGroup),
+    el("div", { class: "field" }, pickerSlot, paySlot),
     el("div", { class: "field" }, el("label", { class: "label", for: "spray-amount" }, "How much?"),
       el("div", { class: "money" }, prefix, amountIn, tokenEl), quick, hint),
-    el("div", { class: "field" }, pickerSlot, estimate),
+    el("div", { class: "field" }, estimate),
     room, walletBox, actions, msg);
   const formKids = [...node.childNodes];
   loadTokenFacts();
   refreshRoom();
-  loadRate().then((r) => { S.rate = r; picker.setAvailability({ ...r.available, cngn: S.payCode === "cngn" ? true : r.available.cngn }); paint(); }).catch(() => paint());
+  loadRate().then((r) => { S.rate = r; picker.setAvailability(r.available); paint(); }).catch(() => paint());
   if (eth && !walletDisconnected()) {
     eth.request({ method: "eth_accounts" }).then((accs) => { if (accs?.[0]) setAccount(accs[0]); }).catch(() => {});
     eth.on?.("accountsChanged", (accs) => setAccount(accs?.[0] ?? null));

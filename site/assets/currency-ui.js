@@ -35,6 +35,7 @@ export const money = (n, code) => formatCurrency(n, code);
  *   value       the code selected at first (falls back to the remembered one, then naira)
  *   extra       more options after the four currencies, e.g. [{ code: "usd", label: "Dollars", flag: "usd" }]
  *   only        show only these codes (e.g. ["cngn", "usd"] when the payer sends cNGN)
+ *   options     the full list instead of the four currencies + extra: [{ code, label, flag?, title? }] (e.g. tokens)
  *   remember    false to not read or save the device's last choice (e.g. a link whose currency is fixed)
  *   onChange    (code, { user }) => void, called when the selection changes
  *   describedBy id of an element that explains the choice (added to aria-describedby with the note)
@@ -43,10 +44,10 @@ export const money = (n, code) => formatCurrency(n, code);
 let pickers = 0;
 export function currencyPicker(opts = {}) {
   const id = `cur-${++pickers}`;
-  const options = [
+  const options = (opts.options ?? [
     ...CURRENCIES.map((c) => ({ code: c.code, label: c.label, title: `${c.name} (${c.token})` })),
     ...(opts.extra ?? []),
-  ].filter((o) => !opts.only || opts.only.includes(o.code));
+  ]).filter((o) => !opts.only || opts.only.includes(o.code));
   const remember = opts.remember !== false;
   const start = [opts.value, remember ? lastCurrency() : null, "cngn"].find((c) => c && options.some((o) => o.code === c));
   let value = start;

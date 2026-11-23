@@ -107,8 +107,8 @@ export function defaultReceive({ receive = null, currency = null } = {}) {
  * The accessible name of the "Change" / "Done" button on the currency line. It starts with the visible word (WCAG
  * 2.5.3, label in name): "Change (They receive: Naira)", "Change (You receive: Dollars)", "Done choosing the currency".
  */
-export function choiceButtonLabel({ open = false, label = "They receive", code } = {}) {
-  return open ? "Done choosing the currency" : `Change (${label}: ${receiveName(code)})`;
+export function choiceButtonLabel({ open = false, label = "They receive", code, nameOf = receiveName } = {}) {
+  return open ? "Done choosing the currency" : `Change (${label}: ${nameOf(code)})`;
 }
 
 // ---------- sharing ----------
@@ -297,20 +297,21 @@ function shareGlyph() {
 // ---------- "They receive: Naira · Change" ----------
 /**
  * Wraps a currencyPicker (assets/currency-ui.js) in one line with a Change button that opens the full picker inline.
- * opts: { picker, label = "They receive", id }. Returns { el, refresh(), open(), close() }; call refresh() after a change.
+ * opts: { picker, label = "They receive", id, nameOf (code -> the name shown; default receiveName, e.g. a token symbol
+ * for "You pay with: USD₮") }. Returns { el, refresh(), open(), close() }; call refresh() after a change.
  */
-export function currencyChoice({ picker, label = "They receive", id } = {}) {
+export function currencyChoice({ picker, label = "They receive", id, nameOf = receiveName } = {}) {
   const pid = id ?? `cc-${++ids}`;
   const name = el("b", { class: "cc-name" });
   const flag = el("span", { class: "cc-flag" });
   const btn = el("button", { class: "linklike cc-change", type: "button", "aria-expanded": "false", "aria-controls": pid }, "Change");
   const panel = el("div", { class: "dc-panel cc-panel", id: pid, hidden: true }, el("div", { class: "dc-inner" }, picker.el));
   const line = el("p", { class: "cc-line" }, el("span", { class: "cc-label" }, label + ":"), flag, name, el("span", { class: "cc-dot", "aria-hidden": "true" }, "·"), btn);
-  const api = wireDisclosure(btn, panel, { onToggle: (open) => { btn.textContent = open ? "Done" : "Change"; btn.setAttribute("aria-label", choiceButtonLabel({ open, label, code: picker.value })); } });
+  const api = wireDisclosure(btn, panel, { onToggle: (open) => { btn.textContent = open ? "Done" : "Change"; btn.setAttribute("aria-label", choiceButtonLabel({ open, label, code: picker.value, nameOf })); } });
   const refresh = () => {
-    name.textContent = receiveName(picker.value);
+    name.textContent = nameOf(picker.value);
     flag.replaceChildren(el("span", { class: `cur-flag cur-flag-${picker.value === "usdt" ? "usd" : picker.value}`, "aria-hidden": "true" }));
-    if (!api.isOpen()) btn.setAttribute("aria-label", choiceButtonLabel({ open: false, label, code: picker.value }));
+    if (!api.isOpen()) btn.setAttribute("aria-label", choiceButtonLabel({ open: false, label, code: picker.value, nameOf }));
   };
   refresh();
   return { el: el("div", { class: "cc" }, line, panel), refresh, open: api.open, close: api.close };

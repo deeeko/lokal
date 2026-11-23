@@ -134,7 +134,9 @@ test("currency route for all five tokens: tags, pots, and the site's payoutRoute
   assert.deepEqual(routeFor(IDRX, null, "tag"), { mode: "forward", receive: "idrx" });
   assert.deepEqual(routeFor(USDT, null, "pot"), { mode: "forward", receive: "usdt" });
   assert.deepEqual(routeFor(CNGN, null, "pot"), { mode: "swap", corridor: "cngn-usdt", receive: "usdt" });
-  assert.equal(routeFor(WCOP, null, "pot"), null);
+  assert.deepEqual(routeFor(WCOP, null, "pot"), { mode: "swap", corridor: "wcop-usdt", receive: "usdt" });
+  assert.deepEqual(routeFor(IDRX, null, "pot"), { mode: "swap", corridor: "idrx-usdt", receive: "usdt" });
+  assert.deepEqual(routeFor(WARS, null, "pot"), { mode: "swap", corridor: "wars-usdt", receive: "usdt" });
   // a receive token set: USD₮ converts into it, the same token passes through, any other pair is refused
   for (const [tok, code] of [[CNGN, "cngn"], [IDRX, "idrx"], [WARS, "wars"], [WCOP, "wcop"]]) {
     for (const kind of ["tag", "pot"]) {
@@ -145,7 +147,22 @@ test("currency route for all five tokens: tags, pots, and the site's payoutRoute
   assert.deepEqual(routeFor(USDT, USDT, "tag"), { mode: "forward", receive: "usdt" });
   assert.deepEqual(routeFor(CNGN, USDT, "tag"), { mode: "swap", corridor: "cngn-usdt", receive: "usdt" });
   assert.equal(routeFor(CNGN, IDRX, "tag"), null);
-  assert.equal(routeFor(IDRX, USDT, "tag"), null);
+  // every local token pays out dollars through its own reverse corridor; one local currency into another is refused
+  const LOCAL = [[CNGN, "cngn"], [IDRX, "idrx"], [WARS, "wars"], [WCOP, "wcop"]];
+  for (const [tok, code] of LOCAL) {
+    for (const kind of ["tag", "pot"]) {
+      assert.deepEqual(routeFor(tok, USDT, kind), { mode: "swap", corridor: `${code}-usdt`, receive: "usdt" }, `${code} -> dollars (${kind}, default)`);
+      assert.deepEqual(routeFor(tok, null, kind, "usdt"), { mode: "swap", corridor: `${code}-usdt`, receive: "usdt" }, `${code} -> dollars (${kind}, chosen)`);
+      assert.deepEqual(routeFor(tok, IDRX, kind, code), { mode: "forward", receive: code }, `${code} passed through when chosen`);
+      for (const [other, oc] of LOCAL) {
+        if (oc === code) continue;
+        assert.equal(routeFor(tok, other, kind), null, `${code} -> ${oc} (${kind}) refused`);
+        assert.equal(routeFor(tok, null, kind, oc), null, `${code} -> ${oc} (${kind}, chosen) refused`);
+      }
+    }
+  }
+  assert.deepEqual(routeFor(IDRX, USDT, "tag"), { mode: "swap", corridor: "idrx-usdt", receive: "usdt" });
+  assert.deepEqual(routeFor(IDRX, null, "tag"), { mode: "forward", receive: "idrx" }, "a tag with no preference still passes a local token through");
   assert.equal(routeFor(EVE, null, "tag"), null, "unknown token");
   assert.equal(routeFor(USDT, EVE, "tag"), null, "unknown receive token");
   assert.deepEqual([USDT, CNGN, IDRX, WARS, WCOP].map(tokenCode), ["usdt", "cngn", "idrx", "wars", "wcop"]);
@@ -375,6 +392,52 @@ test("the payer's choice in the ref beats the owner's default; an impossible cho
   assert.equal(w.mem.contract[evKey(1)].chosen, "wars");
   assert.equal(w.mem.contract[evKey(3)].status, "refused");
   assert.match(w.mem.contract[evKey(3)].reason, /token not accepted/);
+});
+
+test("IDRX, wARS and wCOP for dollars: the matching <code>-usdt corridor, the amount in the token's own decimals, the live $1 floor", async () => {
+  const floors = [];
+  const w = world({
+    payments: [
+      { n: 1, block: B0 + 10, kind: "tag", token: IDRX, amount: 18_407_050n, ref: currencyRef("usdt") }, // 184,070.50 IDRX (2 dp)
+      { n: 2, block: B0 + 11, kind: "tag", token: WARS, amount: 17_652_123_456_789_012_345_678n, ref: currencyRef("usdt") }, // 18 dp, to the last unit
+      { n: 3, block: B0 + 12, kind: "pot", token: WCOP, amount: 34_556_000_000_000_000_000_000n }, // a pot pays dollars by default
+      { n: 4, block: B0 + 13, kind: "tag", token: IDRX, amount: 2_000_000n }, // no choice, no preference: IDRX passed through
+      { n: 5, block: B0 + 14, kind: "tag", recipient: HOST, tag: "host", token: WARS, amount: 17_652n * 10n ** 18n }, // HOST's default is dollars
+    ],
+    receive: { [HOST]: USDT },
+    over: { ntagUsdFloor: async (corridor, units) => { floors.push([corridor, BigInt(units)]); } },
+  });
+  await run(w);
+  assert.deepEqual(w.calls.map((c) => [c.corridor, c.amount]), [
+    ["idrx-usdt", "184070.5"], ["wars-usdt", "17652.123456789012345678"], ["wcop-usdt", "34556"], ["wars-usdt", "17652"],
+  ]);
+  assert.deepEqual(floors.map(([c]) => c), ["idrx-usdt", "wars-usdt", "wcop-usdt", "wars-usdt"]);
+  assert.equal(floors[1][1], 17_652_123_456_789_012_345_678n, "the floor previews the exact units");
+  assert.deepEqual(w.forwards.map((f) => [f.token, f.units]), [[IDRX, 2_000_000n]]);
+  assert.equal(w.mem.contract[evKey(1)].dir, "idrx-usdt");
+  assert.equal(w.mem.contract[evKey(1)].receive, "usdt");
+  assert.equal(w.mem.contract[evKey(1)].amount, "184070.5");
+});
+
+test("IDRX, wARS and wCOP: under the dust floor or worth under $1 live is refused and recorded; local into another local is refused", async () => {
+  const w = world({
+    payments: [
+      { n: 1, block: B0 + 10, kind: "tag", token: IDRX, amount: 999_999n, ref: currencyRef("usdt") }, // 9,999.99 IDRX < 10,000
+      { n: 2, block: B0 + 11, kind: "tag", token: WCOP, amount: 3_000n * 10n ** 18n, ref: currencyRef("usdt") }, // worth < $1 live
+      { n: 3, block: B0 + 12, kind: "tag", token: WARS, amount: 17_652n * 10n ** 18n, ref: currencyRef("idrx") }, // wARS -> rupiah: no corridor
+    ],
+    over: {
+      ntagUsdFloor: async (corridor, units) => {
+        if (corridor === "wcop-usdt") throw refusal(`${units} wCOP is worth about 0.86 USD, below the 1 USD minimum for Lokal tag payments. Not paid.`);
+      },
+    },
+  });
+  await run(w);
+  assert.equal(w.calls.length + w.forwards.length, 0);
+  assert.match(w.mem.contract[evKey(1)].reason, new RegExp(`minimum of ${CONTRACT_MIN.IDRX} IDRX`));
+  assert.match(w.mem.contract[evKey(2)].reason, /below the 1 USD minimum/);
+  assert.match(w.mem.contract[evKey(3)].reason, /token not accepted: wARS can't be paid out as IDRX/);
+  for (const n of [1, 2, 3]) assert.equal(w.mem.contract[evKey(n)].status, "refused");
 });
 
 test("the agent's own caps still apply: a refusal is recorded like any other and a rescan never pays it", async () => {

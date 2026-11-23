@@ -15,9 +15,9 @@ USD₮. The payer picks the currency; all four are built, not yet used on mainne
 | Country | Token | Issuer | Decimals | Today's rate (5 USD₮) | Status |
 |---|---|---|---|---|---|
 | 🇳🇬 Nigeria | [cNGN](https://celoscan.io/address/0xF6829D7393dAe24509eb1E52eE8e572e2E271a4f) (naira) | — | 6 | ₦7,205.67 | **Built, not yet used on mainnet** (USD₮ → cNGN, cNGN → USD₮, and CELO → cNGN for the operator) |
-| 🇮🇩 Indonesia | [IDRX](https://celoscan.io/address/0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22) (rupiah) | — | 2 | Rp 92,035.51 | **Built, not yet used on mainnet** (`usdt-idrx`) |
-| 🇦🇷 Argentina | [wARS](https://celoscan.io/address/0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D) (peso) | Ripio | 18 | ARS 8,826.31 | **Built, not yet used on mainnet** (`usdt-wars`) |
-| 🇨🇴 Colombia | [wCOP](https://celoscan.io/address/0x8a1D45e102e886510e891d2Ec656a708991e2D76) (peso) | Ripio | 18 | COP 17,277.91 | **Built, not yet used on mainnet** (`usdt-wcop`; thin market: Textile could fill only about $6.71 on 21 Nov, so larger payments are refused, never switched) |
+| 🇮🇩 Indonesia | [IDRX](https://celoscan.io/address/0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22) (rupiah) | — | 2 | Rp 92,035.51 | **Built, not yet used on mainnet** (`usdt-idrx`, and `idrx-usdt` for dollars) |
+| 🇦🇷 Argentina | [wARS](https://celoscan.io/address/0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D) (peso) | Ripio | 18 | ARS 8,826.31 | **Built, not yet used on mainnet** (`usdt-wars`, and `wars-usdt` for dollars) |
+| 🇨🇴 Colombia | [wCOP](https://celoscan.io/address/0x8a1D45e102e886510e891d2Ec656a708991e2D76) (peso) | Ripio | 18 | COP 17,277.91 | **Built, not yet used on mainnet** (`usdt-wcop`, and `wcop-usdt` for dollars; thin market: Textile could fill only about $6.71 on 21 Nov, so larger payments are refused, never switched) |
 
 - **Rates** are live Textile FX previews for 5 USD₮ taken on 21 Nov 2026. They are free previews, not firm quotes, and
   they move; every payment gets its own firm quote at the time it is paid.
@@ -36,6 +36,15 @@ USD₮. The payer picks the currency; all four are built, not yet used on mainne
   Payment links and Get paid fix the currency in the link. Every amount uses the token's own decimals (IDRX 2, cNGN 6,
   wARS and wCOP 18) and is shown rounded down. If a currency has no Textile quote when the payment is handled, the
   payment is refused (`currency_unavailable`) and never paid in another currency.
+- **Paying in a local currency for dollars.** The payer can also pay in any local currency and the recipient gets
+  dollars: `cngn-usdt`, `idrx-usdt`, `wars-usdt` and `wcop-usdt` (you send cNGN, IDRX, wARS or wCOP; they get
+  USD₮). On a tag or pot page, pick "Dollars", then "You pay with: USD₮ · Change" offers USD₮ (passed straight
+  through), cNGN, IDRX, wARS or wCOP. The caps are counted in dollars from the live preview (the USD₮ the swap buys,
+  checked again on the firm quote), and Textile needs about $1 per swap: a payment whose live preview is under $1 is
+  refused permanently, never paid. A live preview on 23 Nov 2026 of about $1 in each returned 1.0047 USD₮ for
+  18,407 IDRX, 1.0024 for 1,766.5 wARS and 0.9843 for 3,456 wCOP. `idrx-usdt`, `wars-usdt` and `wcop-usdt` are
+  for payments through the contracts (and the operator's `pay` / `quote`); payment links, Get paid and legacy
+  `NTP:` memos only take USD₮ and cNGN, so they keep `cngn-usdt` as their only reverse corridor.
 - **Getting it to a bank.** The [cash-out guide](https://lokalpay.vercel.app/cash-out.html)
   ([docs/CASH-OUT.md](CASH-OUT.md)) gives each currency's checked route as of 21 Nov 2026. MiniPay only shows
   USDT, USDC and USDm, so recipients who cash out through MiniPay should take dollars.
@@ -124,7 +133,8 @@ amount, ref, ...)`, the money is already in the agent wallet and the event names
    went to another payout wallet, the event is recorded as refused and nothing is paid.
 3. **What they get.** The payer's choice in `ref` (`cur:<code>`), else the recipient's default (`receiveTokenOf` at
    the payment's block), else naira for USD₮ and dollars for cNGN; a pot with no choice pays dollars. USD₮ converts on
-   `usdt-<code>`, cNGN on `cngn-usdt`; a payment already in the token they get is passed on as is (`src/forward.mjs`:
+   `usdt-<code>`; a local token converts into dollars on its own reverse corridor (`cngn-usdt`, `idrx-usdt`,
+   `wars-usdt`, `wcop-usdt`); a payment already in the token they get is passed on as is (`src/forward.mjs`:
    same recipient rules and caps, exact amount, attribution tag, logged to `receipts.jsonl`). Any other pair (cNGN to
    rupiah, say) is refused, never paid in another currency.
 4. **The same safety path.** Pre-flight (recipient rules, the agent's own caps, a live preview), the payment recorded

@@ -15,7 +15,7 @@ import { registrationError } from "../src/registrations.mjs";
 import { classifyNtagDeposit, NTAG_MIN, ntagCorridor, watch } from "../src/watch.mjs";
 import { depositEvent, reasonCode, tokenSymbol } from "../src/status-report.mjs";
 import { PAID_TOKENS, REASONS, validateEvent } from "../lib/status.mjs";
-import { buildRate, currencyQuote, hasAnyRate } from "../lib/rate.mjs";
+import { REVERSE_PREVIEW, buildRate, currencyQuote, hasAnyRate } from "../lib/rate.mjs";
 import {
   agentPaidUsd, buildTransfer, estimateReceive, expectedPayoutUnits, fmtToken as cliToken, parseArgs, parseCurrencyArg, UsageError,
 } from "../src/ntag.mjs";
@@ -404,6 +404,10 @@ test("rates: every currency, a thin market read from a smaller preview, graceful
   assert.deepEqual(Object.keys(r.rates), ["cngn", "idrx", "wars", "wcop"]);
   assert.ok(r.errors.some((e) => /wars/.test(e)));
   assert.equal(r.effectiveRate, r.rates.cngn, "the old naira field still works");
+  // the reverse rates (USD₮ per 1 local unit, from each <code>-usdt preview of about $10): what local -> dollars is worth
+  assert.equal(r.reverseRates.cngn, r.reverseRate);
+  for (const code of ["idrx", "wars", "wcop"]) assert.equal(r.reverseRates[code], +(9.968215 / REVERSE_PREVIEW[code]).toPrecision(8), code);
+  assert.deepEqual(Object.keys(r.reverseRates), ["cngn", "idrx", "wars", "wcop"]);
   assert.ok(r.at && r.fetchedAt);
   assert.ok(hasAnyRate(r));
   // the site reads the same body

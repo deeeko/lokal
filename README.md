@@ -62,7 +62,7 @@ Each row links to its proof on Celo. Everything LokalPay does is on the
 | Contract admin handed to a separate wallet (two-step) | **Live** | [accepted tx](https://celoscan.io/tx/0xbee2dd85e15c4fb664397f06e1a0a932214c6c6a65aaa3aa99e599905c2ec3a6) |
 | First LokalPay tag claimed through LokalTags | **Live** | [claim tx](https://celoscan.io/tx/0x4ae77beb9f14d14a1c39525e617a0d6cc50fd08fab68d07a2f3106c8f5e0aeec) |
 | ERC-8004 identity, agentId 10079, card updated to LokalPay | **Live** | [register tx](https://celoscan.io/tx/0x080d54275f02a722a3b0daa408f02a1af760e29f9e39092a9a48d22b964cf62e) · [card update tx](https://celoscan.io/tx/0x089fcfc3ef04a5ae2fcb4c016f11d37c7955bd4e86bc32fae18eaa1732c1b327) |
-| Payouts in naira, rupiah and pesos; tags, links, pots, refunds, "Who am I paying?" | **Built, not yet used on mainnet** | 372 tests and 135 contract tests, run on every push |
+| Payouts in naira, rupiah and pesos; tags, links, pots, refunds, "Who am I paying?" | **Built, not yet used on mainnet** | 379 tests and 135 contract tests, run on every push |
 | First real user payout | **Pending** | It will be listed here and on the [Proof page](https://lokalpay.vercel.app/proof.html) with its transactions |
 
 Every transaction the agent sends, and every one the site asks a wallet to send, ends with the ERC-8021 attribution
@@ -108,7 +108,8 @@ Pots work the same way for many payers: one link and QR code for a wedding or a 
 | 🇳🇬 Naira · cNGN | 🇮🇩 Rupiah · IDRX | 🇦🇷 Argentine peso · wARS | 🇨🇴 Colombian peso · wCOP | 💵 Dollars · USD₮ |
 |---|---|---|---|---|
 
-The payer picks on every payment; Textile FX prices each one live. Rates, decimals and how the choice travels on
+The payer picks on every payment; Textile FX prices each one live. The payer can also pay in any local currency and
+the recipient gets dollars. Rates, decimals and how the choice travels on
 chain: [docs/PROTOCOL.md](docs/PROTOCOL.md#currencies).
 
 ## Safety

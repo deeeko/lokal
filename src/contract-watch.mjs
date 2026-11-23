@@ -21,8 +21,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { formatUnits, getAddress, parseAbi, parseUnits } from "viem";
-import { CONTRACT_PAYMENTS_FILE, CORRIDORS, LEGACY_CUTOVER_BLOCK, LOKAL_POTS, LOKAL_TAGS, LOKAL_TAGS_BLOCK, TOKENS } from "./config.mjs";
-import { CURRENCIES, DEFAULT_CURRENCY, USDT_ADDRESS, corridorFor } from "./currencies.mjs";
+import { CONTRACT_PAYMENTS_FILE, CORRIDORS, LEGACY_CUTOVER_BLOCK, PAYOUT_CORRIDORS, LOKAL_POTS, LOKAL_TAGS, LOKAL_TAGS_BLOCK, TOKENS } from "./config.mjs";
+import { CURRENCIES, DEFAULT_CURRENCY, USDT_ADDRESS, corridorFor, reverseCorridorFor } from "./currencies.mjs";
 import { refusal } from "./guards.mjs";
 import { forward, forwardPreflight } from "./forward.mjs";
 
@@ -77,7 +77,9 @@ export function currencyOfRef(ref) {
  * What a contract payment pays out in. The PAYER's choice for this payment (`chosen`, from the ref) wins; then the
  * recipient's optional default (their receive token on LokalTags, set with setReceiveToken); then: a TAG pays USD₮
  * payments in naira (DEFAULT_CURRENCY, as since the memo days) and cNGN payments in dollars and passes any other token
- * through; a POT pays dollars. A payment already in the token the recipient gets is passed through as is.
+ * through; a POT pays dollars. A payment already in the token the recipient gets is passed through as is. USD₮ converts
+ * into any local currency (usdt-<code>); any local token converts into dollars (<code>-usdt: cngn, idrx, wars, wcop);
+ * one local currency into another is refused.
  * Returns { mode: "swap", corridor, receive } | { mode: "forward", receive } | null (refused: no route).
  * Same rule as payoutRoute in site/assets/lokal-contracts.js (a test checks every case).
  */
@@ -91,12 +93,16 @@ export function routeFor(paidToken, receiveToken, kind = "tag", chosen = null) {
   const want = chosen ?? set ?? (kind === "pot" ? "usdt" : paid === "usdt" ? DEFAULT_CURRENCY : paid === "cngn" ? "usdt" : paid);
   if (paid === want) return { mode: "forward", receive: want };
   if (paid === "usdt" && CORRIDORS[corridorFor(want)]) return { mode: "swap", corridor: corridorFor(want), receive: want };
-  if (paid === "cngn" && want === "usdt") return { mode: "swap", corridor: "cngn-usdt", receive: "usdt" };
+  if (want === "usdt" && PAYOUT_CORRIDORS[reverseCorridorFor(paid)]) return { mode: "swap", corridor: reverseCorridorFor(paid), receive: "usdt" };
   return null;
 }
 
-/** Smallest swap autopilot pays (the sell token, 6 dp): Textile's ~$1 minimum; cNGN is also checked live (ntagUsdFloor). */
-export const CONTRACT_MIN = { USDT: "1", CNGN: "1000" };
+/**
+ * Smallest swap autopilot pays, in the sell token's own units (TOKENS key -> decimal string). USD₮: Textile's ~$1
+ * minimum. Local tokens: a dust floor well under $1; every local -> dollars swap is also checked live (ntagUsdFloor:
+ * a preview under $1 is a permanent refusal).
+ */
+export const CONTRACT_MIN = { USDT: "1", CNGN: "1000", IDRX: "10000", WARS: "1000", WCOP: "2000" };
 
 /**
  * A log from eth_getLogs (viem, decoded with TAGS_ABI / POTS_ABI) -> the payment, or null when it is not a TagPaid from
@@ -151,8 +157,8 @@ export function mergeLogs(transfers, events, innerKeys) {
   return items;
 }
 
-/** Base units of the 6-decimal sell token -> pay() amount string (whole deposit; pay() takes up to 6 decimals). */
-const payAmount = (units) => ({ amount: formatUnits(BigInt(units), 6), units: BigInt(units) });
+/** Base units of the sell token -> pay() amount string in its own decimals (the whole payment, to the last unit). */
+const payAmount = (units, decimals) => ({ amount: formatUnits(BigInt(units), decimals), units: BigInt(units) });
 
 // ---------- local state (git-ignored) ----------
 
@@ -282,10 +288,10 @@ export function makeContractWatch({
   }
   /**
    * Status server: kind "ntag" (pots: the host's tag), under the DEPOSIT's id (the inner Transfer's tx:logIndex), the
-   * same id refunds use. Only USD₮ and cNGN payments fit its schema today.
+   * same id refunds use. Any token the agent knows (USD₮, cNGN, IDRX, wARS, wCOP).
    */
   function reportEvent(ev, rec, status, extra = {}) {
-    if (!ev.inner || !rec?.tag || !["USDT", "cNGN"].includes(rec.token)) return;
+    if (!ev.inner || !rec?.tag || !Object.values(TOKENS).some((t) => t.symbol === rec.token)) return;
     try {
       report({ kind: "ntag", key: ev.inner.key, tag: rec.tag, recipient: rec.from, token: rec.token, amount: rec.amount, corridor: rec.dir, payer: ev.payer, status, ...extra });
     } catch { /* best effort */ }
@@ -337,9 +343,9 @@ export function makeContractWatch({
     let args;
     let usdUnits = null;
     if (route.mode === "swap") {
-      const { amount, units } = payAmount(ev.amount);
-      const sell = CORRIDORS[route.corridor].sell;
-      if (units < parseUnits(CONTRACT_MIN[sell], 6)) return refuse(ev, `below the minimum of ${CONTRACT_MIN[sell]} ${sym} for a payout`, rec(ev.recipient), where);
+      const sell = PAYOUT_CORRIDORS[route.corridor].sell;
+      const { amount, units } = payAmount(ev.amount, TOKENS[sell].decimals);
+      if (units < parseUnits(CONTRACT_MIN[sell], TOKENS[sell].decimals)) return refuse(ev, `below the minimum of ${CONTRACT_MIN[sell]} ${sym} for a payout`, rec(ev.recipient), where);
       args = { to: name, amount, corridor: route.corridor, recipientAddress: ev.recipient, payer: ev.payer, ntag: tag ?? undefined };
     } else {
       usdUnits = route.receive === "usdt" ? ev.amount : BigInt(await io.readUsdValue(pub, ev.token, ev.amount));
@@ -350,7 +356,7 @@ export function makeContractWatch({
     if (!execute) {
       try {
         if (route.mode === "swap") {
-          await io.ntagUsdFloor(route.corridor, args.amount && parseUnits(args.amount, 6));
+          await io.ntagUsdFloor(route.corridor, ev.amount);
           await io.pay({ ...args, execute: false });
         } else await io.forward({ ...args, execute: false });
         dry.set(ev.key, rec(ev.recipient));
@@ -367,7 +373,7 @@ export function makeContractWatch({
     let from = ev.recipient;
     try {
       if (route.mode === "swap") {
-        await io.ntagUsdFloor(route.corridor, parseUnits(args.amount, 6));
+        await io.ntagUsdFloor(route.corridor, ev.amount);
         const pf = await io.preflight({ ...args, agent });
         if (pf?.recipient) from = pf.recipient;
       } else {

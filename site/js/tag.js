@@ -7,6 +7,7 @@ import {
 import {
   LOKAL_TAGS, ZERO_ADDRESS, approveData, checkPayment, currencyRef, payTagData, payTagWithPermitData, permitDomainOk,
   permitTypedData, readAllowance, readNonce, readPaymentRoom, readTagInfo, simulate, splitSignature, tokenAmountText,
+  payWithTokens, paySymbol, payDecimals, unitsFromCents, usdPerUnit, payUsdValue, localPayError,
 } from "../assets/lokal-contracts.js";
 import { currencyPicker } from "../assets/currency-ui.js";
 import {
@@ -44,6 +45,8 @@ const title = $("#tag-title"), lead = $("#tag-lead");
 const eth = injectedWallet();
 const USDT_MIN_CENTS = 100, USDT_MAX_CENTS = CAP * 100; // $1.00 to $25.00
 const NGN_MIN = 1500; // cNGN payments must also be worth at least $1 (the agent checks it live)
+/** The amount a pay page starts on for each token: about $10. */
+const START_AMOUNT = { usdt: "10", cngn: "15000", idrx: "184000", wars: "17500", wcop: "34500" };
 const PAYOUT_POLL_MS = 10_000, PAYOUT_WATCH_MS = 2 * 3600_000;
 const PENDING_KEY = (tag) => `np-ntag-pay:${tag}`;
 const isHash = (h) => /^0x[0-9a-fA-F]{64}$/.test(String(h));
@@ -231,31 +234,47 @@ function whoCard(tag, entry) {
 // ---------- pay ----------
 function payCard(tag, entry, beforePay = null) {
   // C: the tag is on the LokalTags contract and is paid through it. Either way the PAYER chooses what the owner gets on
-  // this payment (the owner's optional default is pre-selected, else naira): you send USD₮ for naira, rupiah or pesos,
-  // or cNGN for dollars. On the contract the choice travels in payTag's `ref` ("cur:<code>"), which the agent reads.
+  // this payment (the owner's optional default is pre-selected, else naira), then what they pay with: on the contract,
+  // USD₮ for any currency, or for dollars USD₮, cNGN, IDRX, wARS or wCOP (whatever payoutRoute allows); a tag still on
+  // the memo protocol takes USD₮ for local money and cNGN for dollars. On the contract the choice travels in payTag's
+  // `ref` ("cur:<code>"), which the agent reads.
   const C = entry.source === "contract";
   const startCode = defaultReceive(entry);
   const P = {
-    corridor: startCode === "usd" ? "cngn-usdt" : `usdt-${startCode}`, rate: null, rateFailed: false, account: null, chainOk: null, bal: null, celo: null, busy: false,
+    receive: startCode, pay: "usdt", rate: null, rateFailed: false, account: null, chainOk: null, bal: null, celo: null, busy: false,
     touched: false, allowance: null, celoAnyway: false, alive: true, room: null,
   };
   onCleanup(() => { P.alive = false; });
-  // isNaira: you send USD₮ and they get local money (any currency); otherwise you send cNGN and they get dollars
-  const isNaira = () => P.corridor !== "cngn-usdt";
-  const code = () => (isNaira() ? P.corridor.slice(5) : null); // the currency they receive, or null (dollars)
+  /** What they get on this payment: "usdt" (dollars) or a currency code. */
+  const recv = () => (P.receive === "usd" ? "usdt" : P.receive);
+  /** What the payer can pay with for that: token codes, USD₮ first. */
+  const payChoices = () => (C ? payWithTokens(recv(), "tag").map((t) => t.code) : [P.receive === "usd" ? "cngn" : "usdt"]);
+  P.pay = payChoices()[0];
+  // isNaira: you send USD₮ and they get local money (any currency); passThrough: they get the very token you send
+  // (contract only); otherwise you send a local token (cNGN, IDRX, wARS, wCOP) and they get dollars
+  const isNaira = () => P.pay === "usdt" && P.receive !== "usd";
+  const passThrough = () => P.pay === recv();
+  const code = () => (P.receive === "usd" ? null : P.receive); // the currency they receive, or null (dollars)
   const cur = () => currencyOf(code());
+  const payCur = () => currencyOf(P.pay); // the local token paid with, or null (USD₮)
   const perUsd = () => (P.rate && code() && P.rate.available[code()] ? P.rate.rates[code()] : null);
-  const sellToken = () => (isNaira() ? TOKENS.USDT : TOKENS.cNGN);
+  const sellToken = () => (P.pay === "usdt" ? TOKENS.USDT : TOKENS[payCur().token]);
+  /** The route's id, as the receipt tracker and the agent name it: usdt-idrx, idrx-usdt, forward-usdt, ... */
+  const corridorId = () => (passThrough() ? `forward-${P.pay}` : P.pay === "usdt" ? `usdt-${P.receive}` : `${P.pay}-usdt`);
+  /** Units of the paid token as text ("1,234.50"), by its own decimals. */
+  const unitsText = (u) => num2.format(Number(u) / 10 ** payDecimals(P.pay));
+  /** About `usdv` dollars in the paid local token ("Rp 446,369"), or null without a rate. */
+  const localForUsd = (usdv) => { const u = usdPerUnit(P.pay, P.rate); return u ? formatCurrency(Math.floor(usdv / u.usdPer), P.pay) : null; };
   const pref = entry.currency ?? null;
 
   const picker = currencyPicker({
     label: `What does @${tag} receive?`, describedBy: "corridor-l", value: startCode, remember: false,
-    extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮): you send cNGN" }],
+    extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮)" }],
     onChange: (c) => {
-      const next = c === "usd" ? "cngn-usdt" : `usdt-${c}`;
-      const unitChange = (next === "cngn-usdt") !== (P.corridor === "cngn-usdt");
-      P.corridor = next;
-      if (unitChange) { amountIn.value = isNaira() ? "10" : "15000"; P.bal = null; P.room = null; refreshBalances(); refreshRoom(); }
+      P.receive = c;
+      const opts = payChoices();
+      if (!opts.includes(P.pay)) setPay(opts[0]);
+      buildPay();
       choice.refresh();
       renderForm();
     },
@@ -264,7 +283,28 @@ function payCard(tag, entry, beforePay = null) {
   const choice = currencyChoice({ picker, label: "They receive" });
   const segHint = el("p", { class: "hint" });
   choice.el.querySelector(".dc-inner").append(segHint);
-  const amountIn = el("input", { id: "pay-amount", type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false", size: "4", value: "10", "aria-describedby": "pay-amount-hint pay-refusal" });
+  // "You pay with: USD₮ · Change": the tokens this payment can be paid with (Change only when there is a choice)
+  const paySlot = el("div", {});
+  let payChoice = null;
+  function buildPay() {
+    const opts = payChoices();
+    const payPicker = currencyPicker({
+      label: "What do you pay with?", value: P.pay, remember: false,
+      options: opts.map((c) => ({ code: c, label: paySymbol(c), flag: c === "usdt" ? "usd" : c, title: c === "usdt" ? "USD₮ (dollars)" : `${paySymbol(c)} (${currencyOf(c).name})` })),
+      onChange: (c) => { setPay(c); payChoice.refresh(); renderForm(); },
+    });
+    payChoice = currencyChoice({ picker: payPicker, label: "You pay with", nameOf: paySymbol });
+    for (const n of payChoice.el.querySelectorAll(".cc-change, .cc-dot")) n.style.display = opts.length > 1 ? "" : "none";
+    paySlot.replaceChildren(payChoice.el);
+  }
+  function setPay(c) {
+    if (c === P.pay) return;
+    P.pay = c;
+    amountIn.value = START_AMOUNT[c] ?? "10";
+    P.bal = null; P.room = null;
+    refreshBalances(); refreshRoom();
+  }
+  const amountIn = el("input", { id: "pay-amount", type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false", size: "4", value: START_AMOUNT[P.pay] ?? "10", "aria-describedby": "pay-amount-hint pay-refusal" });
   const tokenEl = el("span", { class: "token" }, "USD₮");
   const amountHint = el("p", { class: "hint", id: "pay-amount-hint", hidden: true });
   const out = el("output", { for: "pay-amount", "aria-live": "polite" }, el("span", { class: "skel lg" }));
@@ -308,7 +348,7 @@ function payCard(tag, entry, beforePay = null) {
   const msg = el("div", { "aria-live": "polite" });
   const form = el("div", { class: "stack nt-payform" },
     el("h2", { id: "pay-h", class: "sr-only" }, "Pay @" + tag),
-    choice.el,
+    choice.el, paySlot,
     el("div", { class: "field" }, el("label", { class: "label", for: "pay-amount" }, "You send"), el("div", { class: "money" }, amountIn, tokenEl), amountHint),
     el("div", { class: "receive" }, el("div", { class: "label" }, el("span", {}, "@" + tag + " gets about")), out),
     refusal,
@@ -319,29 +359,33 @@ function payCard(tag, entry, beforePay = null) {
   const section = el("section", { class: "card", "aria-labelledby": "pay-h" }, body);
 
   // ----- amount -----
-  /** { cents, units (bigint, 6 dp), usd } or { error } */
+  /** { cents, units (bigint, in the paid token's own decimals), usd } or { error } */
   function readAmount() {
     const p = parseMoneyInput(amountIn.value);
     if (p.error) return { error: p.error };
     const cents = p.cents;
-    const units = BigInt(cents) * 10_000n;
+    const units = unitsFromCents(cents, P.pay);
     let value;
-    if (isNaira()) {
-      if (cents < USDT_MIN_CENTS || cents > USDT_MAX_CENTS) return { cents, units, error: `Send $1 to $${CAP}${perUsd() ? ` (≈ ${formatCurrency(CAP * perUsd(), code())})` : ""}.` };
+    if (P.pay === "usdt") {
+      if (cents < USDT_MIN_CENTS || cents > USDT_MAX_CENTS) return { cents, units, error: `Send $1 to $${CAP}${isNaira() && perUsd() ? ` (≈ ${formatCurrency(CAP * perUsd(), code())})` : ""}.` };
       value = cents / 100;
-      if (code() && P.rate && !perUsd()) return { cents, units, error: `${cur().label} isn't available on Textile FX right now, so the agent would refuse it. ${C ? "Try again later." : "Pick another currency, or try again later."}` };
-      const max = code() ? P.rate?.maxUsd?.[code()] : null;
+      if (isNaira() && P.rate && !perUsd()) return { cents, units, error: `${cur().label} isn't available on Textile FX right now, so the agent would refuse it. ${C ? "Try again later." : "Pick another currency, or try again later."}` };
+      const max = isNaira() ? P.rate?.maxUsd?.[code()] : null;
       if (max && value > max) return { cents, units, error: `Textile can convert up to about $${max.toFixed(2)} into ${cur().plural} right now. Send less, or pick another currency.` };
     } else {
-      if (cents < NGN_MIN * 100) return { cents, units, error: `Send at least ₦${ngnText(NGN_MIN)}.` };
-      const rr = P.rate?.reverseRate;
-      if (!rr) return { cents, units, error: P.rateFailed ? `Couldn't load the dollar rate, so the $${CAP} limit can't be checked. Choose naira, or reload in a minute.` : "Loading the dollar rate…" };
-      value = (cents / 100) * rr;
-      if (value > CNGN_CAP_USD) return { cents, units, error: `That's worth about ${dollars(value)}. In cNGN, send up to about ₦${ngnText(Math.floor(CNGN_CAP_USD / rr))} so it stays under the agent's $${CAP} limit after price moves.` };
-      if (value < 1) return { cents, units, error: "That's worth less than $1. Send a little more." };
+      // a local token: the agent counts it in dollars (its <code>-usdt preview), so its limits are about dollars too
+      if (P.pay === "cngn" && cents < NGN_MIN * 100) return { cents, units, error: `Send at least ₦${ngnText(NGN_MIN)}.` };
+      const v = payUsdValue(P.pay, cents, P.rate);
+      if (!v) return { cents, units, error: P.rateFailed || P.rate ? `Couldn't load the ${payCur().token} rate, so the $${CAP} limit can't be checked. Pay with USD₮, or reload in a minute.` : "Loading the dollar rate…" };
+      value = v.usd;
+      const e = localPayError(v, CNGN_CAP_USD, (u) => localForUsd(u) ?? `$${u}`);
+      if (e) return { cents, units, error: e };
     }
-    // the contract's own room today (per payment, per recipient, per payer, overall): it would refuse anything over it
+    // the contract's own limits for this token (tokenLimits) and its room today (per payment, per recipient, per
+    // payer, overall), in the token's own units: it would refuse anything outside them
     const room = C && P.room && !P.room.error ? P.room : null;
+    if (room && room.max === 0n) return { cents, units, usd: value, limit: true, error: `The LokalTags contract doesn't take ${sellToken().symbol} right now. Pay with another token.` };
+    if (room && units < room.min) return { cents, units, usd: value, error: `The contract takes at least ${tokenAmountText(room.min, sellToken().address)} in ${sellToken().symbol}. Send a little more.` };
     if (room && units > room.room) return { cents, units, usd: value, limit: true, error: roomError(room) };
     const alw = P.allowance;
     if (alw && !alw.error && value > alw.leftUsd + 0.005) {
@@ -351,7 +395,7 @@ function payCard(tag, entry, beforePay = null) {
     }
     return { cents, units, usd: value };
   }
-  const fmtSend = (cents) => (isNaira() ? `${num2.format(cents / 100)} USD₮` : `${num2.format(cents / 100)} cNGN`);
+  const fmtSend = (cents) => `${num2.format(cents / 100)} ${sellToken().symbol}`;
   /** Why the contract would refuse an amount over its room today, in plain English. */
   const roomError = (r) => {
     const t = sellToken().address, amt = (u) => tokenAmountText(u, t);
@@ -384,10 +428,12 @@ function payCard(tag, entry, beforePay = null) {
     } catch { P.room = { error: true }; }
     if (P.alive) renderForm();
   }
+  /** The limits for a payment in a local token, in that token: about $1 up to a little under the $25 cap. */
   const cngnHint = () => {
-    const rr = P.rate?.reverseRate;
-    const most = rr ? `about ₦${ngnText(Math.floor(CNGN_CAP_USD / rr))} (about $${CNGN_CAP_USD})` : `about $${CNGN_CAP_USD} in value`;
-    return `₦${ngnText(NGN_MIN)} up to ${most}. That's a little under the $${CAP} limit, so price moves before the agent pays can't push it over.`;
+    const u = usdPerUnit(P.pay, P.rate);
+    const most = u ? `about ${localForUsd(CNGN_CAP_USD)} (about $${CNGN_CAP_USD})` : `about $${CNGN_CAP_USD} in value`;
+    const least = P.pay === "cngn" ? `₦${ngnText(NGN_MIN)}` : u ? `about ${formatCurrency(Math.ceil(1.05 / u.usdPer), P.pay)} ($1)` : "about $1";
+    return `${least} up to ${most}. That's a little under the $${CAP} limit, so price moves before the agent pays can't push it over.`;
   };
 
   function renderToday() {
@@ -405,8 +451,10 @@ function payCard(tag, entry, beforePay = null) {
   function renderForm() {
     const chose = isNaira() ? cur() : null;
     const prefC = pref ? currencyOf(pref) : null;
-    picker.note(prefC ? (chose && chose.code === pref ? `@${tag} prefers ${prefC.plural}.` : `@${tag} prefers ${prefC.plural}; you chose ${chose ? chose.plural : "dollars"}.`) : "");
-    segHint.textContent = isNaira() ? `You send USD₮. @${tag} gets ${chose.plural} (${chose.token}).` : `You send cNGN. @${tag} gets USD₮ (dollars).`;
+    picker.note(prefC ? (code() === pref ? `@${tag} prefers ${prefC.plural}.` : `@${tag} prefers ${prefC.plural}; you chose ${code() ? cur().plural : "dollars"}.`) : "");
+    segHint.textContent = isNaira() ? `You send USD₮. @${tag} gets ${chose.plural} (${chose.token}).`
+      : passThrough() ? `You send ${sellToken().symbol}. @${tag} gets it as is (no conversion).`
+      : `You send ${sellToken().symbol}. @${tag} gets USD₮ (dollars).`;
     tokenEl.textContent = sellToken().symbol;
     const a = readAmount();
     const show = a.error && (P.touched || a.limit || amountIn.value.trim()) && !/^Loading/.test(a.error);
@@ -425,17 +473,23 @@ function payCard(tag, entry, beforePay = null) {
         rateText = pu ? `1 USD₮ = ${formatCurrency(pu, code(), code() === "cngn" ? 2 : cur().places)}` : `${cur().label}: not available right now`;
         if (a.cents > 0 && pu) get = el("span", { title: `${cur().name}, rounded down` }, formatCurrency((a.cents / 100) * pu, code()));
       }
-      else if (r.reverseRate) { rateText = `1 USD₮ = ${naira(1 / r.reverseRate)}`; if (a.cents > 0) get = usd((a.cents / 100) * r.reverseRate); }
-      else if (isNaira() && !code()) { rateText = "No conversion"; if (a.cents > 0) get = usd(a.cents / 100); }
-      else rateText = "Not published yet";
+      else if (passThrough()) { rateText = "No conversion"; if (a.cents > 0) get = P.pay === "usdt" ? usd(a.cents / 100) : formatCurrency(a.cents / 100, P.pay); }
+      else {
+        // a local token converted into dollars: at its <code>-usdt rate (approx. when only the USD₮ -> local rate is known)
+        const u = usdPerUnit(P.pay, r);
+        if (u) {
+          rateText = `1 USD₮ = ${formatCurrency(1 / u.usdPer, P.pay, P.pay === "cngn" ? 2 : payCur().places)}${u.approx ? " (approx.)" : ""}`;
+          if (a.cents > 0) get = usd((a.cents / 100) * u.usdPer);
+        } else rateText = "Not published yet";
+      }
     } else if (P.rateFailed) rateText = "Rate unavailable";
     if (r || P.rateFailed) out.replaceChildren(get ?? "—");
     out.classList.toggle("over", !!a.error && a.cents > 0 && !/^Loading/.test(a.error));
     sRate.textContent = rateText;
     rateRow.setSummary(rateSummary({ rateText: r || P.rateFailed ? rateText : null, fees: r ? (r.fromPreview ? "included" : "before") : null }));
     limitsRow.setSummary(limitsLine());
-    cngnNote.textContent = isNaira() ? "" : cngnHint();
-    cngnNote.hidden = isNaira();
+    cngnNote.textContent = P.pay === "usdt" ? "" : cngnHint();
+    cngnNote.hidden = P.pay === "usdt";
     renderToday();
     renderRoom();
     renderWallet();
@@ -444,9 +498,9 @@ function payCard(tag, entry, beforePay = null) {
   function limitsLine() {
     // a room that couldn't be read is said in the line itself, not only behind "Limits"
     const unchecked = Boolean(P.allowance?.error) || Boolean(C && P.room?.error);
-    if (!isNaira()) {
-      const rr = P.rate?.reverseRate;
-      return (rr ? `Up to about ₦${ngnText(Math.floor(CNGN_CAP_USD / rr))}` : `Up to about $${CNGN_CAP_USD} in value`) + (unchecked ? " · couldn't check today's limit" : "");
+    if (P.pay !== "usdt") {
+      const most = localForUsd(CNGN_CAP_USD);
+      return (most ? `Up to about ${most}` : `Up to about $${CNGN_CAP_USD} in value`) + (unchecked ? " · couldn't check today's limit" : "");
     }
     const alw = P.allowance && !P.allowance.error ? P.allowance : null;
     const room = C && P.room && !P.room.error ? Number(P.room.room) / 1e6 : null;
@@ -489,7 +543,7 @@ function payCard(tag, entry, beforePay = null) {
     if (sameAddr(P.account, AGENT)) return { kind: "err", text: "This is the agent's own wallet. Connect your own wallet." };
     const a = readAmount();
     if (!a.error && P.bal && sameAddr(P.bal.token, sellToken().address) && P.bal.units < a.units) {
-      return { kind: "warn", text: `This wallet has ${num2.format(Number(P.bal.units) / 1e6)} ${sellToken().symbol}, less than the ${fmtSend(a.cents)} you're sending.` };
+      return { kind: "warn", text: `This wallet has ${unitsText(P.bal.units)} ${sellToken().symbol}, less than the ${fmtSend(a.cents)} you're sending.` };
     }
     if (P.celo === 0n && !P.celoAnyway) return { kind: "celo" };
     return null;
@@ -512,7 +566,7 @@ function payCard(tag, entry, beforePay = null) {
     fromLink.href = celoscanAddr(P.account);
     fromLink.title = P.account;
     fromLink.textContent = short(P.account);
-    if (P.bal && sameAddr(P.bal.token, sellToken().address)) balCell.textContent = `${num2.format(Number(P.bal.units) / 1e6)} ${sellToken().symbol}`;
+    if (P.bal && sameAddr(P.bal.token, sellToken().address)) balCell.textContent = `${unitsText(P.bal.units)} ${sellToken().symbol}`;
     else if (!balCell.querySelector(".skel")) balCell.replaceChildren(el("span", { class: "skel" }));
     if (P.chainOk === false) { if (!netCell.querySelector(".badge")) netCell.replaceChildren(" ", badge("Not Celo: switches when you pay", "warn")); }
     else if (netCell.firstChild) netCell.replaceChildren();
@@ -580,7 +634,7 @@ function payCard(tag, entry, beforePay = null) {
     const a0 = readAmount();
     if (a0.error) { renderForm(); amountIn.focus(); return; }
     if (C) return submitContract();
-    const from = P.account, token = sellToken(), corridor = P.corridor;
+    const from = P.account, token = sellToken(), corridor = corridorId();
     P.busy = true;
     payBtn.disabled = true;
     payBtn.textContent = "Checking @" + tag + "…";
@@ -614,13 +668,13 @@ function payCard(tag, entry, beforePay = null) {
       await ensureCelo(eth);
       P.chainOk = true;
       const [bal] = await readContract(token.address, "0x70a08231", ["address"], [from], ["uint256"]);
-      if (bal < a.units) throw plainError(`This wallet has ${num2.format(Number(bal) / 1e6)} ${token.symbol}, less than ${fmtSend(a.cents)}. Nothing was sent.`);
+      if (bal < a.units) throw plainError(`This wallet has ${unitsText(bal)} ${token.symbol}, less than ${fmtSend(a.cents)}. Nothing was sent.`);
       // the memo names the currency they receive ("NTP:budi:idrx"); naira keeps the original "NTP:budi"
       const data = encodeNtagTransfer(AGENT, a.units, tag, isNaira() ? code() : undefined);
       const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from, to: token.address, value: "0x0", data }] });
       if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
       rememberPaid(tag);
-      const pending = { hash, from, corridor, cents: a.cents, owner: entry.owner, since: entry.since, at: Date.now(), held: waitNote(a) };
+      const pending = { hash, from, corridor, payCode: P.pay, cents: a.cents, units: String(a.units), owner: entry.owner, since: entry.since, at: Date.now(), held: waitNote(a) };
       try { sessionStorage.setItem(PENDING_KEY(tag), JSON.stringify(pending)); } catch { /* storage blocked: tracking works until the page closes */ }
       P.busy = false;
       track(pending, { scroll: true });
@@ -636,12 +690,12 @@ function payCard(tag, entry, beforePay = null) {
   /**
    * Pays through LokalTags. Before the wallet opens: the tag and its receive currency are re-read from the contract,
    * the contract's own dry run (validatePayment) explains any refusal, and the exact transaction is simulated from the
-   * payer's wallet. USD₮: one permit signature (EIP-2612) and one payTagWithPermit. cNGN: approve exactly the amount,
-   * then payTag. Both carry the attribution suffix.
+   * payer's wallet. USD₮: one permit signature (EIP-2612) and one payTagWithPermit. cNGN, IDRX, wARS, wCOP: approve
+   * exactly the amount, then payTag. Both carry the attribution suffix.
    */
   async function submitContract() {
-    const from = P.account, token = sellToken(), corridor = P.corridor, payCode = isNaira() ? "usdt" : "cngn";
-    const ref = currencyRef(code() ?? "usdt"); // the payer's choice for this payment: "cur:idrx", ... or "cur:usdt" (dollars)
+    const from = P.account, token = sellToken(), corridor = corridorId(), payCode = P.pay;
+    const ref = currencyRef(recv()); // the payer's choice for this payment: "cur:idrx", ... or "cur:usdt" (dollars)
     P.busy = true;
     payBtn.disabled = true;
     payBtn.textContent = "Checking @" + tag + "…";
@@ -669,7 +723,7 @@ function payCard(tag, entry, beforePay = null) {
       await ensureCelo(eth);
       P.chainOk = true;
       const [bal] = await readContract(token.address, "0x70a08231", ["address"], [from], ["uint256"]);
-      if (bal < a.units) throw plainError(`This wallet has ${num2.format(Number(bal) / 1e6)} ${token.symbol}, less than ${fmtSend(a.cents)}. Nothing was sent.`);
+      if (bal < a.units) throw plainError(`This wallet has ${unitsText(bal)} ${token.symbol}, less than ${fmtSend(a.cents)}. Nothing was sent.`);
       // the contract's own dry run: every limit, before any signature
       const chk = await checkPayment({ tag, token: token.address, amount: a.units, payer: from });
       if (!chk.ok) throw plainError(chk.message, { limit: true });
@@ -707,7 +761,7 @@ function payCard(tag, entry, beforePay = null) {
       const hash = await eth.request({ method: "eth_sendTransaction", params: [{ from, to: LOKAL_TAGS, value: "0x0", data }] });
       if (!isHash(hash)) throw plainError("The wallet didn't return a transaction id. Check your wallet's activity before trying again.");
       rememberPaid(tag);
-      const pending = { hash, from, corridor, payCode, cents: a.cents, owner: entry.owner, since: entry.since, at: Date.now(), contract: true, held: waitNote(a) };
+      const pending = { hash, from, corridor, payCode, cents: a.cents, units: String(a.units), owner: entry.owner, since: entry.since, at: Date.now(), contract: true, held: waitNote(a) };
       try { sessionStorage.setItem(PENDING_KEY(tag), JSON.stringify(pending)); } catch { /* storage blocked: tracking works until the page closes */ }
       P.busy = false;
       track(pending, { scroll: true });
@@ -725,8 +779,8 @@ function payCard(tag, entry, beforePay = null) {
     let stopped = false, stopSlow = null;
     const stop = () => { stopped = true; stopSlow?.(); };
     onCleanup(stop);
-    const sendUsdt = p.payCode ? p.payCode === "usdt" : p.corridor !== "cngn-usdt";
-    const sendText = sendUsdt ? `${num2.format(p.cents / 100)} USD₮` : `${num2.format(p.cents / 100)} cNGN`;
+    const paidWith = p.payCode ?? (p.corridor === "cngn-usdt" ? "cngn" : "usdt");
+    const sendText = `${num2.format(p.cents / 100)} ${paySymbol(paidWith)}`;
     const rows = {};
     const step = (id, t, sub) => {
       const small = el("small", {}, sub ?? "");
@@ -766,7 +820,7 @@ function payCard(tag, entry, beforePay = null) {
     // the payer's own transaction; the payout's status stays on this tracker (verify.html only checks the attribution tag)
     const chainLink = el("a", { class: "btn btn-secondary", href: celoscanTx(p.hash), target: "_blank", rel: "noopener" }, "View on Celoscan", icon("ext"));
     const to = "@" + tag;
-    const gets = p.corridor === "cngn-usdt" ? "dollars" : currencyOf(String(p.corridor).replace(/^(usdt|forward)-/, ""))?.plural ?? "their money";
+    const gets = /-usdt$/.test(String(p.corridor)) ? "dollars" : currencyOf(String(p.corridor).replace(/^(usdt|forward)-/, ""))?.plural ?? "their money";
     const slow = el("p", { class: "micro muted" });
     ok.set({ state: "pending", title: successHeadline({ state: "pending", amount: sendText, to }), text: "Waiting for Celo to confirm. Usually a few seconds; keep this page open.", alert: slow, actions: [] });
     body.replaceChildren(el("div", { class: "nt-track" }, ok.el));
@@ -825,7 +879,7 @@ function payCard(tag, entry, beforePay = null) {
       // the outcome in the role=status sentence too, so it is announced
       const notPaid = (title, sentence) => ok.set({ state: "failed", title, text: sentence, actions: [done] });
       let refusedShown = false; // "refused" is final for the payout: nothing after it may say the agent will still pay
-      const depositUnits = BigInt(p.cents) * 10_000n; // what the payer sent, to tell this transfer from others in the tx
+      const depositUnits = p.units ? BigInt(p.units) : BigInt(p.cents) * 10_000n; // what the payer sent, to tell this transfer from others in the tx
       while (!stopped && Date.now() < until) {
         if (document.visibilityState === "visible") {
           try {
@@ -920,6 +974,7 @@ function payCard(tag, entry, beforePay = null) {
     eth.on("chainChanged", onChain);
     onCleanup(() => { eth.removeListener?.("accountsChanged", onAccounts); eth.removeListener?.("chainChanged", onChain); });
   }
+  buildPay();
   loadRate().then((r) => { P.rate = r; picker?.setAvailability(r.available); }).catch(() => { P.rateFailed = true; })
     .then(() => { if (P.alive) renderForm(); return loadAllowance(); })
     .then(() => { if (P.alive) renderForm(); });
@@ -931,7 +986,7 @@ function payCard(tag, entry, beforePay = null) {
   let pending = null;
   try { pending = JSON.parse(sessionStorage.getItem(PENDING_KEY(tag)) ?? "null"); } catch { pending = null; }
   if (pending && isHash(pending.hash) && sameAddr(pending.owner, entry.owner) && Date.now() - pending.at < 24 * 3600_000
-    && Boolean(pending.contract) === C && /^(usdt-(cngn|idrx|wars|wcop)|cngn-usdt|forward-(usdt|cngn))$/.test(String(pending.corridor))) {
+    && Boolean(pending.contract) === C && /^(usdt-(cngn|idrx|wars|wcop)|(cngn|idrx|wars|wcop)-usdt|forward-(usdt|cngn|idrx|wars|wcop))$/.test(String(pending.corridor))) {
     setTimeout(() => { if (P.alive) track(pending); }, 0);
   }
   return section;
