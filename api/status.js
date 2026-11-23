@@ -227,7 +227,16 @@ export function makeHandler(opts = {}) {
           memo = { at: now(), got: { data: summary, etag: null } };
           return done(changed);
         } catch (e) {
-          if (!(e instanceof StaleWriteError) || attempt >= 4) throw e;
+          if (!(e instanceof StaleWriteError)) throw e;
+          if (attempt >= 4) {
+            // The store kept answering with an ETag its own write check rejects (seen on Vercel Blob, 23 Nov 2026). Only
+            // the agent writes this summary, and merging is idempotent (the agent re-sends anything unconfirmed, and
+            // status-sync --backfill restores everything), so the last resort is a plain overwrite of the merged summary.
+            await getStore().replace(summary);
+            memo = { at: now(), got: { data: summary, etag: null } };
+            console.error("status: wrote the summary without an ETag after repeated stale writes");
+            return done(changed);
+          }
           await new Promise((r) => setTimeout(r, 300 * (attempt + 1))); // let the store's read catch up before merging again
         }
       }
