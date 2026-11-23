@@ -61,7 +61,7 @@ Each row links to its proof on Celo. Everything LokalPay does is on the
 | LokalPots contract (one link, many payers), source verified | **Live** | [deploy tx](https://celoscan.io/tx/0x8e56d2a9e391a54589ab9e72d683d8307355c5f8b8fb2dd697bab62b65c3ebd9) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) |
 | Contract admin handed to a separate wallet (two-step) | **Live** | [accepted tx](https://celoscan.io/tx/0xbee2dd85e15c4fb664397f06e1a0a932214c6c6a65aaa3aa99e599905c2ec3a6) |
 | First LokalPay tag claimed through LokalTags | **Live** | [claim tx](https://celoscan.io/tx/0x4ae77beb9f14d14a1c39525e617a0d6cc50fd08fab68d07a2f3106c8f5e0aeec) |
-| ERC-8004 identity, agentId 10079, card updated to Lokal (LokalPay name update pending) | **Live** | [register tx](https://celoscan.io/tx/0x080d54275f02a722a3b0daa408f02a1af760e29f9e39092a9a48d22b964cf62e) · [card update tx](https://celoscan.io/tx/0x30d6545ebb388ce73111eb05cb9c7e49ac6ae55f620e9140561bcf68a1e9f966) |
+| ERC-8004 identity, agentId 10079, card updated to LokalPay | **Live** | [register tx](https://celoscan.io/tx/0x080d54275f02a722a3b0daa408f02a1af760e29f9e39092a9a48d22b964cf62e) · [card update tx](https://celoscan.io/tx/0x089fcfc3ef04a5ae2fcb4c016f11d37c7955bd4e86bc32fae18eaa1732c1b327) |
 | Payouts in naira, rupiah and pesos; tags, links, pots, refunds, "Who am I paying?" | **Built, not yet used on mainnet** | 372 tests and 135 contract tests, run on every push |
 | First real user payout | **Pending** | It will be listed here and on the [Proof page](https://lokalpay.vercel.app/proof.html) with its transactions |
 
