@@ -203,6 +203,14 @@ test("a guest's spray: the smallest room binds, the contract's rounding is match
   assert.equal(C.payoutRoute(CNGN, null, "pot", "idrx"), null, "naira can't become rupiah, so it isn't offered");
   assert.equal(P.sprayToken("usdt"), USDT);
   assert.equal(P.sprayToken("cngn"), CNGN);
+  // a guest who picks dollars pays with any of the five tokens; each token's quick amounts are in its own decimals
+  assert.deepEqual(P.SPRAY_TOKENS, ["usdt", "cngn", "idrx", "wars", "wcop"]);
+  assert.deepEqual(P.receiveChoices("idrx"), ["idrx", "usd"]);
+  assert.deepEqual(C.payWithTokens("usdt", "pot").map((t) => t.code), P.SPRAY_TOKENS);
+  for (const code of P.SPRAY_TOKENS) {
+    assert.equal(P.sprayToken(code), C.tokenOfCode(code));
+    assert.ok(P.QUICK_AMOUNTS[code]?.length, code);
+  }
 });
 
 // ---------- the Spray Wall ----------

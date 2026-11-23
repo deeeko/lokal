@@ -209,7 +209,40 @@ test("payable tokens follow the payout route: no page offers a payment the agent
   const codes = (rt, kind) => C.payableTokens(rt, kind).map((t) => t.code);
   assert.deepEqual(codes(null, "tag"), ["usdt", "cngn", "idrx", "wars", "wcop"]);
   assert.deepEqual(codes(TOKENS.IDRX.address, "tag"), ["usdt", "idrx"]);
-  assert.deepEqual(codes(TOKENS.USDT.address, "tag"), ["usdt", "cngn"]);
-  assert.deepEqual(codes(null, "pot"), ["usdt", "cngn"]);
+  assert.deepEqual(codes(TOKENS.USDT.address, "tag"), ["usdt", "cngn", "idrx", "wars", "wcop"]);
+  assert.deepEqual(codes(null, "pot"), ["usdt", "cngn", "idrx", "wars", "wcop"]);
+  // the payer's own choice: dollars can be paid in any of the five; a local currency in USD₮ or that same token
+  const withs = (chosen, kind) => C.payWithTokens(chosen, kind).map((t) => `${t.code}:${t.symbol}:${t.decimals}`);
+  for (const kind of ["tag", "pot"]) {
+    assert.deepEqual(withs("usdt", kind), ["usdt:USD₮:6", "cngn:cNGN:6", "idrx:IDRX:2", "wars:wARS:18", "wcop:wCOP:18"]);
+    assert.deepEqual(withs("cngn", kind), ["usdt:USD₮:6", "cngn:cNGN:6"]);
+    assert.deepEqual(withs("idrx", kind), ["usdt:USD₮:6", "idrx:IDRX:2"]);
+    assert.deepEqual(withs("wcop", kind), ["usdt:USD₮:6", "wcop:wCOP:18"]);
+  }
+  // the estimate and the limits use the paid token's own decimals and its <code>-usdt rate
+  assert.deepEqual(["usdt", "cngn", "idrx", "wars", "wcop"].map((c) => C.unitsFromCents(1_000, c)),
+    [10_000_000n, 10_000_000n, 1_000n, 10n * 10n ** 18n, 10n * 10n ** 18n]);
+  assert.deepEqual(["usdt", "cngn", "idrx", "wars", "wcop"].map(C.payDecimals), [6, 6, 2, 18, 18]);
+  const rate = {
+    rates: { cngn: 1441, idrx: 18393, wars: 1760, wcop: 3460 }, available: { cngn: true, idrx: true, wars: true, wcop: false },
+    reverseRate: 0.00068, reverseRates: { cngn: 0.00068, idrx: 0.0000541, wars: null, wcop: null },
+  };
+  assert.deepEqual(C.usdPerUnit("usdt", rate), { usdPer: 1, approx: false });
+  assert.deepEqual(C.usdPerUnit("idrx", rate), { usdPer: 0.0000541, approx: false }, "the reverse preview");
+  assert.deepEqual(C.usdPerUnit("wars", rate), { usdPer: 1 / 1760, approx: true }, "no reverse rate yet: 1 / the forward rate");
+  assert.equal(C.usdPerUnit("wcop", rate), null, "not quoting and no reverse rate: no estimate");
+  assert.equal(C.usdPerUnit("cngn", { reverseRate: 0.0007 }).usdPer, 0.0007, "the older naira field");
+  const v = C.payUsdValue("idrx", 18_407_000, rate); // Rp 184,070
+  assert.ok(Math.abs(v.usd - 9.958) < 0.001);
+  const fmt = (u) => `Rp ${Math.floor(u / 0.0000541)}`;
+  assert.equal(C.localPayError(v, 24.25, fmt), null);
+  assert.match(C.localPayError(C.payUsdValue("idrx", 50_000_000, rate), 24.25, fmt), /worth about \$27\.05\. Send up to about Rp 448243/);
+  assert.match(C.localPayError(C.payUsdValue("idrx", 1_500_000, rate), 24.25, fmt), /less than \$1/);
+  assert.match(C.localPayError({ usd: 1.02, approx: true }, 24.25, fmt), /less than \$1/, "an approximate value keeps a 5% margin");
+  assert.equal(C.localPayError({ usd: 1.02, approx: false }, 24.25, fmt), null);
+  assert.equal(C.localPayError(null, 24.25, fmt), null);
+  for (const t of C.payWithTokens("usdt", "tag")) {
+    assert.deepEqual(C.payoutRoute(t.address, null, "tag", "usdt"), t.code === "usdt" ? { mode: "forward", receive: "usdt" } : { mode: "swap", corridor: `${t.code}-usdt`, receive: "usdt" });
+  }
   assert.deepEqual(C.payoutRoute(USDT, null, "tag"), { mode: "swap", corridor: "usdt-cngn", receive: "cngn" });
 });

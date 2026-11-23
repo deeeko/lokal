@@ -1,4 +1,4 @@
-import { CAP, HAS_API, $, $$, el, icon, badge, naira, usd, getJson, loadRate, initChrome, parseMoneyInput, ageText, normalizeNtag, ntagError, CURRENCIES, currencyOf, formatCurrency } from "../assets/core.js";
+import { CAP, HAS_API, $, $$, el, icon, badge, naira, usd, getJson, loadRate, initChrome, parseMoneyInput, ageText, normalizeNtag, ntagError, CURRENCIES, currencyOf, formatCurrency, reverseCorridorFor, currencyOfReverse } from "../assets/core.js";
 import { currencyPicker } from "../assets/currency-ui.js";
 
 initChrome();
@@ -50,6 +50,21 @@ const VIEW = {
     emptyHint: "Enter an amount in naira.",
     badHint: "Enter an amount in naira, like 10000 or 12500.50.",
   },
+  // the reverse corridors of the other currencies: you send IDRX, wARS or wCOP, the recipient gets USD₮ (about $5 to $24)
+  ...Object.fromEntries(CURRENCIES.slice(1).map((c) => {
+    const ten = { idrx: 184000, wars: 17500, wcop: 34500 }[c.code];
+    const k = (v) => `${c.symbol.length > 1 ? c.symbol + " " : c.symbol}${Math.round(v / 1000)}k`;
+    return [reverseCorridorFor(c.code), {
+      sendToken: c.token, getToken: "USD₮", presets: [ten / 2, ten, ten * 2, Math.floor(ten * 2.4 / 1000) * 1000], start: ten,
+      presetLabel: k, presetAria: (v) => formatCurrency(v, c.code),
+      corridorHint: `You send ${c.token} (${c.plural}). The recipient gets USD₮ (dollars).`,
+      receiveLabel: "Recipient gets in USD₮ (approx.)",
+      route: `${c.token} → USD₮ on Textile FX`,
+      delivered: "USD₮ on Celo, a dollar stablecoin",
+      emptyHint: `Enter an amount in ${c.plural}.`,
+      badHint: `Enter an amount in ${c.plural}, like ${ten}.`,
+    }];
+  })),
   "celo-cngn": {
     sendToken: "CELO", getToken: "cNGN", presets: [20, 50, 100, 250], start: 50,
     presetLabel: (v) => String(v),
@@ -67,6 +82,7 @@ const MIN_SWAP_USD = 1.05;
 /** CELO the agent keeps for gas and never sells (MIN_CELO_RESERVE, default 2). */
 const GAS_RESERVE_CELO = 2;
 const LINK_NOTE_CELO = "CELO payment links aren't supported. Payouts from CELO are run by the owner with pay.";
+const LINK_NOTE_REVERSE = (t) => `Payment links take USD₮ or cNGN only. ${t} to dollars is paid through a Lokal tag or a pot, or by the owner with pay.`;
 
 let quote = null; // result of loadRate(), or null while loading / on failure
 let celo = null; // { celoUsdRate, celoPreviewCelo } from rate.json or /api/rate, or null if not published
@@ -74,7 +90,11 @@ let rateFailed = false;
 let mode = "dry";
 let corridor = "usdt-cngn";
 
-const isReverse = () => corridor === "cngn-usdt";
+const isReverse = () => /-usdt$/.test(corridor); // cngn-usdt, idrx-usdt, wars-usdt, wcop-usdt: local money in, dollars out
+/** The local currency sent in a reverse corridor ("idrx"), or null. */
+const fromCode = () => (isReverse() ? currencyOfReverse(corridor)?.code ?? null : null);
+/** No payment link for this corridor: CELO, and the reverse corridors other than naira's. */
+const noLink = () => isCelo() || (isReverse() && corridor !== "cngn-usdt");
 const isCelo = () => corridor === "celo-cngn";
 /** The local currency the recipient gets (usdt-* corridors and celo-cngn), or null (dollars). */
 const curCode = () => (isReverse() ? null : isCelo() ? "cngn" : corridor.slice(5));
@@ -88,16 +108,25 @@ const minCelo = () => (celoRate() ? Math.max(1, Math.ceil(MIN_SWAP_USD / celoRat
 const celoFmt = new Intl.NumberFormat("en-NG", { maximumFractionDigits: 2 });
 const fmtCelo = (n) => `${celoFmt.format(n)} CELO`;
 const usd4 = (n) => "$" + n.toFixed(4);
-/** USD₮ received per 1 NGN, or null when rate.json doesn't carry it yet. */
-const reverseRate = () => quote?.reverseRate ?? null;
+/** USD₮ received per 1 unit of the local currency sent (its <code>-usdt preview), or null when not published yet. */
+const reverseRate = () => (fromCode() ? quote?.reverseRates?.[fromCode()] ?? (fromCode() === "cngn" ? quote?.reverseRate : null) ?? null : quote?.reverseRate ?? null);
+/** A local amount in the currency sent ("Rp 446,369"). */
+const fmtFrom = (n, places) => formatCurrency(n, fromCode() ?? "cngn", places);
 
 // ---------- what they receive ----------
 const picker = currencyPicker({
   label: "What the recipient receives", describedBy: "currency-label",
-  extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮): you send cNGN" }],
-  onChange: (code) => setCorridor(code === "usd" ? "cngn-usdt" : `usdt-${code}`),
+  extra: [{ code: "usd", label: "Dollars", flag: "usd", title: "Dollars (USD₮)" }],
+  onChange: (code) => setCorridor(code === "usd" ? reverseCorridorFor(sendPicker.value) : `usdt-${code}`),
 });
-$("#currency-slot").replaceChildren(picker.el);
+// for dollars: what you send (cNGN, IDRX, wARS or wCOP), each through its own <code>-usdt corridor
+const sendPicker = currencyPicker({
+  label: "What you send", value: "cngn", remember: false,
+  options: CURRENCIES.map((c) => ({ code: c.code, label: c.token, flag: c.code, title: `${c.token} (${c.name})` })),
+  onChange: (code) => setCorridor(reverseCorridorFor(code)),
+});
+const sendRow = el("div", { class: "mt-8" }, el("span", { class: "label" }, "You send"), sendPicker.el);
+$("#currency-slot").replaceChildren(picker.el, sendRow);
 
 /** The amount field read exactly (core.js parseMoneyInput: "1,5" is 1.50, "1,250" is 1250): { cents } or { error }. */
 const parsedAmount = () => parseMoneyInput(amountIn.value);
@@ -142,6 +171,8 @@ function renderCorridor() {
   celoRow.hidden = picker.value !== "cngn";
   celoRow.style.display = celoRow.hidden ? "none" : "";
   celoToggle.checked = isCelo();
+  sendRow.hidden = !isReverse();
+  sendRow.style.display = sendRow.hidden ? "none" : "";
   setText($("#corridor-hint"), v.corridorHint);
   setText($("#amount-token"), v.sendToken);
   setText($("#receive-label"), v.receiveLabel);
@@ -156,15 +187,15 @@ function renderCorridor() {
     ? el("span", {}, "The amount is worth ", el("b", {}, `$${CAP} or less`), " in USD₮.")
     : el("span", {}, "The amount is ", el("b", {}, `$${CAP} or less`), "."));
   for (const id of ["#kv-leg1-row", "#kv-leg2-row", "#kv-min-row"]) $(id).hidden = !isCelo();
-  $("#kv-market-row").hidden = !(corridor === "usdt-cngn" || isCelo() || isReverse()); // the market feed is naira only
+  $("#kv-market-row").hidden = !(corridor === "usdt-cngn" || isCelo() || corridor === "cngn-usdt"); // the market feed is naira only
   // plain-language commands take dollar amounts paid in naira only (.field sets display, so [hidden] alone isn't enough)
   const askField = $("#ask-field");
   const noAsk = corridor !== "usdt-cngn";
   askField.hidden = noAsk;
   askField.style.display = noAsk ? "none" : "";
-  // CELO payouts are owner-only: no payment link to build
-  $("#req-code").style.display = isCelo() ? "none" : "";
-  $("#req-note").style.display = isCelo() ? "none" : "";
+  // CELO payouts and the reverse corridors other than naira's are not payment links: no link to build
+  $("#req-code").style.display = noLink() ? "none" : "";
+  $("#req-note").style.display = noLink() ? "none" : "";
   renderPresets();
 }
 
@@ -190,7 +221,7 @@ function renderAmount() {
   const over = usdv !== null && usdv > CAP;
   const thin = !over && !isCelo() && !isReverse() && maxUsd !== null && n !== null && n > maxUsd;
   const unavailable = !isReverse() && quote !== null && code !== null && !quote.available[code];
-  const under = isCelo() && n !== null && (usdv !== null ? usdv < MIN_SWAP_USD : n < minCelo());
+  const under = (isCelo() && n !== null && (usdv !== null ? usdv < MIN_SWAP_USD : n < minCelo())) || (isReverse() && usdv !== null && usdv < 1);
   hint.classList.toggle("err", n === null || over || under || thin || unavailable);
   const capLocal = lr ? ` ≈ ${fmtLocal(CAP * lr)}` : "";
   if (n === null) setText(hint, amountProblem(v) ?? v.emptyHint);
@@ -198,14 +229,15 @@ function renderAmount() {
   else if (isCelo() && !celoRate() && !(quote || rateFailed)) setText(hint, `Checking the $${CAP} limit once the rate loads.`);
   else if (isCelo() && !celoRate() && under) setText(hint, `CELO rate not published yet. Textile needs about $1 per swap, so send at least about ${fmtCelo(minCelo())}.`);
   else if (isCelo() && !celoRate()) setText(hint, `CELO rate not published yet. The agent checks the $${CAP} limit on its own quote before paying.`);
-  else if (under) setText(hint, `Worth about ${usd(usdv)}. Textile needs about $1 per swap, so send at least about ${fmtCelo(minCelo())}.`);
+  else if (under && isCelo()) setText(hint, `Worth about ${usd(usdv)}. Textile needs about $1 per swap, so send at least about ${fmtCelo(minCelo())}.`);
   else if (over && isCelo()) setText(hint, `Worth about ${usd(usdv)}, over the $${CAP} limit. The agent would refuse this payment.`);
   else if (isCelo()) setText(hint, `Worth about ${usd(usdv)}. The agent pays from about ${fmtCelo(minCelo())} up to $${CAP} (about ${fmtCelo(Math.floor(CAP / celoRate()))}).`);
   else if (over && isReverse()) setText(hint, `Worth about ${usd(usdv)}, over the $${CAP} limit. The agent would refuse this payment.`);
   else if (over) setText(hint, `Over the $${CAP}${capLocal} limit. The agent would refuse this payment.`);
   else if (thin) setText(hint, `Textile can convert up to about $${maxUsd.toFixed(2)} into ${currencyOf(code).plural} right now. Send less, or pick another currency.`);
   else if (!isReverse()) setText(hint, `$1 to $${CAP}${capLocal}, up to 2 decimals.`);
-  else if (usdv !== null) setText(hint, `Worth about ${usd(usdv)}. The agent pays up to $${CAP} (about ${naira(CAP / reverseRate())}) per payment.`);
+  else if (usdv !== null && usdv < MIN_SWAP_USD) setText(hint, `Worth about ${usd(usdv)}. Textile needs about $1 per swap, so send at least about ${fmtFrom(Math.ceil(MIN_SWAP_USD / reverseRate()), 0)}.`);
+  else if (usdv !== null) setText(hint, `Worth about ${usd(usdv)}. The agent pays up to $${CAP} (about ${fmtFrom(CAP / reverseRate())}) per payment.`);
   else if (quote || rateFailed) setText(hint, `The agent pays up to $${CAP} per payment, checked against its firm quote before paying.`);
   else setText(hint, `Checking the $${CAP} limit once the rate loads.`);
   amountIn.setAttribute("aria-invalid", String(n === null || over || under || thin || unavailable));
@@ -230,7 +262,7 @@ function renderAmount() {
         : quote.fromPreview ? `Two Textile fees, both included — previews for ${fmtCelo(celo.celoPreviewCelo)} and $${cliAmount(quote.previewUsd)}`
         : "Two Textile fees: CELO swap included, cNGN swap not (market bid)");
     } else if (!isReverse()) setText($("#kv-fees"), quote.fromPreview ? "Included — from a Textile FX preview" : "Not included — market bid");
-    else setText($("#kv-fees"), reverseRate() ? `Included — Textile preview for ${naira(quote.reversePreviewNgn ?? 14400)}` : "—");
+    else setText($("#kv-fees"), !reverseRate() ? "—" : fromCode() === "cngn" ? `Included — Textile preview for ${naira(quote.reversePreviewNgn ?? 14400)}` : "Included — from a Textile FX preview");
   }
   return n;
 }
@@ -238,9 +270,9 @@ function renderAmount() {
 // ---------- commands ----------
 /** In the CELO corridor the payment-link builder is replaced by a plain note; otherwise the hint starts hidden. */
 function showLinkNote() {
-  reqHint.classList.toggle("err", !isCelo());
-  reqHint.hidden = !isCelo();
-  setText(reqHint, isCelo() ? LINK_NOTE_CELO : "");
+  reqHint.classList.toggle("err", !noLink());
+  reqHint.hidden = !noLink();
+  setText(reqHint, isCelo() ? LINK_NOTE_CELO : noLink() ? LINK_NOTE_REVERSE(VIEW[corridor].sendToken) : "");
 }
 
 /** The friendliest flag for this corridor on the agent's command line. */
@@ -286,7 +318,7 @@ function renderCommand() {
   const req = `node src/agent.mjs request --to ${name} --amount ${amt}${corr}`;
   setText(cmdPre, cmd);
   cmdCopy.disabled = false; cmdCopy.dataset.copy = cmd;
-  if (isCelo()) {
+  if (noLink()) {
     setText(reqPre, "");
     reqCopy.disabled = true; reqCopy.removeAttribute("data-copy");
     setText(askPre, ""); askCopy.disabled = true; askCopy.removeAttribute("data-copy");
@@ -313,9 +345,9 @@ function renderRate() {
   const ngn = quote.rates.cngn;
   if (isCelo()) setText($("#kv-rate"), cr && ngn ? `1 CELO ≈ ${usd4(cr)} ≈ ${naira(cr * ngn)}` : "CELO rate not published yet");
   else if (!isReverse()) setText($("#kv-rate"), lr ? `1 USD₮ = ${formatCurrency(lr, code, code === "cngn" ? 2 : currencyOf(code).places)}` : `${currencyOf(code).label}: not available right now`);
-  else setText($("#kv-rate"), rr ? `1 USD₮ costs ${naira(1 / rr)}` : "Not published yet");
+  else setText($("#kv-rate"), rr ? `1 USD₮ costs ${fmtFrom(1 / rr, 2)}` : "Not published yet");
   if (isCelo()) setText($("#kv-cap"), cr ? `$${CAP} per payment (about ${fmtCelo(Math.floor(CAP / cr))})` : `$${CAP} per payment`);
-  else if (isReverse()) setText($("#kv-cap"), rr ? `$${CAP} per payment (about ${naira(CAP / rr)})` : `$${CAP} per payment`);
+  else if (isReverse()) setText($("#kv-cap"), rr ? `$${CAP} per payment (about ${fmtFrom(CAP / rr)})` : `$${CAP} per payment`);
   else setText($("#kv-cap"), lr ? `$${CAP} per payment ≈ ${fmtLocal(CAP * lr)}` : `$${CAP} per payment`);
   setText($("#kv-min"), cr ? `About ${fmtCelo(minCelo())} (about ${usd(minCelo() * cr)}), $1 per swap` : "About 20 CELO (about $1.10), $1 per swap");
   setText($("#basis"), quote.fromPreview ? "Fees included" : "Before fees");
@@ -342,8 +374,8 @@ function renderRate() {
   if (isReverse() && !rr) {
     alerts.push(el("div", { class: "alert warn mt-16" }, icon("alert"),
       el("span", {}, el("b", {}, "Reverse rate not published yet. "),
-        `The naira-to-dollar price is added to the rate feed ${nextRefresh}. For a live price now, run `,
-        el("code", { class: "inline" }, "node src/agent.mjs quote --amount 10000 --corridor cngn-usdt"), ".")));
+        `The ${currencyOf(fromCode()).plural}-to-dollar price is added to the rate feed ${nextRefresh}. For a live price now, run `,
+        el("code", { class: "inline" }, `node src/agent.mjs quote --amount ${VIEW[corridor].start} --corridor ${corridor}`), ".")));
   }
   if (quote.stale) {
     alerts.push(el("div", { class: "alert warn mt-16" }, icon("alert"),
@@ -405,6 +437,7 @@ const hashCorridor = new URLSearchParams(location.hash.slice(1)).get("corridor")
 if (hashCorridor && VIEW[hashCorridor]) {
   corridor = hashCorridor;
   picker.set(isReverse() ? "usd" : isCelo() ? "cngn" : corridor.slice(5), { silent: true });
+  if (isReverse()) sendPicker.set(fromCode(), { silent: true });
   amountIn.value = String(VIEW[corridor].start);
 } else if (picker.value !== "cngn") {
   corridor = `usdt-${picker.value}`;

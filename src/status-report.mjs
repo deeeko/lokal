@@ -15,7 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { formatUnits, parseUnits } from "viem";
-import { AGENT_ADDRESS, CORRIDORS, STATUS_OUTBOX_FILE, STATUS_SECRET_FILE, STATUS_URL, TOKENS } from "./config.mjs";
+import { AGENT_ADDRESS, CORRIDORS, PAYOUT_CORRIDORS, STATUS_OUTBOX_FILE, STATUS_SECRET_FILE, STATUS_URL, TOKENS } from "./config.mjs";
 import { receiptNo as receiptNoOf } from "./requests.mjs";
 import { MAX_BODY, MAX_EVENTS, RANK, STATUS_VERSION, refundNo as refundNoOf, signReport, validateEvent, validateHeartbeat } from "../lib/status.mjs";
 
@@ -30,8 +30,8 @@ const BACKOFF_MAX_MS = 10 * 60_000;
 const BATCH_BYTES = MAX_BODY - 2048;
 
 /** Corridor id -> the token symbol sold / paid out, as the status server names them (USDT, cNGN, IDRX, wARS, wCOP). */
-const SELL = Object.fromEntries(Object.values(CORRIDORS).map((c) => [c.id, TOKENS[c.sell].symbol]));
-const BUY = Object.fromEntries(Object.values(CORRIDORS).map((c) => [c.id, TOKENS[c.buy].symbol]));
+const SELL = Object.fromEntries(Object.values(PAYOUT_CORRIDORS).map((c) => [c.id, TOKENS[c.sell].symbol]));
+const BUY = Object.fromEntries(Object.values(PAYOUT_CORRIDORS).map((c) => [c.id, TOKENS[c.buy].symbol]));
 const lc = (s) => String(s ?? "").toLowerCase();
 const num = (v) => (v == null || v === "" ? undefined : Number(v));
 const rankOf = (s) => (Object.prototype.hasOwnProperty.call(RANK, s) ? RANK[s] : -1);

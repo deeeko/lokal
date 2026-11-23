@@ -2,7 +2,7 @@
 import os from "node:os";
 import path from "node:path";
 import { celo } from "viem/chains";
-import { CURRENCIES, USDT_ADDRESS, USDT_DECIMALS, corridorFor, currencyOf } from "./currencies.mjs";
+import { CURRENCIES, USDT_ADDRESS, USDT_DECIMALS, corridorFor, currencyOf, reverseCorridorFor } from "./currencies.mjs";
 
 export const CHAIN = celo; // Celo mainnet, chain id 42220. This event only counts mainnet.
 
@@ -29,10 +29,22 @@ const payout = (c) => [corridorFor(c.code), {
 }];
 export const CORRIDORS = {
   [corridorFor("cngn")]: payout(currencyOf("cngn"))[1],
-  "cngn-usdt": { id: "cngn-usdt", sell: "CNGN", buy: "USDT", usd: "buy", blurb: "pay someone in dollars" },
+  "cngn-usdt": { id: "cngn-usdt", sell: "CNGN", buy: "USDT", usd: "buy", from: "cngn", blurb: "pay someone in dollars" },
   ...Object.fromEntries(CURRENCIES.filter((c) => c.code !== "cngn").map(payout)),
 };
 export const DEFAULT_CORRIDOR = "usdt-cngn";
+// The reverse corridors of the other local currencies: the payer sends IDRX, wARS or wCOP and the recipient gets USD₮,
+// exactly like cngn-usdt (usd "buy": the caps count the USD₮ the quote buys; `from` = the local currency paid in).
+// They pay contract payments (LokalTags TagPaid, LokalPots PotPaid) and the owner's own pay / quote. They are NOT
+// payment-link corridors: "Get paid" links, requests and Lokal tag memos only watch USD₮ and cNGN deposits, so
+// getCorridor (links) refuses them and getPayoutCorridor (src/guards.mjs) accepts them.
+const reverse = (c) => [reverseCorridorFor(c.code), {
+  id: reverseCorridorFor(c.code), sell: c.token.toUpperCase(), buy: "USDT", usd: "buy", from: c.code,
+  blurb: `pay someone in dollars with ${c.plural}`,
+}];
+export const REVERSE_CORRIDORS = Object.fromEntries(CURRENCIES.filter((c) => c.code !== "cngn").map(reverse));
+/** Every corridor pay() runs (the link corridors plus the reverse ones). celo-cngn is separate (DIRECT_CORRIDORS). */
+export const PAYOUT_CORRIDORS = { ...CORRIDORS, ...REVERSE_CORRIDORS };
 
 // CELO on Celo mainnet (GoldToken: native CELO with an ERC-20 interface, 18 decimals). Only the agent's own `pay`/`quote`
 // can sell it; it is NOT in TOKENS, so payment links, "Get paid" registrations and the watch loop never see it.

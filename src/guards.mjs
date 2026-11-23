@@ -1,6 +1,6 @@
 // Safety rules. Pure functions, unit-tested. The AI layer can never bypass these.
 import { formatUnits, getAddress, isAddress, parseUnits, zeroAddress } from "viem";
-import { CELO_TOKEN, CORRIDORS, DIRECT_CORRIDORS, TOKENS } from "./config.mjs";
+import { CELO_TOKEN, CORRIDORS, DIRECT_CORRIDORS, PAYOUT_CORRIDORS, REVERSE_CORRIDORS, TOKENS } from "./config.mjs";
 import { currencyOf, findCurrency, corridorFor } from "./currencies.mjs";
 
 /**
@@ -15,9 +15,25 @@ export function getCorridor(id) {
       `${Object.keys(CORRIDORS).join(", ")}`,
     );
   }
+  if (REVERSE_CORRIDORS[key]) {
+    throw new Error(
+      `Corridor "${key}" is for payments through the contracts and direct payouts only (pay / quote). Payment links, ` +
+      `"Get paid" and Lokal tag memos support: ${Object.keys(CORRIDORS).join(", ")}`,
+    );
+  }
   const c = CORRIDORS[key];
   if (!c) throw new Error(`Unknown corridor "${id}". Use one of: ${Object.keys(CORRIDORS).join(", ")}`);
   return { ...c, sellToken: TOKENS[c.sell], buyToken: TOKENS[c.buy] };
+}
+
+/**
+ * Any corridor pay() runs: the payment-link corridors plus the reverse ones ("idrx-usdt", "wars-usdt", "wcop-usdt":
+ * the payer sends that local token, the recipient gets USD₮). Used by pay()'s pre-flight and contract autopilot.
+ */
+export function getPayoutCorridor(id) {
+  const key = String(id ?? "usdt-cngn").trim().toLowerCase();
+  const c = REVERSE_CORRIDORS[key];
+  return c ? { ...c, sellToken: TOKENS[c.sell], buyToken: TOKENS[c.buy] } : getCorridor(key);
 }
 
 /** The refusal code for a payout currency Textile FX isn't quoting (recorded as refused, reported to the status server). */
@@ -44,8 +60,8 @@ export function getPayCorridor(id) {
   const key = String(id ?? "usdt-cngn").trim().toLowerCase();
   const d = DIRECT_CORRIDORS[key];
   if (!d) {
-    if (CORRIDORS[key]) return getCorridor(key);
-    throw new Error(`Unknown corridor "${id}". Use one of: ${[...Object.keys(CORRIDORS), ...Object.keys(DIRECT_CORRIDORS)].join(", ")}`);
+    if (PAYOUT_CORRIDORS[key]) return getPayoutCorridor(key);
+    throw new Error(`Unknown corridor "${id}". Use one of: ${[...Object.keys(PAYOUT_CORRIDORS), ...Object.keys(DIRECT_CORRIDORS)].join(", ")}`);
   }
   return { ...d, sellToken: CELO_TOKEN, viaToken: TOKENS[d.via], buyToken: TOKENS[d.buy] };
 }
@@ -122,9 +138,17 @@ export function measuredReceived(balanceDelta, transferredInSwap) {
   return r > 0n ? r : 0n;
 }
 
-/** Amount in the corridor's sell token: "10", "$10", "₦14,400.50". At most 6 decimals. */
-export function parseAmount(input) {
-  return parseUsd(String(input ?? "").trim().replace(/^[₦$]/, "").replace(/,/g, ""));
+/**
+ * Amount in the corridor's sell token: "10", "$10", "₦14,400.50". At most `decimals` decimal places: 6 by default (USD₮,
+ * cNGN); pay() passes the sell token's own (IDRX 2, wARS and wCOP 18), so a contract payment is paid to the last unit.
+ */
+export function parseAmount(input, decimals = 6) {
+  const t = String(input ?? "").trim().replace(/^[₦$]/, "").replace(/,/g, "");
+  if (Number(decimals) === 6) return parseUsd(t);
+  const d = Math.max(0, Number(decimals));
+  if (!(d > 0 ? new RegExp(`^\\d+(\\.\\d{1,${d}})?$`) : /^\d+$/).test(t)) throw new Error(`Invalid amount: "${input}" (at most ${d} decimal places)`);
+  if (parseUnits(t, d) === 0n) throw new Error("Amount must be greater than zero");
+  return t;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

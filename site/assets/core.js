@@ -65,6 +65,10 @@ export function findCurrency(input) {
 export const corridorFor = (code) => "usdt-" + code;
 /** The currency a "usdt-<code>" corridor pays out in, or null for any other corridor. */
 export const currencyOfCorridor = (id) => (/^usdt-[a-z]+$/.test(String(id)) ? currencyOf(String(id).slice(5)) : null);
+/** The corridor that pays DOLLARS for a payment in a local currency: "idrx-usdt" (you send IDRX, they get USD₮). */
+export const reverseCorridorFor = (code) => code + "-usdt";
+/** The local currency a "<code>-usdt" corridor is paid in ("idrx-usdt" -> rupiah), or null for any other corridor. */
+export const currencyOfReverse = (id) => (/^[a-z]+-usdt$/.test(String(id)) ? currencyOf(String(id).slice(0, -5)) : null);
 /** Base units -> a plain decimal string rounded DOWN to `places` ("92035.51"). Never more than the units say. */
 export function unitsToDecimal(units, decimals, places = decimals) {
   const v = BigInt(units);
@@ -130,6 +134,13 @@ export const CORRIDORS = {
   "cngn-usdt": { id: "cngn-usdt", sell: "cNGN", buy: "USDT", label: "cNGN → USD₮", blurb: "Pay someone in dollars" },
   ...Object.fromEntries(CURRENCIES.slice(1).map((c) => [corridorFor(c.code), payoutCorridor(c)])),
 };
+/**
+ * The reverse corridors of the other local currencies (same ids as src/config.mjs REVERSE_CORRIDORS): you send IDRX,
+ * wARS or wCOP, they receive USD₮. Contract payments (tags, pots) and the agent's pay / quote only, not payment links.
+ */
+export const REVERSE_CORRIDORS = Object.fromEntries(CURRENCIES.slice(1).map((c) => [reverseCorridorFor(c.code), {
+  id: reverseCorridorFor(c.code), sell: c.token, buy: "USDT", from: c.code, label: `${c.token} → USD₮`, blurb: `Pay someone in dollars with ${c.plural}`,
+}]));
 /** The corridor object for an id, or null (own keys only: "toString" is not a corridor). */
 export const corridorOf = (id) => (Object.prototype.hasOwnProperty.call(CORRIDORS, id) ? CORRIDORS[id] : null);
 /** Function selectors (computed with viem, see SPEC). */
@@ -735,9 +746,15 @@ async function fetchRate() {
   const ageMin = Math.max(0, Math.round((Date.now() - Date.parse(d.fetchedAt ?? d.at)) / 60000));
   // reverseRate = USD₮ received per 1 NGN (cNGN -> USD₮ preview, fee included); null if not published yet
   const reverseRate = Number(d.reverseRate) > 0 ? Number(d.reverseRate) : null;
+  // reverseRates = USD₮ received per 1 unit of each local currency (its <code>-usdt preview); null where not published
+  const reverseRates = Object.fromEntries(CURRENCIES.map((c) => {
+    const r = Number(d.reverseRates?.[c.code] ?? (c.code === "cngn" ? reverseRate : null));
+    return [c.code, r > 0 ? r : null];
+  }));
   return {
     rate: rates.cngn, rates, available, maxUsd, fromPreview, fetchedAt: d.fetchedAt ?? d.at, ageMin, stale: !!d.stale || ageMin > 120,
     previewUsd: d.previewUsd ?? 10, ticker: d.ticker ?? null, reverseRate, reversePreviewNgn: d.reversePreviewNgn ?? null,
+    reverseRates,
   };
 }
 

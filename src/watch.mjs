@@ -48,7 +48,7 @@
 import fs from "node:fs";
 import { createPublicClient, formatUnits, getAddress, http, parseAbiItem, parseUnits } from "viem";
 import { verifyTx } from "@celo/attribution-tags";
-import { AGENT_ADDRESS, ATTRIBUTION_CODE, CHAIN, CORRIDORS, LOW_CELO_WARN, MIN_CELO_RESERVE, TOKENS, WATCH_STATE_FILE } from "./config.mjs";
+import { AGENT_ADDRESS, ATTRIBUTION_CODE, CHAIN, CORRIDORS, LOW_CELO_WARN, MIN_CELO_RESERVE, PAYOUT_CORRIDORS, TOKENS, WATCH_STATE_FILE } from "./config.mjs";
 import { corridorFor, currencyOf } from "./currencies.mjs";
 import { loadAccount, makeClients } from "./chain.mjs";
 import { getCorridor, refusal } from "./guards.mjs";
@@ -106,14 +106,18 @@ export const NTAG_MIN = {
 export const NTAG_MIN_USD = "1";
 
 /**
- * cNGN deposits: a permanent refusal when the live preview says the naira is worth less than NTAG_MIN_USD (the site and
- * the ntag CLI never let a payer send less). No price right now is left to preflight, which stops autopilot as usual.
+ * Payments in a local token that pay out dollars (cngn-usdt, idrx-usdt, wars-usdt, wcop-usdt; `units` in the sell
+ * token's own decimals): a permanent refusal when the live preview says the amount is worth less than NTAG_MIN_USD
+ * (Textile needs about $1 per swap; the site and the ntag CLI never let a payer send less). No price right now is left
+ * to preflight, which stops autopilot as usual. Any other corridor is not checked here.
  */
 export async function ntagUsdFloor(corridor, units, previewImpl = preview) {
-  if (corridor !== "cngn-usdt") return;
-  const pv = await previewImpl(TOKENS.CNGN.address, TOKENS.USDT.address, BigInt(units).toString());
+  const c = PAYOUT_CORRIDORS[corridor];
+  if (!c || c.usd !== "buy" || c.buy !== "USDT") return;
+  const sell = TOKENS[c.sell];
+  const pv = await previewImpl(sell.address, TOKENS.USDT.address, BigInt(units).toString());
   if (pv?.status === "preview" && BigInt(pv.buyAmount) < parseUnits(NTAG_MIN_USD, 6)) {
-    throw refusal(`${formatUnits(BigInt(units), 6)} cNGN is worth about ${formatUnits(BigInt(pv.buyAmount), 6)} USD, below the ${NTAG_MIN_USD} USD minimum for Lokal tag payments. Not paid.`);
+    throw refusal(`${formatUnits(BigInt(units), sell.decimals)} ${sell.symbol} is worth about ${formatUnits(BigInt(pv.buyAmount), 6)} USD, below the ${NTAG_MIN_USD} USD minimum for Lokal tag payments. Not paid.`);
   }
 }
 

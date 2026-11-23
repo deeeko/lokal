@@ -232,7 +232,8 @@ async function main() {
         console.log(JSON.stringify({ leg1: q.pv1, leg2: q.pv2 }, null, 2));
         break;
       }
-      const amount = parseAmount(flag("amount") ?? (c.sell === "USDT" ? "10" : "14400"));
+      // default: about $10 in the sell token
+      const amount = parseAmount(flag("amount") ?? ({ USDT: "10", CNGN: "14400", IDRX: "184000", WARS: "17500", WCOP: "34500" }[c.sell] ?? "10"), c.sellToken.decimals);
       const pv = await preview(c.sellToken.address, c.buyToken.address, parseUnits(amount, c.sellToken.decimals).toString());
       if (pv.status === "preview") {
         console.log(`[${c.id}] ${amount} ${c.sellToken.symbol} -> ~${formatUnits(BigInt(pv.buyAmount), c.buyToken.decimals)} ${c.buyToken.symbol} (indicative, ${c.blurb})`);

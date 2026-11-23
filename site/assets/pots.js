@@ -19,10 +19,13 @@ export const POT_MIN_LEAD_SECONDS = 10 * 60;
 export const LOG_RANGE = 5000;
 /** Blockscout's Etherscan-style API (logs with topic filters over any block range). */
 export const BLOCKSCOUT_RPC_API = "https://celo.blockscout.com/api";
-/** The tokens a guest can spray with: dollars (USD₮) for any currency, or naira (cNGN) for naira or dollars. */
-export const SPRAY_TOKENS = Object.freeze(["usdt", "cngn"]);
+/**
+ * The tokens a guest can spray with: dollars (USD₮) for any currency, or a local token (cNGN, IDRX, wARS, wCOP) for
+ * dollars or for that same currency (lokal-contracts.js payWithTokens says which, per choice).
+ */
+export const SPRAY_TOKENS = Object.freeze(["usdt", ...CURRENCIES.map((c) => c.code)]);
 /** Quick amounts a guest can tap, in whole units of the token they spray with (shown when they fit the room). */
-export const QUICK_AMOUNTS = Object.freeze({ usdt: [1, 2, 5], cngn: [1500, 3000, 5000] });
+export const QUICK_AMOUNTS = Object.freeze({ usdt: [1, 2, 5], cngn: [1500, 3000, 5000], idrx: [20000, 50000, 100000], wars: [2000, 5000, 10000], wcop: [4000, 10000, 20000] });
 
 // ---------- the title (LokalText.isValidText with 60 bytes / 60 UTF-16 units) ----------
 const INVISIBLE = /[​-‏‪-‮⁠-⁩﻿]/;
@@ -182,9 +185,9 @@ export function sprayError({ units, usd6, limits, room, fmt }) {
   }
   return null;
 }
-/** What the host can receive when a guest sprays with `payCode`: USD₮ -> any currency or dollars; cNGN -> naira or dollars. */
+/** What the host can receive when a guest sprays with `payCode`: USD₮ -> any currency or dollars; a local token -> that currency or dollars. */
 export function receiveChoices(payCode) {
-  return payCode === "cngn" ? ["cngn", "usd"] : [...CURRENCIES.map((c) => c.code), "usd"];
+  return payCode === "usdt" ? [...CURRENCIES.map((c) => c.code), "usd"] : [payCode, "usd"];
 }
 
 // ---------- the Spray Wall: PotPaid logs, without payer addresses ----------
@@ -318,5 +321,5 @@ export async function loadHostPots(host, { scan = 40, fetchJson = getJson, rpcUr
   const infos = await Promise.all(ids.map((id) => readPotInfo(id, opts).then((i) => ({ potId: BigInt(id), ...i })).catch(() => null)));
   return infos.filter((p) => p && lc(p.host) === lc(host));
 }
-/** The token address for a spray code ("usdt" | "cngn"). */
-export const sprayToken = (code) => (code === "cngn" ? CURRENCIES.find((c) => c.code === "cngn").address : USDT_ADDRESS);
+/** The token address for a spray code ("usdt" | "cngn" | "idrx" | "wars" | "wcop"). */
+export const sprayToken = (code) => (code === "usdt" ? USDT_ADDRESS : CURRENCIES.find((c) => c.code === code)?.address ?? USDT_ADDRESS);

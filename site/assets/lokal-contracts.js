@@ -8,7 +8,7 @@
 // Selectors are written out (computed with viem from contracts/deployments/*.json; the test recomputes every one).
 import {
   AGENT, RPC, TOKENS, CURRENCIES, USDT_ADDRESS, DEFAULT_CURRENCY, abiEncode, abiDecode, getJson, tagSuffix, currencyOf,
-  unitsToDecimal, formatCurrencyUnits,
+  unitsToDecimal, formatCurrencyUnits, reverseCorridorFor,
 } from "./core.js";
 
 export const LOKAL_TAGS = "0xFF2f8ADC0c97B6E40b201848d378C11325bC7187";
@@ -205,7 +205,8 @@ export function currencyOfRef(ref) {
  * agree for every case). The PAYER's choice for this payment (`chosen`, from the ref) wins; then the recipient's
  * optional default (their receive token on LokalTags); then: a tag pays USD₮ payments in naira (the default since the
  * memo days) and cNGN payments in dollars; a pot pays dollars. A payment already in the token they get is passed
- * straight through. Returns { mode: "swap", corridor, receive } | { mode: "forward", receive } | null (the agent would
+ * straight through. USD₮ converts into any local currency (usdt-<code>), any local token into dollars (<code>-usdt);
+ * one local currency into another is refused. Returns { mode: "swap", corridor, receive } | { mode: "forward", receive } | null (the agent would
  * refuse it, so pages never offer it). `receive` = "usdt" or a currency code.
  */
 export function payoutRoute(paidToken, receiveToken, kind = "tag", chosen = null) {
@@ -217,13 +218,57 @@ export function payoutRoute(paidToken, receiveToken, kind = "tag", chosen = null
   const want = chosen ?? set ?? (kind === "pot" ? "usdt" : paid === "usdt" ? DEFAULT_CURRENCY : paid === "cngn" ? "usdt" : paid);
   if (paid === want) return { mode: "forward", receive: want };
   if (paid === "usdt") return { mode: "swap", corridor: "usdt-" + want, receive: want };
-  if (paid === "cngn" && want === "usdt") return { mode: "swap", corridor: "cngn-usdt", receive: "usdt" };
+  if (want === "usdt") return { mode: "swap", corridor: reverseCorridorFor(paid), receive: "usdt" }; // paid is a local currency here
   return null;
 }
 /** The tokens a payer can pay a recipient with, given their receive token: [{ code, address }] (USD₮ first). */
 export function payableTokens(receiveToken, kind = "tag") {
   const all = ["usdt", ...CURRENCIES.map((c) => c.code)];
   return all.map((code) => ({ code, address: tokenOfCode(code) })).filter((t) => payoutRoute(t.address, receiveToken, kind));
+}
+/**
+ * What a payer can pay with when they choose what the recipient gets on this payment (`chosen`: "usdt" for dollars or a
+ * currency code): [{ code, address, decimals, symbol }], USD₮ first. Dollars: USD₮ (passed through) or any local token
+ * (converted on Textile FX); a local currency: USD₮, or that same token passed through.
+ */
+export function payWithTokens(chosen, kind = "tag") {
+  return payableTokensFor(chosen, kind).map((t) => ({ ...t, decimals: t.code === "usdt" ? 6 : currencyOf(t.code).decimals, symbol: t.code === "usdt" ? "USD₮" : currencyOf(t.code).token }));
+}
+const payableTokensFor = (chosen, kind) => ["usdt", ...CURRENCIES.map((c) => c.code)]
+  .map((code) => ({ code, address: tokenOfCode(code) })).filter((t) => payoutRoute(t.address, null, kind, chosen));
+/** "USD₮" or the token's symbol ("IDRX") for "usdt" or a currency code. */
+export const paySymbol = (code) => (code === "usdt" ? "USD₮" : currencyOf(code)?.token ?? "");
+/** The token's decimals for "usdt" or a currency code (USD₮ 6, cNGN 6, IDRX 2, wARS 18, wCOP 18). */
+export const payDecimals = (code) => (code === "usdt" ? 6 : currencyOf(code)?.decimals ?? 6);
+/** Base units for an amount typed in cents (pages take at most 2 decimals; every token here has at least 2). */
+export const unitsFromCents = (cents, code) => BigInt(cents) * 10n ** BigInt(payDecimals(code) - 2);
+/**
+ * USD₮ one unit of `code` is worth when the agent converts it to dollars, from loadRate(): the <code>-usdt preview
+ * (rate.reverseRates; naira also from the older reverseRate field), else 1 / its USD₮ -> local rate, which leaves out
+ * the fee on the way back (approx: true). { usdPer, approx } or null without any rate. "usdt" is 1, exact.
+ */
+export function usdPerUnit(code, rate) {
+  if (code === "usdt") return { usdPer: 1, approx: false };
+  const rr = Number(rate?.reverseRates?.[code] ?? (code === "cngn" ? rate?.reverseRate : null));
+  if (rr > 0) return { usdPer: rr, approx: false };
+  const fwd = Number(rate?.rates?.[code]);
+  return fwd > 0 && rate?.available?.[code] !== false ? { usdPer: 1 / fwd, approx: true } : null;
+}
+/** What `cents` of `code` is worth in dollars at today's rate: { usd, approx } or null without a rate. */
+export function payUsdValue(code, cents, rate) {
+  const u = usdPerUnit(code, rate);
+  return u ? { usd: (Number(cents) / 100) * u.usdPer, approx: u.approx } : null;
+}
+/**
+ * Why the agent would refuse a payment in a LOCAL token that it converts to dollars, before the wallet opens (or null):
+ * worth under $1 (Textile's minimum per swap; 5% more when the value is only approximate) or over `capUsd` (the
+ * per-payment cap less a margin for price moves). `v` = payUsdValue(); `fmtMax` (usd) -> text in the token.
+ */
+export function localPayError(v, capUsd, fmtMax) {
+  if (!v) return null;
+  if (v.usd > capUsd) return `That's worth about $${v.usd.toFixed(2)}. Send up to about ${fmtMax(capUsd)} so it stays under the agent's limit after price moves.`;
+  if (v.usd < (v.approx ? 1.05 : 1)) return "That's worth less than $1. Send a little more.";
+  return null;
 }
 
 // ---------- decoding ----------

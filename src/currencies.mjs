@@ -52,6 +52,10 @@ export function findCurrency(input) {
 export const corridorFor = (code) => "usdt-" + code;
 /** The currency a "usdt-<code>" corridor pays out in, or null for any other corridor. */
 export const currencyOfCorridor = (id) => (/^usdt-[a-z]+$/.test(String(id)) ? currencyOf(String(id).slice(5)) : null);
+/** The corridor that pays DOLLARS for a payment in a local currency: "idrx-usdt" (you send IDRX, they get USD₮). */
+export const reverseCorridorFor = (code) => code + "-usdt";
+/** The local currency a "<code>-usdt" corridor is paid in ("idrx-usdt" -> rupiah), or null for any other corridor. */
+export const currencyOfReverse = (id) => (/^[a-z]+-usdt$/.test(String(id)) ? currencyOf(String(id).slice(0, -5)) : null);
 /** Base units -> a plain decimal string rounded DOWN to `places` ("92035.51"). Never more than the units say. */
 export function unitsToDecimal(units, decimals, places = decimals) {
   const v = BigInt(units);
