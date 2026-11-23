@@ -11,7 +11,7 @@ Code: `src/refund.mjs` (the rules and the flow), `src/agent.mjs` (`refund`, `ref
 
 | Deposit | Where autopilot recorded it | Refundable |
 |---|---|---|
-| Refused Lokal tag payment (any reason: unknown tag, bad memo, under the minimum, over a cap, self-payment, ...) | `ntag-payments.json`, `status: "refused"` | yes |
+| Refused LokalPay tag payment (any reason: unknown tag, bad memo, under the minimum, over a cap, self-payment, ...) | `ntag-payments.json`, `status: "refused"` | yes |
 | Refused "Get paid" deposit (any reason) | `registrations-state.json`, the registration's `refused` map | yes |
 | Deposit to an expired or already used link | `receipts.jsonl`, `type: "unmatched_deposit"` | yes |
 | Unmatched deposit (no link has that token and exact amount) | `receipts.jsonl`, `type: "unmatched_deposit"` | yes |
@@ -51,7 +51,7 @@ was not paid, its age and its status: `refundable`, `sending`, `refunded`, `fail
 2. With `--execute`: you type `yes` (or pass `--yes`).
 3. **Lock.** Takes the agent lock (`agent.lock`, the same one autopilot and `pay --execute` take), so a refund can never
    race a payout.
-4. **Re-read the deposit over RPC.** The transaction succeeded, the log is an ERC-20 Transfer of a token Lokal knows
+4. **Re-read the deposit over RPC.** The transaction succeeded, the log is an ERC-20 Transfer of a token LokalPay knows
    (USD₮, cNGN, IDRX, wARS or wCOP, each in its own decimals), sent to the agent, and its amount and `from` are what the
    refund will use. The transaction was not sent by the agent. The minimum and the cap are in USD: USD₮ counts 1:1, a
    local token is valued with a live Textile price (no price, no refund).
@@ -87,6 +87,6 @@ was not paid, its age and its status: `refundable`, `sending`, `refunded`, `fail
 ## Auto-refund (opt-in)
 
 `watch --execute --auto-refund` refunds a deposit right after autopilot refuses it, with every check above. Only
-**refused Lokal tag and "Get paid" deposits**, at most **3 refunds per payer in 24 hours** (more wait for the
+**refused LokalPay tag and "Get paid" deposits**, at most **3 refunds per payer in 24 hours** (more wait for the
 operator). Unmatched and ambiguous deposits are always refunded by hand. A failed auto-refund never stops autopilot: it
 is recorded as `failed`, alerted, and left for `refund --retry`.

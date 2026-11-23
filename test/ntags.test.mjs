@@ -397,5 +397,5 @@ test("force-paying a refused nTag deposit: only with a known owner, claim and am
     assert.match(node.refusedRetryBlocker({ ...good, [missing]: undefined }), /nobody to pay/, missing);
   }
   assert.match(node.refusedRetryBlocker({ ...good, tag: null, reason: "unknown nTag" }), /unknown nTag/);
-  assert.match(node.refusedRetryBlocker(undefined), /No Lokal tag payment/);
+  assert.match(node.refusedRetryBlocker(undefined), /No LokalPay tag payment/);
 });

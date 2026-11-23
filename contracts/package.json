@@ -2,7 +2,7 @@
   "name": "lokal-contracts",
   "version": "1.0.0",
   "private": true,
-  "description": "LokalTags and LokalPots: the onchain tag registry, payment router and pots for the Lokal payout agent on Celo. The contract has the final say.",
+  "description": "LokalTags and LokalPots: the onchain tag registry, payment router and pots for the LokalPay payout agent on Celo. The contract has the final say.",
   "license": "MIT",
   "engines": {
     "node": ">=20"

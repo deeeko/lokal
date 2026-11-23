@@ -1,6 +1,6 @@
 // Changing or deleting a test in this file needs the owner's written OK. Adding tests is fine.
 //
-// The money-safety invariants of Lokal, one test each, against the real functions (pay(), the guards, autopilot, the
+// The money-safety invariants of LokalPay, one test each, against the real functions (pay(), the guards, autopilot, the
 // refund flow, the wallet client, the site's resolver). Fakes only (test/fakes.mjs and a fake chain below): nothing
 // reaches Celo, Textile or the real state files. contacts.json and receipts.jsonl are temp files set up before the
 // modules load, because src/config.mjs reads their paths once.
@@ -242,7 +242,7 @@ test("INVARIANT 9: attribution tag: every transaction the wallet client sends en
   process.exitCode = 0;
 });
 
-test("INVARIANT 10: the site and the agent resolve Lokal tags identically (owner, memos, availability, before a deposit)", () => {
+test("INVARIANT 10: the site and the agent resolve LokalPay tags identically (owner, memos, availability, before a deposit)", () => {
   const AGENT = AGENT_ADDRESS;
   const froms = ["0x2222222222222222222222222222222222222222", "0x4444444444444444444444444444444444444444", AGENT];
   const bodies = [{ t: "ada" }, { t: "ada", n: "Ada" }, { t: "bob" }, { t: "" }, { t: "admin" }, { t: "Ada" }, "junk"];

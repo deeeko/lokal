@@ -1,6 +1,6 @@
 # Cash out to your bank
 
-Lokal pays you in a local stablecoin on Celo: cNGN (naira), IDRX (rupiah), wARS (Argentine peso) or wCOP (Colombian peso), or in USD₮. This guide explains how to turn that into money in your bank account.
+LokalPay pays you in a local stablecoin on Celo: cNGN (naira), IDRX (rupiah), wARS (Argentine peso) or wCOP (Colombian peso), or in USD₮. This guide explains how to turn that into money in your bank account.
 
 The short version is on the website: [lokalpay.vercel.app/cash-out.html](https://lokalpay.vercel.app/cash-out.html). This page has the same routes in more depth, with sources.
 
@@ -22,7 +22,7 @@ The short version is on the website: [lokalpay.vercel.app/cash-out.html](https:/
 1. **Send a small test amount first.** Wait until it arrives on the other side, then send the rest.
 2. **Only send on a network the receiving app lists for that token.** Your tokens are on the **Celo** network. If the app's deposit page doesn't show Celo for that exact token, don't send it there: tokens sent on an unsupported network can be lost, and recovering them (if possible at all) is up to that app.
 3. **Check the token address, not just the name.** Different coins can share a similar name or symbol. Compare the contract address in your wallet with the one in this guide.
-4. **Lokal never asks for your seed phrase** (your recovery words). No real support team does. Anyone who asks for it is trying to take your money.
+4. **LokalPay never asks for your seed phrase** (your recovery words). No real support team does. Anyone who asks for it is trying to take your money.
 
 ## Using MiniPay
 
@@ -204,9 +204,9 @@ USD₮ is the universal fallback: more apps accept it on Celo than any of the lo
 
 ## About this guide
 
-- This guide describes third-party services as we found them on the date above. Lokal isn't affiliated with any of them, earns nothing from them, and can't promise how they'll handle your money.
+- This guide describes third-party services as we found them on the date above. LokalPay isn't affiliated with any of them, earns nothing from them, and can't promise how they'll handle your money.
 - Routes marked "official" are documented by the token's issuer. Routes marked "not officially confirmed" rely on a third-party report and may stop working.
-- Lokal pays to your wallet. What happens after that is between you and the app you choose.
+- LokalPay pays to your wallet. What happens after that is between you and the app you choose.
 
 ## Sources
 

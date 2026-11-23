@@ -7,7 +7,7 @@
 //      address), with an honest empty state until the first one.
 // The activity feed and everyone's addresses are not on this page: they live behind sign-in (Activity, Dashboard).
 // Signed-in visitors never get here by accident: assets/gate.js sends them to the dashboard unless they asked for
-// "About Lokal" (index.html?about); then the top bar's "Sign in" becomes "Dashboard".
+// "About LokalPay" (index.html?about); then the top bar's "Sign in" becomes "Dashboard".
 import { $, $$, el, initChrome, loadRate, loadTxPage, txKind, receiptNo, celoscanTx, lagosTime, lagosClock, parseMoneyInput, CAP, CURRENCIES, formatCurrency, tokenOf } from "../assets/core.js";
 import { getSession } from "../assets/session.js";
 import { flagIcon } from "../assets/currency-ui.js";
@@ -16,7 +16,7 @@ import { ntagCard, stage, reducedMotion } from "../assets/ntag-ui.js";
 document.documentElement.classList.add("js");
 initChrome();
 
-// signed in, here on purpose ("About Lokal"): the top bar offers the way back
+// signed in, here on purpose ("About LokalPay"): the top bar offers the way back
 if (getSession()) {
   const a = $("#lp-signin");
   a.textContent = "Dashboard";

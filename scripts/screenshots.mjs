@@ -85,7 +85,7 @@ function mockChain({ tag = null, name = "", receive = null } = {}) {
     else if (method === "eth_getTransactionReceipt") { if (st.pending) { st.tag = st.pending.tag; st.pending = null; } result = { status: "0x1", logs: [], blockNumber: "0x1" }; }
     return { jsonrpc: "2.0", id, result };
   }
-  // Blockscout: the example account's payments with Lokal, and its payment link
+  // Blockscout: the example account's payments with LokalPay, and its payment link
   const transfers = [
     { transaction_hash: hash(0xa11ce1), timestamp: day(15), token: { address_hash: CURRENCIES[0].address }, total: { value: "14407670000", decimals: "6" }, from: { hash: AGENT }, to: { hash: ME } },
     { transaction_hash: hash(0xa11ce2), timestamp: day(12), token: { address_hash: CURRENCIES[0].address }, total: { value: "7203830000", decimals: "6" }, from: { hash: AGENT }, to: { hash: ME } },

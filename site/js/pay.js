@@ -89,7 +89,7 @@ function showError(message, opts = {}) {
     $("#err-retry-row").hidden = false;
     $("#err-retry").addEventListener("click", () => location.reload(), { once: true });
   }
-  document.title = (opts.title ? opts.title.replace(/\.$/, "") : "Link can't be opened") + " · Lokal";
+  document.title = (opts.title ? opts.title.replace(/\.$/, "") : "Link can't be opened") + " · LokalPay";
 }
 
 // =====================================================================
@@ -190,7 +190,7 @@ function initLink(req) {
   const sendText = `${exactAmount(req.amount)} ${sell.symbol}`;
   const isReg = !!req.recipient; // #tx= link: the recipient registered it from their own wallet
 
-  document.title = `Pay ${req.name} · Lokal`;
+  document.title = `Pay ${req.name} · LokalPay`;
   setText($("#l-name"), req.name);
   const to = isReg ? `${req.name}'s wallet` : req.name;
   setText($("#l-lead"), inNaira

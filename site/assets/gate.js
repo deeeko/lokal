@@ -1,6 +1,6 @@
 // The landing's front door. Loaded as a plain (classic) script in the <head> of index.html, so it runs before the
 // page paints: someone who is signed in on this device goes straight to their dashboard (app.html) instead of seeing
-// the story again. "About Lokal" links (index.html?about) always show the landing.
+// the story again. "About LokalPay" links (index.html?about) always show the landing.
 //
 // It reads the same browser storage as assets/session.js: the sign-in "np-session" (localStorage) and the
 // "np-wallet-off" flag a Disconnect sets for this tab (sessionStorage). It only decides where to send the browser;

@@ -110,7 +110,7 @@ export function greeting(date = new Date()) {
 
 /** The WhatsApp share link for a tag. */
 export function whatsappUrl(tag, url = ntagUrl(tag)) {
-  return "https://wa.me/?text=" + encodeURIComponent(`Pay me in dollars on Celo and I receive my own local money. My Lokal tag is @${tag}: ${url}`);
+  return "https://wa.me/?text=" + encodeURIComponent(`Pay me in dollars on Celo and I receive my own local money. My LokalPay tag is @${tag}: ${url}`);
 }
 
 // ---------- payments to a tag: values, eligibility, matching deposits to payouts (pure, tested) ----------
@@ -279,16 +279,16 @@ const STATUS_RANK = { received: 0, failed: 1, refused: 2, refunded: 3, paid: 4 }
 const has = (o, k) => o != null && Object.prototype.hasOwnProperty.call(o, k); // not Object.hasOwn: older phones
 const finite = (v) => typeof v === "number" && Number.isFinite(v);
 const REASON_TEXT = {
-  unknown_tag: "Nobody held this Lokal tag when the payment arrived",
+  unknown_tag: "Nobody held this LokalPay tag when the payment arrived",
   bad_memo: "The @tag note on the payment couldn't be read",
-  token_not_accepted: "This token isn't accepted for Lokal tag payments",
+  token_not_accepted: "This token isn't accepted for LokalPay tag payments",
   below_minimum: "The payment was below the minimum",
   over_payment_cap: `The payment was over the $${CAP} limit for one payment`,
   over_wallet_cap: `It would have taken this person over $${LIMITS.perPersonDay} in 24 hours`,
   currency_unavailable: "The currency it asked for wasn't available on Textile FX when it arrived (it is never paid in another one)",
   self_payment: "It was sent from the same wallet it pays",
   recipient_blocked: "The agent can't pay this wallet",
-  claim_invalid: "The Lokal tag's claim didn't check out on Celo",
+  claim_invalid: "The LokalPay tag's claim didn't check out on Celo",
   registration_invalid: "The payment link didn't check out on Celo",
   other: "The agent couldn't pay it automatically",
 };
@@ -463,7 +463,7 @@ export function ntagCard(props = {}) {
   const stamp = el("span", { class: "ntag-stamp", "aria-hidden": "true" }, stampCheck, stampText);
   const front = el("div", { class: "ntag-face ntag-front" },
     el("span", { class: "ntag-guilloche" }),
-    el("div", { class: "ntag-top" }, el("span", { class: "ntag-brand" }, ringMark(), "Lokal tag"), net),
+    el("div", { class: "ntag-top" }, el("span", { class: "ntag-brand" }, ringMark(), "LokalPay tag"), net),
     el("div", { class: "ntag-main" }, handle, name),
     el("div", { class: "ntag-bottom" }, addr, since),
     el("span", { class: "ntag-sheen" }), el("span", { class: "ntag-glare" }));
@@ -497,7 +497,7 @@ export function ntagCard(props = {}) {
     stampText.textContent = props.stamp ?? "";
     stampCheck.style.display = kind === "ghost" ? "none" : ""; // "Unclaimed", "Reserved", "On hold": no tick
     card.classList.toggle("is-stamped", Boolean(props.stamp));
-    if (as !== "div") card.setAttribute("aria-label", props.label ?? `Lokal tag @${shown}${nm ? ", " + nm : ""}${pc ? `, receives ${pc.plural}` : ""}`);
+    if (as !== "div") card.setAttribute("aria-label", props.label ?? `LokalPay tag @${shown}${nm ? ", " + nm : ""}${pc ? `, receives ${pc.plural}` : ""}`);
     return card;
   };
   card.update();
@@ -556,7 +556,7 @@ export const renderQr = drawQr;
 export function shareBlock(tag) {
   const url = ntagUrl(tag);
   return shareRow({
-    url, title: `@${tag} on Lokal`, text: `Pay me in dollars on Celo and I receive my own local money. My Lokal tag is @${tag}.`,
+    url, title: `@${tag} on LokalPay`, text: `Pay me in dollars on Celo and I receive my own local money. My LokalPay tag is @${tag}.`,
     whatsappText: decodeURIComponent(whatsappUrl(tag, url).split("?text=")[1]), qrLabel: `QR code for the @${tag} pay page`,
     qrCaption: "Scan to open the pay page.",
   });
@@ -619,7 +619,7 @@ export async function loadNtagStateFresh(maxPages = 200) {
       return { ops, state: resolveNtags(ops) };
     }
   }
-  throw new Error("partial Lokal tag list");
+  throw new Error("partial LokalPay tag list");
 }
 
 /** Blockscout token-transfer item -> { hash, logIndex, block, ts (ms), from, to, token (tokenKey) | null, units }, or null. */
@@ -859,7 +859,7 @@ export function ntagFinder(opts = {}) {
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && best) location.href = best; });
   if (opts.value) { input.value = cleanTagInput(opts.value); setTimeout(run, 0); }
   return el("div", { class: "nt-find", role: "search" },
-    el("label", { class: "nt-find-label", for: id }, icon("search"), opts.label ?? "Find a Lokal tag"),
+    el("label", { class: "nt-find-label", for: id }, icon("search"), opts.label ?? "Find a LokalPay tag"),
     el("div", { class: "nt-taginput sm" }, el("span", { class: "nt-at", "aria-hidden": "true" }, "@"), input),
     out);
 }

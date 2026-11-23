@@ -1,4 +1,4 @@
-// features.html: everything Lokal does, each with its honest label. A static page; this only runs the shared chrome
+// features.html: everything LokalPay does, each with its honest label. A static page; this only runs the shared chrome
 // (privacy choices), swaps "Sign in" for "Dashboard" when signed in, and the calm reveals on scroll.
 import { $, $$, initChrome } from "../assets/core.js";
 import { getSession } from "../assets/session.js";

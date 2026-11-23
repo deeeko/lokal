@@ -1,4 +1,4 @@
-// "Add <token> to my wallet": asks the wallet to show a Lokal token (EIP-747 wallet_watchAsset), so the money the
+// "Add <token> to my wallet": asks the wallet to show a LokalPay token (EIP-747 wallet_watchAsset), so the money the
 // agent pays out is visible in the recipient's own wallet. Nothing is sent and nothing is signed; the wallet asks the
 // person to confirm. The wallet is switched to Celo first, because a wallet adds the token to whatever network it is
 // on. Addresses and decimals come from the one currency list (core.js); symbols are exactly what each token contract
@@ -9,7 +9,7 @@ import { CURRENCIES, USDT_ADDRESS, USDT_DECIMALS, el, icon } from "./core.js";
 import { ensureCelo, explainWalletError, injectedWallet } from "./session.js";
 import { flagIcon } from "./currency-ui.js";
 
-/** Every token a Lokal recipient can hold, in display order (the four local currencies, then dollars). */
+/** Every token a LokalPay recipient can hold, in display order (the four local currencies, then dollars). */
 export const WALLET_TOKENS = [
   ...CURRENCIES.map((c) => ({ code: c.code, symbol: c.token, address: c.address, decimals: c.decimals, label: c.label, flag: c.code })),
   { code: "usdt", symbol: "USD₮", address: USDT_ADDRESS, decimals: USDT_DECIMALS, label: "Dollars", flag: "usd" },

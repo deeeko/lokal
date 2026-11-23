@@ -4,7 +4,7 @@
 //
 // Four kinds, each from a read the site already makes:
 //   - "payout": the agent paid this wallet (my-activity.js rows, kind "payout") -> its receipt (receipt.html#NP-…);
-//   - "tag": a payment to this wallet's Lokal tag arrived (TagPaid logs whose recipient is this wallet) -> Activity;
+//   - "tag": a payment to this wallet's LokalPay tag arrived (TagPaid logs whose recipient is this wallet) -> Activity;
 //   - "pot": a guest sprayed into a pot this wallet hosts (PotPaid logs whose host is this wallet) -> pot.html?id=N;
 //   - "refund": the agent sent a payment back to this wallet (an agent transfer that returns exactly the token and
 //     amount this wallet sent it earlier) -> the refund transaction on Celoscan, with its RF- number.

@@ -1,4 +1,4 @@
-// proof.html: every real Lokal payout, read from Celo when the page opens (assets/proof.js does the reading and the
+// proof.html: every real LokalPay payout, read from Celo when the page opens (assets/proof.js does the reading and the
 // sums; this file only draws them): a short header, the totals and the list. Never an address. A named user who
 // doesn't match a real payout is a red line in the list, never hidden.
 import { $, el, icon, initChrome, celoscanTx, lagos, lagosClock, CURRENCIES, TAG } from "../assets/core.js";
@@ -35,7 +35,7 @@ function row(r, depositsRead) {
     el("div", { class: "pf-amts" }, el("span", {}, r.inText ?? "In: unknown"), el("span", { class: "pf-arrow", "aria-hidden": "true" }, "→"), el("b", {}, r.outText)),
     el("div", { class: "pf-rcpt" }, el("a", { class: "mono link", href: `receipt.html#${r.receiptNo}` }, r.receiptNo)),
     el("div", { class: "pf-tx" }, deposit, tx(r.payoutHash, "Payout")),
-    el("div", { class: `pf-attr ${r.tagged ? "ok" : "bad"}`, title: r.tagged ? `The payout's input carries Lokal's attribution tag ${TAG}.` : `The payout's input does not carry ${TAG}.` },
+    el("div", { class: `pf-attr ${r.tagged ? "ok" : "bad"}`, title: r.tagged ? `The payout's input carries LokalPay's attribution tag ${TAG}.` : `The payout's input does not carry ${TAG}.` },
       icon(r.tagged ? "check" : "x"), el("span", { class: "mono" }, TAG), r.tagged ? null : el("span", {}, "missing")),
     r.user ? el("p", { class: "pf-user" }, el("b", {}, r.user.label), [r.user.city, r.user.usedFor].filter(Boolean).map((s) => " · " + s).join("")) : null);
 }

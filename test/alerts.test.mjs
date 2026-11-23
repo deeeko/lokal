@@ -36,7 +36,7 @@ test("channels: Telegram needs a token and a chat id, the webhook https; problem
 });
 
 test("texts: level label, one line, length-capped, secrets redacted", () => {
-  assert.match(alertText("autopilot_stopped", "a\nb"), /^\[URGENT\] Lokal agent: a b$/);
+  assert.match(alertText("autopilot_stopped", "a\nb"), /^\[URGENT\] LokalPay agent: a b$/);
   assert.match(alertText("celo_low", "x"), /^\[WARNING\]/);
   assert.ok(alertText("payout_paid", "y".repeat(5000)).length <= 1500);
   assert.equal(scrub(`token ${TOKEN} and ${HOOK}`, [TOKEN, HOOK]), "token [redacted] and [redacted]");

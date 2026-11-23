@@ -1,4 +1,4 @@
-# Architecture: how Lokal is built
+# Architecture: how LokalPay is built
 
 How the site, the agent and the contracts fit together, and how a payment becomes a payout. The contracts have their
 own page ([CONTRACTS.md](CONTRACTS.md)), as do the formats on the wire ([PROTOCOL.md](PROTOCOL.md)), the command
@@ -16,7 +16,7 @@ lines ([CLI.md](CLI.md)) and running the agent ([OPERATOR.md](OPERATOR.md)).
 Formerly Naira Payout.
 
 Send dollars, they receive their local money: an agent on Celo that converts USD₮ to a local stablecoin on Textile FX
-and pays the recipient's own wallet, by Lokal tag, payment link or command line, with every limit enforced in code.
+and pays the recipient's own wallet, by LokalPay tag, payment link or command line, with every limit enforced in code.
 
 Multi-currency by design: the payer chooses what the recipient gets, **naira** (cNGN, Nigeria), **rupiah** (IDRX,
 Indonesia) or **pesos** (wARS, Argentina; wCOP, Colombia), and the agent pays out in that currency through the same
@@ -25,7 +25,7 @@ safety path. All four are built and tested; none has had a real mainnet payout y
 ## What it is and who it's for
 
 Someone abroad wants to send money home. They hold dollars (USD₮) on Celo; the recipient wants their local money.
-Lokal's agent sits in the middle: it takes the dollars, converts them to a local stablecoin on **Textile FX**, and pays
+LokalPay's agent sits in the middle: it takes the dollars, converts them to a local stablecoin on **Textile FX**, and pays
 the recipient's own Celo wallet. It is built for families and freelancers across **Nigeria, Indonesia, Argentina and
 Colombia**: @ada can receive naira; @budi will receive rupiah once the rupiah payouts ship (see
 [Currencies](PROTOCOL.md#currencies)).
@@ -34,9 +34,9 @@ The agent pays out end to end in **cNGN** (naira), **IDRX** (rupiah), **wARS** a
 (naira in, dollars out), and the operator can pay out in naira from the agent's CELO. The corridors below are the ones
 the agent runs.
 
-- **Senders** pay from any Celo wallet: to a **Lokal tag** (a short handle), through a **payment link**, from the site,
+- **Senders** pay from any Celo wallet: to a **LokalPay tag** (a short handle), through a **payment link**, from the site,
   or from the **`lokal` command line** in PowerShell.
-- **Recipients** get paid straight into their own wallet. They can claim a Lokal tag and share `lokalpay.vercel.app/@name`,
+- **Recipients** get paid straight into their own wallet. They can claim a LokalPay tag and share `lokalpay.vercel.app/@name`,
   or publish a payment link from their own wallet ("Get paid").
 - **The operator** runs the agent (`src/agent.mjs`): it watches for deposits (`watch --execute`) and pays them out,
   under hard limits.
@@ -46,11 +46,11 @@ wallet. The agent holds only what it is converting at that moment.
 
 | Corridor | Payer sends | Recipient gets | Amount typed in | Used by |
 |---|---|---|---|---|
-| `usdt-cngn` (default) | USD₮ | cNGN | USD₮ | Lokal tags, payment links, Get paid, CLI, operator |
-| `cngn-usdt` | cNGN | USD₮ | naira (cNGN) | Lokal tags, payment links, Get paid, CLI, operator |
-| `usdt-idrx` | USD₮ | IDRX | USD₮ | Lokal tags, payment links, Get paid, CLI, operator |
-| `usdt-wars` | USD₮ | wARS | USD₮ | Lokal tags, payment links, Get paid, CLI, operator |
-| `usdt-wcop` | USD₮ | wCOP | USD₮ | Lokal tags, payment links, Get paid, CLI, operator |
+| `usdt-cngn` (default) | USD₮ | cNGN | USD₮ | LokalPay tags, payment links, Get paid, CLI, operator |
+| `cngn-usdt` | cNGN | USD₮ | naira (cNGN) | LokalPay tags, payment links, Get paid, CLI, operator |
+| `usdt-idrx` | USD₮ | IDRX | USD₮ | LokalPay tags, payment links, Get paid, CLI, operator |
+| `usdt-wars` | USD₮ | wARS | USD₮ | LokalPay tags, payment links, Get paid, CLI, operator |
+| `usdt-wcop` | USD₮ | wCOP | USD₮ | LokalPay tags, payment links, Get paid, CLI, operator |
 | `celo-cngn` | CELO (from the agent wallet) | cNGN | CELO | operator `pay` and `quote` only |
 
 ## Addresses on Celo mainnet
@@ -83,15 +83,15 @@ The site has three front doors (plus two public pages with the landing's chrome)
 
 | Page | Who it is for | What it does |
 |---|---|---|
-| **Landing** (`/`, `index.html`) | everyone new | Six sections, one job each: the hero with a **live converter** (type $10, see naira, rupiah and both pesos from `/api/rate`), how it works in three lines, the four countries as a live rate board, why it's safe (the two contracts on Celoscan), **Proof** (one line, "Lokal runs on Celo mainnet. Every real payout appears below with its transaction.", then the real payouts read from Celo, with an honest empty state until the first one), and the last word with four questions. A slim top bar: How it works, Countries, Safety, Proof, Features, Sign in, Get started. |
-| **Features** (`features.html`) | anyone who wants the whole list | **Everything Lokal does**: every working capability, listed plainly with a "try it" link, and one small "Coming soon" list for what isn't built yet (MiniPay mode, Pay with CELO, Pay for me). No status pills. Same top bar and footer as the landing. |
+| **Landing** (`/`, `index.html`) | everyone new | Six sections, one job each: the hero with a **live converter** (type $10, see naira, rupiah and both pesos from `/api/rate`), how it works in three lines, the four countries as a live rate board, why it's safe (the two contracts on Celoscan), **Proof** (one line, "LokalPay runs on Celo mainnet. Every real payout appears below with its transaction.", then the real payouts read from Celo, with an honest empty state until the first one), and the last word with four questions. A slim top bar: How it works, Countries, Safety, Proof, Features, Sign in, Get started. |
+| **Features** (`features.html`) | anyone who wants the whole list | **Everything LokalPay does**: every working capability, listed plainly with a "try it" link, and one small "Coming soon" list for what isn't built yet (MiniPay mode, Pay with CELO, Pay for me). No status pills. Same top bar and footer as the landing. |
 | **Proof** (`proof.html`) | anyone checking | Every real payout read from Celo ([below](#proof)). Same top bar and footer as the landing. |
 | **Sign-up gateway** (`start.html`) | someone who wants to get paid | One calm step at a time with a progress line: **Connect** (the wallet shares its address; nothing signed) → **Sign in** (the free signed message, the same sign-in as before) → **Your tag** (the LokalTags contract answers as you type) → **Your name** (optional), then **one** `claim(tag, name)` transaction, simulated first → **Welcome** (your card, your link and QR, "Add <token> to your wallet", next steps). Signing up and signing in are the same flow: the wallet is the account, with no email or password. No currency is asked for. |
 | **Dashboard** (`app.html`) | the signed-in wallet | Your tag card and link (Share, Copy link, the QR code on demand), quick actions (create a payment link, send money), **money received** (payouts to this wallet, per currency), **recent payments** (only yours), **your payment links** with their status, **Add to your wallet** for cNGN, IDRX, wARS, wCOP and USD₮ (`wallet_watchAsset`, after switching the wallet to Celo), and **settings** (folded until opened): display name (`setName`), default currency (`setReceiveToken`, optional) and release, each simulated before the wallet opens. |
 
 **Signed in on this device, `/` opens the dashboard.** `site/assets/gate.js` runs in the landing's `<head>` (a plain
 script, allowed by `script-src 'self'`), reads the saved sign-in and sends the browser to `app.html` before anything is
-drawn. `index.html?about` ("About Lokal", in every page's footer and the account menu) always shows the landing. The
+drawn. `index.html?about` ("About LokalPay", in every page's footer and the account menu) always shows the landing. The
 dashboard never sends anyone back: signed out (or with the wallet locked) it shows a sign-in panel, so the two pages
 can't bounce between each other.
 
@@ -137,15 +137,15 @@ link) with the transaction in Details, and the dashboard's Settings sit folded a
 what is always shown live in `site/assets/disclose.js` (tested in `test/disclose.test.mjs`); `scripts/screenshots-simple.mjs`
 takes the before-and-after screenshots.
 
-### Lokal tags: get paid at @yourname
+### LokalPay tags: get paid at @yourname
 
-A Lokal tag is a handle like `@ada` tied to one Celo wallet. People pay the tag; the agent pays the wallet that holds it.
+A LokalPay tag is a handle like `@ada` tied to one Celo wallet. People pay the tag; the agent pays the wallet that holds it.
 
 1. **Sign in with your wallet** (`account.html`). Connect a wallet and sign a short sign-in message (EIP-4361 style,
    via `personal_sign`). It is free, sends nothing, and needs no password. The session (address, message, signature,
    expiry; 7 days) is kept in your browser under `np-session`. Signing out deletes it and disconnects the wallet.
    On Vercel the signature is checked by `POST /api/session` (see [Safety](#safety-and-limits-enforced-in-code)).
-2. **Your name.** The setup guide (Sign in → Your name → Claim your Lokal tag → Done) asks for an optional display name
+2. **Your name.** The setup guide (Sign in → Your name → Claim your LokalPay tag → Done) asks for an optional display name
    (1–40 characters).
 3. **Claim your @tag.** Type a tag; the **LokalTags contract** answers as you type (`availability`: free, yours,
    taken, reserved, locked or invalid, with the exact rule broken), with suggestions when it is taken and a live
@@ -184,7 +184,7 @@ NP-XXXX-XXXX"** with a receipt link (or, if the agent refuses it, "Not paid: <re
 agent and can be sent back to the wallet you paid from", and later **"Refunded · RF-XXXX-XXXX"**). Tracking survives a
 page reload. A tag claimed with the older memo protocol before the cutover (and not held on the contract) is still
 paid the old way: one ERC-20 transfer to the agent with `hex("NTP:" + tag)` after the standard 68 bytes, plus the
-attribution suffix (see [Lokal tag rules](PROTOCOL.md#lokal-tag-rules)).
+attribution suffix (see [LokalPay tag rules](PROTOCOL.md#lokal-tag-rules)).
 
 ### Pots: one link, many guests
 
@@ -213,7 +213,7 @@ the edge), with a static `rate.json` fallback refreshed every 30 minutes.
 
 ### Activity, receipts and reviews
 
-- **Your activity** (`transactions.html`): signed in, your wallet's own payments with Lokal: what you sent (tag
+- **Your activity** (`transactions.html`): signed in, your wallet's own payments with LokalPay: what you sent (tag
   payments through LokalTags or older memos, link payments), what the agent paid you, and your tag and payment-link
   transactions, each with its attribution tag and receipt; CSV export. Visitors see a sign-in prompt instead (the
   agent's full feed is not shown on the site any more; it stays public on Celoscan).
@@ -274,7 +274,7 @@ flowchart TB
   %% ---------- how they pay ----------
   subgraph WAYS["Ways to pay (lokalpay.vercel.app)"]
     direction TB
-    P1["Pay a Lokal tag<br/>/@ada · picks the currency<br/>they receive"]
+    P1["Pay a LokalPay tag<br/>/@ada · picks the currency<br/>they receive"]
     P2["Pay a link<br/>exact amount, made by<br/>the recipient"]
     P3["Pot / Spray Wall<br/>one QR, many guests<br/>(built)"]
   end
@@ -288,7 +288,7 @@ flowchart TB
   end
 
   %% ---------- the agent ----------
-  subgraph AGENT["Lokal agent (Celo mainnet · ERC-8004 #10079)"]
+  subgraph AGENT["LokalPay agent (Celo mainnet · ERC-8004 #10079)"]
     direction TB
     A1["Agent wallet receives<br/>the payment"]
     A2{"Autopilot matches it<br/>tag memo · link amount<br/>· owner request"}
@@ -359,7 +359,7 @@ sequenceDiagram
   actor Tom as Tom (payer)
   participant Site as lokalpay.vercel.app
   participant Chain as Celo mainnet
-  participant Agent as Lokal agent (autopilot)
+  participant Agent as LokalPay agent (autopilot)
   participant Textile as Textile FX
   participant Status as Status server
   actor Ada as Ada (recipient)
@@ -422,23 +422,23 @@ up deposits that arrived while it was off. RPC errors back off up to 5 minutes; 
 
 | Deposit | Matched when | Pays |
 |---|---|---|
-| **Lokal tag payment** | the transfer calldata carries a valid `NTP:<tag>` memo | the wallet that held the tag just before the deposit (by block and position) |
+| **LokalPay tag payment** | the transfer calldata carries a valid `NTP:<tag>` memo | the wallet that held the tag just before the deposit (by block and position) |
 | **Operator request** (`request`) | sell token, **exact** amount, after creation and before expiry | the allow-listed contact |
 | **"Get paid" registration** | the **active** registration for that token and exact amount, at the deposit's block time | the registration's sender |
 
 Rules that hold for all three:
 
-- **Memo payments are never amount-matched.** A deposit with a Lokal tag memo is never matched against requests or
-  registrations, and neither is anything that merely *looks like* a Lokal tag attempt (the `NTP:` bytes anywhere in the
+- **Memo payments are never amount-matched.** A deposit with a LokalPay tag memo is never matched against requests or
+  registrations, and neither is anything that merely *looks like* a LokalPay tag attempt (the `NTP:` bytes anywhere in the
   input, also inside a smart-wallet call, or a transfer with unexplained extra bytes). Those are refused unless the memo
   decodes cleanly on a direct transfer.
 - **Checks first, then record, then pay.** Before anything is recorded, the claim or registration is **re-read over
   RPC** (success, sent to the agent, same sender, block, position, block time, content, zero value), and the recipient
   rules, caps and a live preview run. The deposit is then **recorded before paying** (`requests.json`,
   `registrations-state.json` or `ntag-payments.json`), so a crash can never pay it twice.
-- **Refusals are recorded.** Self-payment, a blocked recipient, an unknown tag, a Lokal tag payment under $1, a claim or registration that does not
+- **Refusals are recorded.** Self-payment, a blocked recipient, an unknown tag, a LokalPay tag payment under $1, a claim or registration that does not
   check out, or a per-payment / per-wallet cap (also when only the firm quote breaks it) is logged as
-  `refused_deposit` and recorded as handled, so a rescan never pays it. The money stays in the agent wallet; for Lokal tag
+  `refused_deposit` and recorded as handled, so a rescan never pays it. The money stays in the agent wallet; for LokalPay tag
   payments the operator can pay one later by hand with `retry --ntag <tx>:<logIndex> --force-refused` (every cap
   applies again).
 - **Stops instead of guessing.** The global daily cap or a missing price stops autopilot *without* recording anything,
@@ -465,7 +465,7 @@ All numbers are defaults from `src/config.mjs`; the language-parsing layer of `a
 | Rule | Value | Where |
 |---|---|---|
 | Per payment | **$25** (`MAX_USD`) | `src/guards.mjs`, `src/pay.mjs` |
-| Per recipient wallet, rolling 24 h | **$25** (`MAX_WALLET_DAILY_USD`; Get paid and Lokal tag payouts) | `src/guards.mjs`, `src/pay.mjs` |
+| Per recipient wallet, rolling 24 h | **$25** (`MAX_WALLET_DAILY_USD`; Get paid and LokalPay tag payouts) | `src/guards.mjs`, `src/pay.mjs` |
 | Everything the agent pays, rolling 24 h | **$100** (`MAX_DAILY_USD`, counted from `receipts.jsonl`) | `src/guards.mjs` |
 | Firm quote vs. preview | at most **3%** worse (`MAX_SLIPPAGE_BPS` = 300), per swap | `src/guards.mjs`, `src/pay.mjs` |
 | `cngn-usdt` cap | checked on the preview, the firm quote and the amount actually paid | `src/pay.mjs` |
@@ -514,19 +514,19 @@ HTML, CSS and ES modules.
 | `src/celo.mjs` | pay in naira from CELO: two swaps, gas reserve, recovery message |
 | `src/requests.mjs` | operator payment requests: unique amounts, link encoding, deposit matching, receipt numbers |
 | `src/registrations.mjs` | "Get paid" registrations: decoding, discovery, the same-amount rule (ported from the site) |
-| `src/ntags.mjs` | Lokal tags: resolver (byte-identical port of the site's), memo decoding, discovery, onchain claim check, local state |
-| `src/watch.mjs` | autopilot: watches deposits and pays requests, registrations and Lokal tag payments |
+| `src/ntags.mjs` | LokalPay tags: resolver (byte-identical port of the site's), memo decoding, discovery, onchain claim check, local state |
+| `src/watch.mjs` | autopilot: watches deposits and pays requests, registrations and LokalPay tag payments |
 | `src/ntag.mjs` | the `lokal` CLI (also runs as `ntag`): encrypted wallet, whois, send, claim, release, status |
 | `src/agent.mjs` | the operator command line |
 | `src/intent.mjs` | plain-language parser for `ask` |
 | `src/register8004.mjs` | ERC-8004 registration |
 | `src/chain.mjs` | agent wallet and the attribution-tagged client |
 | `site/` | the live app: `index` (the landing), `start` (sign-up), `app` (dashboard), `quote`, `pay`, `tag`, `get-paid`, `account`, `transactions`, `receipt`, `verify`, `agent`, `autopilot`, `docs`, `privacy`, `terms`, `404`, and the public `features`, `proof` and `pot` |
-| `site/assets/core.js` | shared site code: ABI codec, link formats, registrations, the Lokal tag resolver, explorer and RPC helpers |
+| `site/assets/core.js` | shared site code: ABI codec, link formats, registrations, the LokalPay tag resolver, explorer and RPC helpers |
 | `site/assets/session.js` | wallet sign-in (message, session, Celo network switch, wallet error messages) |
 | `site/assets/gate.js` | the landing's front door: a signed-in visitor goes to the dashboard (classic script in `<head>`) |
 | `site/assets/front-door.js` | who sees what: Activity and dashboard gating, the gateway's first step, the public pages |
-| `site/assets/my-activity.js` | "Yours": one wallet's own payments with Lokal, shared by the dashboard and Activity |
+| `site/assets/my-activity.js` | "Yours": one wallet's own payments with LokalPay, shared by the dashboard and Activity |
 | `site/assets/wallet-assets.js` | "Add <token> to your wallet" (`wallet_watchAsset`) |
 | `site/assets/landing.css`, `app.css` | the landing, Features, Proof and gateway styles; the dashboard styles |
 | `site/assets/ntag-ui.js`, `ntags.css` | the tag card, claim and pay UI pieces |
@@ -571,10 +571,10 @@ node scripts/check-site.mjs       # static site check
 | `test/registrations.test.mjs` | 10 | "Get paid": port matches the site, matching, per-wallet cap, self-payment refusals, discovery, onchain re-check |
 | `test/watch-autopilot.test.mjs` | 10 | memo guard, recorded refusals, failed saves never drop a deposit, "paid" write failure, waiting on the tag list, firm-quote refusals |
 | `test/ntags.test.mjs` | 15 | the byte-identical port, rules, codec, resolution and ordering, cross-check with the site, discovery, onchain re-check, cache refresh, force-pay |
-| `test/ntags-watch.test.mjs` | 13 | Lokal tag autopilot: corridor by token, exact amounts, owner resolved before the deposit, minimums, attempts refused |
+| `test/ntags-watch.test.mjs` | 13 | LokalPay tag autopilot: corridor by token, exact amounts, owner resolved before the deposit, minimums, attempts refused |
 | `test/ntag-cli.test.mjs` | 21 | the `lokal` CLI: wallet location (and the pre-rename wallet), parsing, exact amounts and limits, dry-run data, refusing the agent's key, keystore, password change, lockout, allowance, payout matching |
 | `test/ntag-ui.test.mjs` | 12 | tag input, live rules, availability, suggestions, limits, deposit eligibility, payout tracking, daily allowance |
-| `test/session-api.test.mjs` | 8 | the sign-in check: hosts (Lokal and the older addresses), the pre-rename sign-in text, chain, expiry, body limits, contract wallets |
+| `test/session-api.test.mjs` | 8 | the sign-in check: hosts (LokalPay and the older addresses), the pre-rename sign-in text, chain, expiry, body limits, contract wallets |
 | `test/site-helpers.test.mjs` | 5 | the limits line matches `src/config.mjs` on every page, rate age, network errors, decimal-comma amounts |
 | `test/status-api.test.mjs` | 17 | the status server: signatures, replay window, body limits, strict validation, merge rules, totals, 503 fallback |
 | `test/status-report.test.mjs` | 19 | autopilot's reporter: outbox, batching, backoff, never throws into a payout, backfill |

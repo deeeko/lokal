@@ -1,6 +1,6 @@
 # Who enforces what
 
-Lokal's claim is that **the agent decides, and the contract has the final say**. That is true for the rules that can
+LokalPay's claim is that **the agent decides, and the contract has the final say**. That is true for the rules that can
 be checked before money moves: tags, and the limits on every payment to a tag or a pot. It is not true for everything
 the product does. The swap into the recipient's local currency and the payout from the agent's wallet happen off the
 contracts, in the agent's code. This page says which is which.
@@ -198,4 +198,4 @@ These are by design or low impact. Each has a test that pins today's behaviour.
 - Whether the agent actually paid out. That is in the agent's receipts and the payout transactions from its wallet.
 - Anything about the old `NT1:` / `NTP:` history. Tags claimed under the old protocol need to be claimed again on the
   contract; there is no admin import, on purpose. Until then the agent keeps paying `NTP:` memo payments to them, and
-  when a name is held in both places the contract's holder wins (see [Lokal tag rules](PROTOCOL.md#lokal-tag-rules)).
+  when a name is held in both places the contract's holder wins (see [LokalPay tag rules](PROTOCOL.md#lokal-tag-rules)).

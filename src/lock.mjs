@@ -31,7 +31,7 @@ export function readLock(file = AGENT_LOCK_FILE) {
   } catch { return { unreadable: true }; }
 }
 
-const who = (h) => (h.command === "watch --execute" || !h.command ? "Autopilot is already running" : `Another Lokal command is running (${h.command})`);
+const who = (h) => (h.command === "watch --execute" || !h.command ? "Autopilot is already running" : `Another LokalPay command is running (${h.command})`);
 
 /**
  * Why `holder` blocks us: "live" | "stale" | "foreign" | "unreadable". Pure apart from isAlive.
@@ -65,7 +65,7 @@ export function acquireLock({
     const state = lockState(holder, { host, isAlive });
     const since = holder.startedAt ? `, started ${holder.startedAt}` : "";
     if (state === "live") {
-      throw new LockError(`${who(holder)} (pid ${holder.pid}${since}). Only one Lokal agent may run at a time; nothing was done. Stop it first (Ctrl+C in its window).`);
+      throw new LockError(`${who(holder)} (pid ${holder.pid}${since}). Only one LokalPay agent may run at a time; nothing was done. Stop it first (Ctrl+C in its window).`);
     }
     if (!clearStale || attempt > 0) {
       const what = state === "stale"
@@ -74,12 +74,12 @@ export function acquireLock({
           ? `The lock ${file} belongs to another computer (${holder.host}, pid ${holder.pid}${since}); it can't be checked from here.`
           : `The lock file ${file} exists but can't be read.`;
       throw Object.assign(new LockError(
-        `${what} Nothing was done. If no Lokal agent is running, check its last payout on Celoscan, then run the same command again with --clear-stale-lock.`,
+        `${what} Nothing was done. If no LokalPay agent is running, check its last payout on Celoscan, then run the same command again with --clear-stale-lock.`,
       ), { stale: true });
     }
     fs.rmSync(file, { force: true });
   }
-  throw new LockError(`Could not take the lock ${file}; another Lokal command took it at the same moment. Nothing was done.`);
+  throw new LockError(`Could not take the lock ${file}; another LokalPay command took it at the same moment. Nothing was done.`);
 }
 
 /** Registers the release hooks for a lock we hold. */

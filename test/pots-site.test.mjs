@@ -55,7 +55,7 @@ test("pot refusals in plain English: creating, spraying and closing", () => {
   assert.match(say("InvalidTitle", [], { creating: true }), /title isn't allowed: 1-60 characters/);
   assert.match(say("InvalidCloseTime", [1n, 1_800_000_000n], { creating: true }), /no later than .*2027/);
   assert.match(say("InvalidPotCaps", [], { creating: true }), /per-guest cap must be more than \$0/);
-  assert.match(say("HostNotEligible", [HOST], { creating: true }), /holds a Lokal tag can open a pot/);
+  assert.match(say("HostNotEligible", [HOST], { creating: true }), /holds a LokalPay tag can open a pot/);
   assert.match(say("HostNotEligible", [HOST]), /host can't be paid right now/);
   assert.match(say("PotFull", [3_000_000n, 1_250_000n]), /can take \$1\.25 more/);
   assert.match(say("OverPayerCap", [3_000_000n, 500_000n]), /\$0\.50 more into this pot/);

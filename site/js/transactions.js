@@ -1,4 +1,4 @@
-// Activity: the signed-in wallet's own payments with Lokal ("Yours"), and nothing else. Visitors who are not signed in
+// Activity: the signed-in wallet's own payments with LokalPay ("Yours"), and nothing else. Visitors who are not signed in
 // see a sign-in prompt instead: the agent's full feed and other people's addresses are not shown here. (Every payout
 // still has a public receipt on receipt.html, and the chain itself is public on Celoscan.)
 import { receiptNo, celoscanTx, lagosTime, short, el, badge, icon, toast, download, $, initChrome } from "../assets/core.js";
@@ -59,7 +59,7 @@ function render() {
     const list = visible();
     tbody.replaceChildren(...(list.length ? list.map(row) : [emptyRow(mine.query.trim()
       ? "None of your payments matches that hash or receipt number."
-      : el("span", {}, "No payments between your wallet and Lokal yet. ", el("a", { class: "link", href: "quote.html" }, "Send money"), " or ", el("a", { class: "link", href: "start.html" }, "claim your Lokal tag"), "."))]));
+      : el("span", {}, "No payments between your wallet and LokalPay yet. ", el("a", { class: "link", href: "quote.html" }, "Send money"), " or ", el("a", { class: "link", href: "start.html" }, "claim your LokalPay tag"), "."))]));
   }
   const n = visible().length, all = mine.rows?.length ?? 0;
   count.textContent = !mine.rows ? (mine.failed ? "Showing 0" : "Loading your activity…")

@@ -11,7 +11,7 @@ Three labels, used here and in the README's "What's real" table. The site lists 
 - **Live:** the LokalTags and LokalPots contracts are deployed and verified on mainnet (see
   [The contract has the final say](CONTRACTS.md#the-contract-has-the-final-say)). No real user payout yet.
 - **Built, not yet used on mainnet:** payouts in naira, rupiah and pesos (plus naira → dollars), the currency
-  picker, Lokal tags, **paying and claiming through the contracts** (site, `lokal` command and autopilot), payment
+  picker, LokalPay tags, **paying and claiming through the contracts** (site, `lokal` command and autopilot), payment
   links, Get paid, [pots and the Spray Wall](ARCHITECTURE.md#pots-one-link-many-guests), autopilot, refunds, the `lokal` command,
   receipts and reviews, the [cash-out guide](https://lokalpay.vercel.app/cash-out.html), the sign-up gateway, the
   dashboard, "Add to wallet", the ["Who am I paying?"](ARCHITECTURE.md#who-am-i-paying) card and the [Proof page](ARCHITECTURE.md#proof).
@@ -26,11 +26,11 @@ Three labels, used here and in the README's "What's real" table. The site lists 
 - [x] Live Textile price previews for all three corridors
 - [x] ERC-8004 identity registered (agentId 10079)
 - [x] Payment links, Get paid, autopilot, two stablecoin corridors plus CELO, receipts and onchain reviews
-- [x] Lokal tags, wallet sign-in and the `lokal` CLI (first shipped as `ntag`)
+- [x] LokalPay tags, wallet sign-in and the `lokal` CLI (first shipped as `ntag`)
 - [x] Live app on Vercel behind a test-gated deploy
 - [x] Status server: exact payout status and daily limits on the site
 - [x] One-line Windows installer for the `lokal` command (`ntag` kept as an alias)
-- [x] Renamed to Lokal, at lokalpay.vercel.app (naira-payout.vercel.app keeps working)
+- [x] Renamed to LokalPay, at lokalpay.vercel.app (naira-payout.vercel.app keeps working)
 - [x] Live Textile FX quotes checked for rupiah (IDRX) and pesos (wARS, wCOP), see [Currencies](PROTOCOL.md#currencies)
 - [x] LokalTags and LokalPots contracts deployed on Celo mainnet and source-verified; admin held by a separate wallet
 - [x] Site, `lokal` command and autopilot switched to the contracts (built and tested, not yet used on mainnet)
@@ -71,7 +71,7 @@ The operator steps for these are in [docs/RUNBOOK.md](RUNBOOK.md).
 
 ## Business model
 
-Lokal is for "Agents Open for Business", so here is how it pays for itself, labelled like everything else.
+LokalPay is for "Agents Open for Business", so here is how it pays for itself, labelled like everything else.
 
 - **Today: no fee.** The payer gets Textile FX's rate exactly as quoted, and the operator pays the gas. Each payout is
   a handful of Celo transactions (reset, approve, swap, transfer), which costs a fraction of a US cent each.
@@ -82,5 +82,5 @@ Lokal is for "Agents Open for Business", so here is how it pays for itself, labe
   many payers), and later the dollar-subscription corridor in [Status and roadmap](#status-and-roadmap).
 
 Why people would pay: sending dollars home or to a freelancer usually means a bank or money-transfer fee *and* a
-weak exchange rate. Lokal shows the exact rate and the exact amount the recipient gets before anyone signs, and pays
+weak exchange rate. LokalPay shows the exact rate and the exact amount the recipient gets before anyone signs, and pays
 their own wallet in seconds.

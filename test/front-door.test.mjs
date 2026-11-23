@@ -42,7 +42,7 @@ test("landing gate: a signed-in visitor goes straight to the dashboard", () => {
   assert.equal(runGate({ session: stored() }).replaced, "app.html");
 });
 
-test("landing gate: visitors, About Lokal, expired, disconnected or malformed sessions stay on the landing", () => {
+test("landing gate: visitors, About LokalPay, expired, disconnected or malformed sessions stay on the landing", () => {
   assert.equal(runGate().replaced, null, "no session");
   assert.equal(runGate({ session: stored(), search: "?about" }).replaced, null, "?about");
   assert.equal(runGate({ session: stored(), search: "?x=1&about" }).replaced, null, "&about");

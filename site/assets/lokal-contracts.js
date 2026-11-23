@@ -343,7 +343,7 @@ export function explainRevert(data, ctx = {}) {
   if (!d) return say("The contract refused this transaction. Nothing was sent.");
   const [a, b] = d.args;
   switch (d.name) {
-    case "TagNotFound": return say(`${tag} isn't claimed on the Lokal contract, so there's nobody to pay. Nothing was sent.`);
+    case "TagNotFound": return say(`${tag} isn't claimed on the LokalPay contract, so there's nobody to pay. Nothing was sent.`);
     case "OverPaymentLimit": return say(`That's more than the ${amt(b)} limit for one payment in ${sym}. Send less. Nothing was sent.`);
     case "BelowMinimum": return say(`The smallest payment in ${sym} is ${amt(b)}. Send a little more. Nothing was sent.`);
     case "OverRecipientDailyLimit": return say(b > 0n
@@ -355,12 +355,12 @@ export function explainRevert(data, ctx = {}) {
     case "OverDailyLimit":
       if (ctx.potId != null) return say(`All pots together have reached today's total (${usd6Text(b)} left). Try again tomorrow (UTC). Nothing was sent.`);
       return say(b > 0n
-        ? `Lokal can take only ${amt(b)} more in ${sym} today across everyone. Send less, or try again tomorrow (UTC). Nothing was sent.`
-        : `Lokal has reached today's total for ${sym} across everyone. Try again tomorrow (UTC). Nothing was sent.`);
+        ? `LokalPay can take only ${amt(b)} more in ${sym} today across everyone. Send less, or try again tomorrow (UTC). Nothing was sent.`
+        : `LokalPay has reached today's total for ${sym} across everyone. Try again tomorrow (UTC). Nothing was sent.`);
     case "SelfPayment": return say(ctx.potId != null ? "You host this pot, so you can't pay into it. Nothing was sent." : `This wallet holds ${tag}. You can't pay your own tag. Nothing was sent.`);
-    case "Paused": return say("Lokal has paused payments and tag changes for now. Nothing was sent; try again later.");
+    case "Paused": return say("LokalPay has paused payments and tag changes for now. Nothing was sent; try again later.");
     case "TokenNotAllowed": return say(`${symOf(a)} isn't accepted for this payment. Nothing was sent.`);
-    case "RecipientIsContract": return say(`${tag} belongs to a smart contract, which Lokal can't pay. Nothing was sent.`);
+    case "RecipientIsContract": return say(`${tag} belongs to a smart contract, which LokalPay can't pay. Nothing was sent.`);
     case "RecipientIsPayoutWallet": return say("That's the agent's own payout wallet, which can't hold a tag or be paid. Nothing was sent.");
     case "PayoutWalletChanged": return say("The agent's payout wallet changed since this page loaded. Reload the page before paying. Nothing was sent.");
     case "TransferAmountMismatch": return say(`${sym} didn't arrive in full, so the payment was stopped. Nothing was sent.`);
@@ -381,7 +381,7 @@ export function explainRevert(data, ctx = {}) {
     case "OverPayerCap": return say(`You can put ${usd6Text(b)} more into this pot. Send less. Nothing was sent.`);
     case "OverHostDailyLimit": return say(`The host's pots can take ${usd6Text(b)} more today. Send less, or try again tomorrow (UTC). Nothing was sent.`);
     case "HostNotEligible": return say(ctx.creating
-      ? "Only a wallet that holds a Lokal tag can open a pot. Claim your tag first. Nothing was sent."
+      ? "Only a wallet that holds a LokalPay tag can open a pot. Claim your tag first. Nothing was sent."
       : "The pot's host can't be paid right now (they no longer hold a tag). Nothing was sent.");
     case "NotHost": return say("Only the pot's host can do that.");
     case "InvalidTitle": return say("That title isn't allowed: 1-60 characters (an emoji counts as two), no control or invisible characters, and no spaces at either end. Nothing was sent.");

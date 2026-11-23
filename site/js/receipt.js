@@ -109,7 +109,7 @@ function problem(kind, title, message, { hash, retry } = {}) {
 // ---------- find a receipt (no hash) ----------
 function showFind(badRaw) {
   setHead("Receipts", "Find a ", "receipt", "Every transaction the agent sends has a receipt. Look one up by its receipt number or transaction hash.");
-  document.title = "Receipts · Lokal";
+  document.title = "Receipts · LokalPay";
   const input = el("input", { class: "input mono", id: "find-q", type: "text", inputmode: "text", autocomplete: "off", spellcheck: "false", placeholder: "NP-7F3A-91C2 or 0x…", "aria-describedby": "find-hint" });
   const hint = el("p", { class: "hint", id: "find-hint", "aria-live": "polite" }, "A receipt number looks like NP-7F3A-91C2. A transaction hash starts with 0x and has 64 characters after it.");
   const form = el("form", { class: "stack", novalidate: true },
@@ -424,7 +424,7 @@ function renderTransaction(tx, rc, item, bs) {
   const slip = {
     kind: "tx", no, url: receiptUrl(no),
     eyebrow: "Transaction receipt", label: "Transaction", headline: title,
-    sub: "Sent by the Lokal agent on Celo",
+    sub: "Sent by the LokalPay agent on Celo",
     status: [stText, stKind],
     rows: [
       { label: "Receipt number", text: no, node: el("span", { class: "mono" }, no) },
@@ -441,7 +441,7 @@ function renderTransaction(tx, rc, item, bs) {
     notes: tx.status === "error" ? [alertBox("err", "alert", el("p", { class: "small" }, "This transaction failed on chain. Nothing it tried to do happened, but the network fee was still paid."))] : [],
   };
   setHead("Transaction receipt", "Transaction ", "receipt", "Rebuilt in your browser from Celo mainnet. Every figure on this receipt is read from the transaction itself.");
-  renderSlip(slip, `Receipt ${no}: ${title} by the Lokal agent on ${time}. Check it on Celo: ${slip.url}`);
+  renderSlip(slip, `Receipt ${no}: ${title} by the LokalPay agent on ${time}. Check it on Celo: ${slip.url}`);
 }
 
 // ---------- the slip (DOM) ----------
@@ -474,7 +474,7 @@ function qrSvg(qr) {
 }
 
 function renderSlip(slip, shareText) {
-  document.title = `Receipt ${slip.no} · Lokal`;
+  document.title = `Receipt ${slip.no} · LokalPay`;
   const qr = qrModules(slip.url);
   const [stText, stKind] = slip.status;
   const dl = el("button", { class: "btn btn-primary btn-sm", type: "button" }, icon("download"), "Download image");
@@ -559,7 +559,7 @@ function paintSlip(ctx, slip, qr, logo, W, H) {
   if (draw) {
     if (logo) ctx.drawImage(logo, P, y, 34, 34);
     ctx.fillStyle = C.text; ctx.font = `600 17px ${sans}`; ctx.textBaseline = "middle"; ctx.textAlign = "left";
-    ctx.fillText("Lokal", P + (logo ? 46 : 0), y + 17);
+    ctx.fillText("LokalPay", P + (logo ? 46 : 0), y + 17);
     const [st, sk] = slip.status;
     const col = sk === "ok" ? C.mint : sk === "err" ? C.err : sk === "warn" ? C.warn : C.text2;
     ctx.font = `500 13px ${sans}`;

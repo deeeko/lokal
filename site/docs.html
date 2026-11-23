@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' https://forno.celo.org https://celo.blockscout.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
-<title>Docs · Lokal</title>
-<meta name="description" content="How the Lokal agent quotes, converts and pays out in two corridors, how payment links and autopilot work, the safeguards it enforces in code, and how to run it from the command line.">
+<title>Docs · LokalPay</title>
+<meta name="description" content="How the LokalPay agent quotes, converts and pays out in two corridors, how payment links and autopilot work, the safeguards it enforces in code, and how to run it from the command line.">
 <meta name="theme-color" content="#06110c">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Lokal: pay anyone in their local money">
+<meta property="og:title" content="LokalPay: pay anyone in their local money">
 <meta property="og:description" content="Send dollars on Celo. They receive their local money. Converts on Textile FX and pays their own wallet.">
 <meta property="og:image" content="https://lokalpay.vercel.app/og.png?v=lokal2">
 <meta name="twitter:card" content="summary_large_image">
@@ -86,7 +86,7 @@
 <div class="sky sky-sm" aria-hidden="true"></div>
 <aside class="sidebar" id="sidebar" aria-label="Site navigation">
   <div class="sb-head">
-    <a class="sb-brand" href="index.html"><img src="logo.svg?v=lokal2" alt="" width="34" height="34"><span class="sb-label">Lokal</span></a>
+    <a class="sb-brand" href="index.html"><img src="logo.svg?v=lokal2" alt="" width="34" height="34"><span class="sb-label">LokalPay</span></a>
     <button class="icon-btn sm sb-collapse" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar  [ ]"><svg class="i"><use href="#i-chevron-left"/></svg></button>
     <button class="icon-btn sm sb-close" type="button" aria-label="Close menu"><svg class="i"><use href="#i-x"/></svg></button>
   </div>
@@ -111,7 +111,7 @@
 
 <div class="nav-wrap">
   <nav class="nav" aria-label="Main">
-    <a class="nav-brand" href="index.html"><img src="logo.svg?v=lokal2" alt="" width="30" height="30"><span>Lokal</span></a>
+    <a class="nav-brand" href="index.html"><img src="logo.svg?v=lokal2" alt="" width="30" height="30"><span>LokalPay</span></a>
     <div class="nav-links">
       <a href="app.html">Dashboard</a>
       <a href="quote.html" data-also="pay.html tag.html">Send</a>
@@ -137,7 +137,7 @@
       <section class="card" id="overview" aria-labelledby="overview-h">
         <div class="card-h"><h2 id="overview-h">Overview</h2></div>
         <div class="card-b">
-          <p class="soft">Lokal is a payout agent on Celo mainnet, with this website for people and a command line for its operator. It converts USD₮ into the recipient's local stablecoin through Textile FX (naira as cNGN, rupiah as IDRX, Argentine pesos as wARS, Colombian pesos as wCOP), and pays the result to the recipient: a contact saved by the agent's owner, the wallet that made a “Get paid” link, or the wallet behind a Lokal tag. Send money home to Lagos, Jakarta, Buenos Aires or Bogotá. Each route is called a corridor: pay someone in their local money, or (cNGN in) pay someone in dollars. The owner can also pay someone in naira from the agent's CELO (<code class="inline" translate="no">celo-cngn</code>): Textile has no direct CELO to cNGN pair, so the agent makes two swaps, CELO to USD₮ and then USD₮ to cNGN, and pays two Textile fees.</p>
+          <p class="soft">LokalPay is a payout agent on Celo mainnet, with this website for people and a command line for its operator. It converts USD₮ into the recipient's local stablecoin through Textile FX (naira as cNGN, rupiah as IDRX, Argentine pesos as wARS, Colombian pesos as wCOP), and pays the result to the recipient: a contact saved by the agent's owner, the wallet that made a “Get paid” link, or the wallet behind a LokalPay tag. Send money home to Lagos, Jakarta, Buenos Aires or Bogotá. Each route is called a corridor: pay someone in their local money, or (cNGN in) pay someone in dollars. The owner can also pay someone in naira from the agent's CELO (<code class="inline" translate="no">celo-cngn</code>): Textile has no direct CELO to cNGN pair, so the agent makes two swaps, CELO to USD₮ and then USD₮ to cNGN, and pays two Textile fees.</p>
           <p class="soft">The owner can run a single payout by hand, or create a <a class="link" href="pay.html">payment link</a> for an exact amount. When the payer sends that amount, <a class="link" href="autopilot.html">autopilot</a> matches the deposit, converts it and pays the contact. After every payout the agent prints a <a class="link" href="receipt.html">receipt</a> link that rebuilds the payout from chain data, and the payer can rate it in the agent's onchain reputation registry.</p>
           <p class="soft">Onchain: the agent's ERC-8004 identity (agent #10079), and every transaction it sends during a payout: the approval (and an allowance reset, if one is needed), the swap and the transfer to the recipient. Each one carries the attribution tag <code class="inline" translate="no">celo_7360953d1b53</code>. Off chain, on the owner's computer: the Textile price quotes, the contacts file, the agent's key file, the payment requests file and a local receipts log.</p>
         </div>
@@ -155,8 +155,8 @@
           </table>
         </div>
         <div class="card-b">
-          <p class="small muted">Amounts are always typed in the token the payer sends: USD₮ for every <code class="inline" translate="no">usdt-…</code> corridor, naira for <code class="inline" translate="no">cngn-usdt</code>, CELO for <code class="inline" translate="no">celo-cngn</code>. Payment links, “Get paid”, Lokal tags and autopilot support every corridor except <code class="inline" translate="no">celo-cngn</code>. Each token keeps its own decimals (cNGN 6, IDRX 2, wARS and wCOP 18); amounts shown to people are rounded down, and the agent pays exactly what the swap delivered. If a currency isn't quoting on Textile when a payment arrives, the agent refuses it (<code class="inline" translate="no">currency_unavailable</code>) and never pays it in another currency. A cNGN recipient can redeem it for naira, for example through cngn.co.</p>
-          <div class="alert mt-16"><svg class="i"><use href="#i-info"/></svg><span>This website never holds money or keys. Every payment it helps with is sent from your own wallet, after you approve it there: paying a link or a Lokal tag, making a “Get paid” link, claiming a tag, or rating a payout. The agent, running on its owner's computer, converts on Textile FX and pays the recipient.</span></div>
+          <p class="small muted">Amounts are always typed in the token the payer sends: USD₮ for every <code class="inline" translate="no">usdt-…</code> corridor, naira for <code class="inline" translate="no">cngn-usdt</code>, CELO for <code class="inline" translate="no">celo-cngn</code>. Payment links, “Get paid”, LokalPay tags and autopilot support every corridor except <code class="inline" translate="no">celo-cngn</code>. Each token keeps its own decimals (cNGN 6, IDRX 2, wARS and wCOP 18); amounts shown to people are rounded down, and the agent pays exactly what the swap delivered. If a currency isn't quoting on Textile when a payment arrives, the agent refuses it (<code class="inline" translate="no">currency_unavailable</code>) and never pays it in another currency. A cNGN recipient can redeem it for naira, for example through cngn.co.</p>
+          <div class="alert mt-16"><svg class="i"><use href="#i-info"/></svg><span>This website never holds money or keys. Every payment it helps with is sent from your own wallet, after you approve it there: paying a link or a LokalPay tag, making a “Get paid” link, claiming a tag, or rating a payout. The agent, running on its owner's computer, converts on Textile FX and pays the recipient.</span></div>
         </div>
       </section>
 
@@ -202,9 +202,9 @@
       </section>
 
       <section class="card" id="ntags" aria-labelledby="ntags-h">
-        <div class="card-h"><h2 id="ntags-h">Lokal tags and sign-in</h2><span class="muted small"><code class="inline" translate="no">assets/lokal-contracts.js</code> · <code class="inline" translate="no">src/contract-watch.mjs</code></span></div>
+        <div class="card-h"><h2 id="ntags-h">LokalPay tags and sign-in</h2><span class="muted small"><code class="inline" translate="no">assets/lokal-contracts.js</code> · <code class="inline" translate="no">src/contract-watch.mjs</code></span></div>
         <div class="card-b">
-          <p class="soft">A Lokal tag is a short name, like <b>@ada</b>, tied to one Celo wallet. Anyone can pay a tag from their own wallet, and the agent pays the wallet that holds it. Tags live on the <a class="link" href="https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187">LokalTags contract</a> on Celo, not on a server, and the contract checks every rule and limit before any money moves.</p>
+          <p class="soft">A LokalPay tag is a short name, like <b>@ada</b>, tied to one Celo wallet. Anyone can pay a tag from their own wallet, and the agent pays the wallet that holds it. Tags live on the <a class="link" href="https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187">LokalTags contract</a> on Celo, not on a server, and the contract checks every rule and limit before any money moves.</p>
           <ol class="steps mt-24">
             <li><h3>Sign in</h3><p>On <a class="link" href="account.html">Account</a>, connect your wallet and sign a short message. It's free, sends nothing and lasts 7 days. Signing out forgets it and disconnects the wallet.</p></li>
             <li><h3>Claim</h3><p>Pick a tag and call <code class="inline" translate="no">claim("ada", "Ada Obi")</code> on LokalTags from your wallet (the display name is optional). The page simulates it first, so a refusal is explained before your wallet opens. It costs only the network fee.</p></li>
@@ -235,7 +235,7 @@
       <section class="card" id="install" aria-labelledby="install-h">
         <div class="card-h"><h2 id="install-h">Install the lokal command (Windows)</h2><span class="muted small"><a class="link" href="install.ps1">install.ps1</a></span></div>
         <div class="card-b">
-          <p class="soft"><code class="inline" translate="no">lokal</code> pays a Lokal tag from <b>your own wallet</b> in PowerShell. To install it, open PowerShell (no admin needed) and paste this line. It takes about a minute.</p>
+          <p class="soft"><code class="inline" translate="no">lokal</code> pays a LokalPay tag from <b>your own wallet</b> in PowerShell. To install it, open PowerShell (no admin needed) and paste this line. It takes about a minute.</p>
           <div class="code mt-16">
             <pre translate="no">irm https://lokalpay.vercel.app/install.ps1 | iex</pre>
             <button class="icon-btn" type="button" aria-label="Copy the install command" data-copy-label="Command copied" data-copy="irm https://lokalpay.vercel.app/install.ps1 | iex"><svg class="i"><use href="#i-copy"/></svg></button>
@@ -245,7 +245,7 @@
             <li><h3>Check</h3><p>Looks for Node.js 20 or newer and npm. Nothing is changed if they are missing.</p></li>
             <li><h3>Download</h3><p>Fetches the code as a zip from GitHub (<code class="inline" translate="no">main</code>, or the branch, tag or commit in <code class="inline" translate="no">$env:NTAG_REF</code>) and installs its libraries with <code class="inline" translate="no">npm ci --ignore-scripts</code>, so no package runs code while installing.</p></li>
             <li><h3>Swap</h3><p>Checks the new copy starts, then puts it in <code class="inline" translate="no">%LOCALAPPDATA%\lokal\app</code> in one rename. An install from before the rename, in <code class="inline" translate="no">%LOCALAPPDATA%\naira-payout</code>, is removed and its PATH entry taken out. If anything fails, your previous install stays as it was.</p></li>
-            <li><h3>PATH</h3><p>Writes the launcher <code class="inline" translate="no">%LOCALAPPDATA%\lokal\bin\lokal.cmd</code> (plus <code class="inline" translate="no">ntag.cmd</code>, the old name, so <code class="inline" translate="no">ntag</code> still works) and adds that folder to your user PATH. Terminals that were already open need a restart.</p></li>
+            <li><h3>PATH</h3><p>Writes the launcher <code class="inline" translate="no">%LOCALAPPDATA%\lokal\bin\lokal.cmd</code> (plus <code class="inline" translate="no">lokalpay.cmd</code>, the product's name, and <code class="inline" translate="no">ntag.cmd</code>, the old name, so <code class="inline" translate="no">lokalpay</code> and <code class="inline" translate="no">ntag</code> work too) and adds that folder to your user PATH. Terminals that were already open need a restart.</p></li>
           </ol>
         </div>
         <div class="card-b">
@@ -253,7 +253,7 @@
           <div class="code mt-16">
             <pre translate="no">lokal wallet new       # your wallet, protected by a send password
 lokal wallet           # your address: add USD₮ and a little CELO for fees
-lokal whois ada        # who owns the Lokal tag @ada
+lokal whois ada        # who owns the LokalPay tag @ada
 lokal send ada 10              # you send $10 USD₮, @ada gets their preferred currency (else naira)
 lokal send ada 10 --to rupiah  # ... and @ada gets rupiah (IDRX): "they get ≈ Rp 183,938"</pre>
             <button class="icon-btn" type="button" aria-label="Copy the first lokal commands" data-copy-label="Commands copied" data-copy="lokal wallet new
@@ -261,7 +261,7 @@ lokal wallet
 lokal whois ada
 lokal send ada 10"><svg class="i"><use href="#i-copy"/></svg></button>
           </div>
-          <p class="small muted mt-8">In PowerShell a leading <code class="inline" translate="no">@</code> is special: write <code class="inline" translate="no">ada</code> or <code class="inline" translate="no">'@ada'</code>. <code class="inline" translate="no">lokal help</code> lists every command, and the old name <code class="inline" translate="no">ntag</code> still works; <code class="inline" translate="no">--dry-run</code> shows a payment without sending it.</p>
+          <p class="small muted mt-8">In PowerShell a leading <code class="inline" translate="no">@</code> is special: write <code class="inline" translate="no">ada</code> or <code class="inline" translate="no">'@ada'</code>. <code class="inline" translate="no">lokal help</code> lists every command; <code class="inline" translate="no">lokalpay</code> and the old name <code class="inline" translate="no">ntag</code> run the same command; <code class="inline" translate="no">--dry-run</code> shows a payment without sending it.</p>
           <ul class="checks mt-16">
             <li><svg class="i"><use href="#i-check"/></svg><span><b>Update.</b> Run the same line again. The app folder is replaced; your wallet is not touched.</span></li>
             <li><svg class="i"><use href="#i-check"/></svg><span><b>Uninstall.</b> <code class="inline" translate="no">$env:NTAG_UNINSTALL = "1"; irm https://lokalpay.vercel.app/install.ps1 | iex</code> removes the app and bin folders and the PATH entry. By hand: delete both folders and remove the bin folder from your user PATH.</span></li>
@@ -286,7 +286,7 @@ lokal send ada 10"><svg class="i"><use href="#i-copy"/></svg></button>
           <p class="limits"><svg class="i"><use href="#i-shield"/></svg><span><b>$25 per payment</b> · <b>$25 per person per day</b> · <b>$100 per day overall</b></span></p>
           <ul class="checks mt-16" style="grid-template-columns:minmax(0,1fr)">
             <li><svg class="i"><use href="#i-check"/></svg><span><b>$25 per payment</b> (<code class="inline" translate="no">MAX_USD</code>), counted in dollars: the USD₮ sold, or the USD₮ bought when someone is paid in dollars. A “Get paid” link in naira can ask for $1 up to $24.99, so the payout stays under the $25 limit.</span></li>
-            <li><svg class="i"><use href="#i-check"/></svg><span><b>$25 per person per day</b> (<code class="inline" translate="no">MAX_WALLET_DAILY_USD</code>) for “Get paid” links and Lokal tags: the agent adds up what it paid that wallet in the last 24 hours. A payment that would go over is refused and not paid out.</span></li>
+            <li><svg class="i"><use href="#i-check"/></svg><span><b>$25 per person per day</b> (<code class="inline" translate="no">MAX_WALLET_DAILY_USD</code>) for “Get paid” links and LokalPay tags: the agent adds up what it paid that wallet in the last 24 hours. A payment that would go over is refused and not paid out.</span></li>
             <li><svg class="i"><use href="#i-check"/></svg><span><b>$100 per day overall</b> (<code class="inline" translate="no">MAX_DAILY_USD</code>), across everyone, from the agent's own payout log. A payment that would go over it is not refused: autopilot stops before it, and pays it when it runs again with room under the limit.</span></li>
           </ul>
           <p class="small muted mt-16">“Per day” always means the last 24 hours, not a calendar day. A payment link shows how much more its recipient can receive today before you pay.</p>
@@ -300,7 +300,7 @@ lokal send ada 10"><svg class="i"><use href="#i-copy"/></svg></button>
             <li><svg class="i"><use href="#i-check"/></svg><span><b>Dry run by default.</b> Nothing is sent without <code class="inline" translate="no">--execute</code>. A manual payout then waits for you to type “yes” (or pass <code class="inline" translate="no">--yes</code>).</span></li>
             <li><svg class="i"><use href="#i-check"/></svg><span><b>$25 per payout.</b> Set by <code class="inline" translate="no">MAX_USD</code>. For <code class="inline" translate="no">cngn-usdt</code> it is checked on the preview, on the firm quote and on the dollars actually paid.</span></li>
             <li><svg class="i"><use href="#i-check"/></svg><span><b>$100 in any 24 hours.</b> Set by <code class="inline" translate="no">MAX_DAILY_USD</code>. The agent adds up the USD value of executed payouts in <code class="inline" translate="no">receipts.jsonl</code> over the last 24 hours and refuses a payout that would go over.</span></li>
-            <li><svg class="i"><use href="#i-check"/></svg><span><b>Only the named recipient.</b> Owner payouts and owner links pay only contacts in the contacts file; a “Get paid” link pays only the wallet that registered it; a Lokal tag pays only the wallet that holds it. The agent's own address, the owner's <code class="inline" translate="no">own_wallets</code>, the token and registry contracts and the zero address are blocked.</span></li>
+            <li><svg class="i"><use href="#i-check"/></svg><span><b>Only the named recipient.</b> Owner payouts and owner links pay only contacts in the contacts file; a “Get paid” link pays only the wallet that registered it; a LokalPay tag pays only the wallet that holds it. The agent's own address, the owner's <code class="inline" translate="no">own_wallets</code>, the token and registry contracts and the zero address are blocked.</span></li>
             <li><svg class="i"><use href="#i-check"/></svg><span><b>Price protection.</b> The firm quote may be at most 3% worse than the preview (<code class="inline" translate="no">MAX_SLIPPAGE_BPS</code>), and may not ask for more than the amount requested. Expired quotes are never sent.</span></li>
             <li><svg class="i"><use href="#i-check"/></svg><span><b>Pays what it received.</b> The payout is the measured change in the agent's balance, capped at what the swap delivered.</span></li>
             <li><svg class="i"><use href="#i-check"/></svg><span><b>Autopilot pays only matched requests.</b> Exact token and amount, after the request was made and before it expired, one payout per request. Unmatched deposits are never paid, and autopilot stops on a payout error.</span></li>
@@ -329,7 +329,7 @@ lokal send ada 10"><svg class="i"><use href="#i-copy"/></svg></button>
               <tr><td class="lead-cell" data-label="Command"><code class="inline" translate="no">requests</code></td><td data-label="What it does"><span>Lists every request with its status (open, received, paid or expired), amount, corridor, name, expiry and link, plus its deposit, receipt or error when there is one.</span></td><td data-label="Sends transactions"><span class="badge neutral">No</span></td></tr>
               <tr><td class="lead-cell" data-label="Command"><code class="inline" translate="no">watch <span class="nw">[--execute]</span> <span class="nw">[--interval S]</span></code></td><td data-label="What it does"><span>Autopilot. Checks for deposits every <code class="inline" translate="no">--interval</code> seconds (default 15, at least 5) and pays matched requests. A dry run unless <code class="inline" translate="no">--execute</code> is given.</span></td><td data-label="Sends transactions"><span class="badge warn">With <code class="inline" translate="no">--execute</code></span></td></tr>
               <tr><td class="lead-cell" data-label="Command"><code class="inline" translate="no">retry <span class="nw">--request ID</span> <span class="nw">[--execute]</span> <span class="nw">[--yes]</span></code></td><td data-label="What it does"><span>Runs again an autopilot payout that failed after its deposit was recorded. Only for a request that is unpaid, has a saved error and sent no swap or payout. A dry run unless <code class="inline" translate="no">--execute</code> is given; <code class="inline" translate="no">--yes</code> skips the typed confirmation.</span></td><td data-label="Sends transactions"><span class="badge warn">With <code class="inline" translate="no">--execute</code></span></td></tr>
-              <tr><td class="lead-cell" data-label="Command"><code class="inline" translate="no">retry <span class="nw">--ntag TX:LOGINDEX</span> <span class="nw">[--execute]</span> <span class="nw">[--yes]</span></code></td><td data-label="What it does"><span>The same, for a Lokal tag payment that failed after its deposit was recorded in <code class="inline" translate="no">ntag-payments.json</code>. The id is the deposit transaction and its log index.</span></td><td data-label="Sends transactions"><span class="badge warn">With <code class="inline" translate="no">--execute</code></span></td></tr>
+              <tr><td class="lead-cell" data-label="Command"><code class="inline" translate="no">retry <span class="nw">--ntag TX:LOGINDEX</span> <span class="nw">[--execute]</span> <span class="nw">[--yes]</span></code></td><td data-label="What it does"><span>The same, for a LokalPay tag payment that failed after its deposit was recorded in <code class="inline" translate="no">ntag-payments.json</code>. The id is the deposit transaction and its log index.</span></td><td data-label="Sends transactions"><span class="badge warn">With <code class="inline" translate="no">--execute</code></span></td></tr>
               <tr><td class="lead-cell" data-label="Command"><code class="inline" translate="no">ntag &lt;@tag | address&gt;</code></td><td data-label="What it does"><span>Looks up a tag or a wallet: the owner, display name, since when, the claim transaction and whether the tag is free, taken, locked, reserved or invalid.</span></td><td data-label="Sends transactions"><span class="badge neutral">No</span></td></tr>
               <tr><td class="lead-cell" data-label="Command"><code class="inline" translate="no">ntags</code></td><td data-label="What it does"><span>Lists every tag held right now, with its owner and name.</span></td><td data-label="Sends transactions"><span class="badge neutral">No</span></td></tr>
               <tr><td class="lead-cell" data-label="Command"><code class="inline" translate="no">pay @tag &lt;amount&gt; <span class="nw">[--corridor ID]</span> <span class="nw">[--execute]</span> <span class="nw">[--yes]</span></code></td><td data-label="What it does"><span>Pays a tag's owner from the agent's own funds. Looks the tag up now, re-checks the claim on Celo, then runs the normal payout with the same caps. In PowerShell write <code class="inline" translate="no">'@ada'</code> in quotes, or use <code class="inline" translate="no">pay --ntag ada --amount 10</code>.</span></td><td data-label="Sends transactions"><span class="badge warn">With <code class="inline" translate="no">--execute</code></span></td></tr>
@@ -464,7 +464,7 @@ node src/agent.mjs watch"><svg class="i"><use href="#i-copy"/></svg></button>
           <li><a href="#overview">Overview</a></li>
           <li><a href="#flow">How a payout runs</a></li>
           <li><a href="#links">Payment links and autopilot</a></li>
-          <li><a href="#ntags">Lokal tags and sign-in</a></li>
+          <li><a href="#ntags">LokalPay tags and sign-in</a></li>
           <li><a href="#install">Install lokal (Windows)</a></li>
           <li><a href="#receipts">Receipts and reviews</a></li>
           <li><a href="#limits">Limits</a></li>
@@ -486,13 +486,13 @@ node src/agent.mjs watch"><svg class="i"><use href="#i-copy"/></svg></button>
   <div class="container">
     <div class="cols">
       <div>
-        <div class="foot-brand"><img src="logo.svg?v=lokal2" alt="" width="28" height="28">Lokal</div>
+        <div class="foot-brand"><img src="logo.svg?v=lokal2" alt="" width="28" height="28">LokalPay</div>
         <p class="small soft" style="max-width:40ch">Send dollars on Celo. They receive their local money: naira, rupiah or pesos, in their own wallet.</p>
-        <p class="small mt-16"><a href="index.html?about">About Lokal</a></p>
+        <p class="small mt-16"><a href="index.html?about">About LokalPay</a></p>
       </div>
       <div>
         <h4>Product</h4>
-        <ul><li><a href="app.html">Dashboard</a></li><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your Lokal tag</a></li><li><a href="transactions.html">Your activity</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="proof.html">Proof</a></li><li><a href="cash-out.html">Cash out</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
+        <ul><li><a href="app.html">Dashboard</a></li><li><a href="quote.html">Send money</a></li><li><a href="pay.html">Pay a link</a></li><li><a href="get-paid.html">Get paid</a></li><li><a href="account.html">Your LokalPay tag</a></li><li><a href="transactions.html">Your activity</a></li><li><a href="receipt.html">Receipts</a></li><li><a href="proof.html">Proof</a></li><li><a href="cash-out.html">Cash out</a></li><li><a href="verify.html">Verify a transaction</a></li><li><a href="agent.html">Agent</a></li><li><a href="autopilot.html">Autopilot</a></li></ul>
       </div>
       <div>
         <h4>Resources</h4>

@@ -159,7 +159,7 @@ async function main() {
   }
 
   // 2. Tokens (mainnet: check them; rehearsal: mocks are deployed in step 5).
-  console.log(`Lokal deployment plan (${chainName}, chain ${chainId}, via ${network.name})\n`);
+  console.log(`LokalPay deployment plan (${chainName}, chain ${chainId}, via ${network.name})\n`);
   console.log(`  deployer        ${deployer} (the agent; key read only after this plan)`);
   console.log(`  new admin       ${newOwner ?? "none: the deployer stays admin (ALLOW_SAME_OWNER=1)"}`);
   console.log(`  payout wallet   ${payoutWallet}`);

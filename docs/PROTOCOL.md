@@ -1,6 +1,6 @@
 # Protocol: tags, currencies, links and contract payments
 
-The formats Lokal puts on Celo and reads back: which currency a payment asks for, the Lokal tag rules and the
+The formats LokalPay puts on Celo and reads back: which currency a payment asks for, the LokalPay tag rules and the
 cutover from the memo protocol, "Get paid" links, and how a payment through the contracts reaches the agent.
 
 The full wire formats are kept as specs: [spec/NTAGS.md](spec/NTAGS.md) (the legacy `NT1:` claim and `NTP:` memo
@@ -9,7 +9,7 @@ formats, still paid for tags claimed before the cutover) and [spec/REGISTRATIONS
 
 ## Currencies
 
-Lokal is multi-currency by design. Every local stablecoin below is on Celo mainnet and is priced by Textile FX against
+LokalPay is multi-currency by design. Every local stablecoin below is on Celo mainnet and is priced by Textile FX against
 USD₮. The payer picks the currency; all four are built, not yet used on mainnet.
 
 | Country | Token | Issuer | Decimals | Today's rate (5 USD₮) | Status |
@@ -21,7 +21,7 @@ USD₮. The payer picks the currency; all four are built, not yet used on mainne
 
 - **Rates** are live Textile FX previews for 5 USD₮ taken on 21 Nov 2026. They are free previews, not firm quotes, and
   they move; every payment gets its own firm quote at the time it is paid.
-- **What "Built, not yet used on mainnet" means.** Payments by Lokal tag, payment link, Get paid or the `lokal` CLI are paid out by the
+- **What "Built, not yet used on mainnet" means.** Payments by LokalPay tag, payment link, Get paid or the `lokal` CLI are paid out by the
   agent (by hand or on autopilot) in cNGN, plus the reverse corridor that pays USD₮. The flow is built and tested against
   live Textile quotes; the first real mainnet payout to a user is still pending and will be linked here with its
   transactions. No payout in IDRX, wARS or wCOP has been made yet.
@@ -40,9 +40,9 @@ USD₮. The payer picks the currency; all four are built, not yet used on mainne
   ([docs/CASH-OUT.md](CASH-OUT.md)) gives each currency's checked route as of 21 Nov 2026. MiniPay only shows
   USDT, USDC and USDm, so recipients who cash out through MiniPay should take dollars.
 - **Not yet supported.** Textile also lists wBRL (Brazil) and wMXN (Mexico), but neither returned a quote on 21 Nov, so
-  Lokal does not offer them.
+  LokalPay does not offer them.
 
-## Lokal tag rules
+## LokalPay tag rules
 
 | Rule | Detail |
 |---|---|
@@ -81,7 +81,7 @@ the agent resolves the tag strictly **before** the deposit (`resolveNtagsBefore(
 
 **Discovery.** Tag claims are read from Blockscout (`/addresses/<agent>/transactions?filter=to`). The agent loads the
 full list once and then refreshes incrementally, re-reading the last 600 blocks each time so a reorg or late-indexed
-block is picked up. It never works from a partial list: past the page limit it stops with an error, and a Lokal tag deposit
+block is picked up. It never works from a partial list: past the page limit it stops with an error, and a LokalPay tag deposit
 above the height the list is complete to waits (requests and registrations before it carry on). Spam sent to the agent
 cannot make it pay from a stale or partial list.
 

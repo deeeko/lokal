@@ -1,5 +1,5 @@
 /**
- * Lokal canonical demo: "The agent decides; the contract has the final say."
+ * LokalPay canonical demo: "The agent decides; the contract has the final say."
  *
  * Runs the real LokalTags and LokalPots contracts on Hardhat's in-process chain with mock tokens at the real decimals
  * (USD₮ 6, cNGN 6, IDRX 2) and walks one fixed story: tags are claimed under the site's rules, payments inside the

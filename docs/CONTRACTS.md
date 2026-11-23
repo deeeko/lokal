@@ -5,7 +5,7 @@
 **The agent decides; the contract has the final say.** Two Solidity contracts check the rules *before* any money moves,
 so a payment that breaks a limit is refused by Celo itself instead of being refunded later:
 
-- **`LokalTags`**: the Lokal tag registry and payment router. Claim a tag, choose the currency you want to receive,
+- **`LokalTags`**: the LokalPay tag registry and payment router. Claim a tag, choose the currency you want to receive,
   and get paid with `payTag` / `payTagWithPermit` (USD₮ supports EIP-2612, so one signature replaces the approval).
   Limits per payment, per recipient per day, per payer per day and overall per day, per token, in that token's own units.
 - **`LokalPots`**: one link, many payers (weddings, birthdays, group gifts). A pot has a dollar cap, a per-guest cap and
@@ -62,7 +62,7 @@ the site enforces it.
 
 | | |
 |---|---|
-| Status | **Live on Celo mainnet since 21 Nov 2026.** Deployed by the agent with the ERC-8021 tag ([LokalTags tx](https://celoscan.io/tx/0x4d4aa9adba3417e9a7017a4c2e45b4cafe2380702e75f6f9350af7ac58af858e), [LokalPots tx](https://celoscan.io/tx/0x8e56d2a9e391a54589ab9e72d683d8307355c5f8b8fb2dd697bab62b65c3ebd9)). **Site and CLI switched** (built, not yet used on mainnet): Account claims, renames, sets the default currency and releases on LokalTags; tag pages and `lokal send` pay with `payTagWithPermit` / `payTag`; autopilot pays `TagPaid` and `PotPaid`. New claims go to the contract only from block 83,405,000; older `NTP:` memo payments keep being paid (see [Lokal tag rules](PROTOCOL.md#lokal-tag-rules)). |
+| Status | **Live on Celo mainnet since 21 Nov 2026.** Deployed by the agent with the ERC-8021 tag ([LokalTags tx](https://celoscan.io/tx/0x4d4aa9adba3417e9a7017a4c2e45b4cafe2380702e75f6f9350af7ac58af858e), [LokalPots tx](https://celoscan.io/tx/0x8e56d2a9e391a54589ab9e72d683d8307355c5f8b8fb2dd697bab62b65c3ebd9)). **Site and CLI switched** (built, not yet used on mainnet): Account claims, renames, sets the default currency and releases on LokalTags; tag pages and `lokal send` pay with `payTagWithPermit` / `payTag`; autopilot pays `TagPaid` and `PotPaid`. New claims go to the contract only from block 83,405,000; older `NTP:` memo payments keep being paid (see [LokalPay tag rules](PROTOCOL.md#lokal-tag-rules)). |
 | LokalTags | [`0xFF2f8ADC0c97B6E40b201848d378C11325bC7187`](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) · [Blockscout](https://celo.blockscout.com/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187?tab=contract) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) |
 | LokalPots | [`0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF`](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) · [Blockscout](https://celo.blockscout.com/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF?tab=contract) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) |
 | ABIs and addresses | [`contracts/deployments/`](../contracts/deployments/) (`LokalTags.json`, `LokalPots.json`, constructor arguments, deploy record) |

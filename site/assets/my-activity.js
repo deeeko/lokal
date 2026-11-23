@@ -1,11 +1,11 @@
-// "Yours": one signed-in wallet's own payments with Lokal, read from Blockscout in the browser. Used by the dashboard
+// "Yours": one signed-in wallet's own payments with LokalPay, read from Blockscout in the browser. Used by the dashboard
 // (app.html) and Activity (transactions.html), which show it only to the signed-in wallet itself. Nothing is stored.
 //
-// A row is one thing the wallet did with Lokal, or one payout it received:
-//   - its token transfers to the agent: a Lokal tag payment (through the LokalTags contract, or an older memo
+// A row is one thing the wallet did with LokalPay, or one payout it received:
+//   - its token transfers to the agent: a LokalPay tag payment (through the LokalTags contract, or an older memo
 //     transfer), or a payment-link / direct payment;
 //   - the agent's payouts to it (money received);
-//   - its Lokal tag transactions on LokalTags (claim, name, default currency, release) and older memo claims;
+//   - its LokalPay tag transactions on LokalTags (claim, name, default currency, release) and older memo claims;
 //   - its "Get paid" payment-link registrations.
 // The top level stays free of window/document access so this file is unit-tested in Node.
 import {
@@ -18,7 +18,7 @@ const HASH_RE = /^0x[0-9a-f]{64}$/i;
 const lc = (s) => String(s ?? "").toLowerCase();
 const sameAddr = (a, b) => lc(a) === lc(b);
 
-/** "USD₮" | "cNGN" | "IDRX" | "wARS" | "wCOP" for a token Lokal uses, else null. */
+/** "USD₮" | "cNGN" | "IDRX" | "wARS" | "wCOP" for a token LokalPay uses, else null. */
 export const tokenName = (t) => Object.values(TOKENS).find((x) => sameAddr(t?.address_hash ?? t?.address, x.address))?.symbol ?? null;
 /** "₦14,400.00 cNGN", "Rp 91,967 IDRX", "ARS 8,848.74 wARS", "10.00 USD₮" (local money rounded down). */
 export function fmtToken(sym, v) {
@@ -80,7 +80,7 @@ export function activityRows(address, transfers = [], sent = []) {
       const gets = call?.fn === "pay" ? pluralOf(call.receive) : memo && sym === "USD₮" ? pluralOf(memo.currency ?? "cngn") : null;
       rows.push({ hash, time: t.timestamp, kind: "sent", status: ["Sent", "ok"], tagged: tx ? isTagged(tx) : null,
         label: tag ? `You paid @${tag} ${fmtToken(sym, amount)}${gets ? ` (they get ${gets})` : ""}` : `You sent ${fmtToken(sym, amount)} to the agent`,
-        sub: tag ? "Lokal tag payment" : "Payment link or direct payment", link: null, token: sym, amount });
+        sub: tag ? "LokalPay tag payment" : "Payment link or direct payment", link: null, token: sym, amount });
     } else if (sameAddr(t.from?.hash, AGENT) && sameAddr(t.to?.hash, address)) {
       rows.push({ hash, time: t.timestamp, kind: "payout", status: ["Received", "ok"], tagged: null,
         label: `You received ${fmtToken(sym, amount)}`, sub: "Payout from the agent", link: null, token: sym, amount });
@@ -95,8 +95,8 @@ export function activityRows(address, transfers = [], sent = []) {
       const label = call.fn === "claim" ? `You claimed @${call.tag}${call.name ? ` (${call.name})` : ""}`
         : call.fn === "setName" ? (call.name ? `You set your name to ${call.name}` : "You removed your display name")
         : call.fn === "setReceiveToken" ? (call.receive ? `You set your default currency to ${pluralOf(call.receive)}` : "You cleared your default currency")
-        : "You released your Lokal tag";
-      rows.push({ hash, time: t.timestamp, kind: "tag", status: txStatus(t), tagged: isTagged(t), label, sub: "Lokal tag", link: null, token: null, amount: null });
+        : "You released your LokalPay tag";
+      rows.push({ hash, time: t.timestamp, kind: "tag", status: txStatus(t), tagged: isTagged(t), label, sub: "LokalPay tag", link: null, token: null, amount: null });
       continue;
     }
     if (!sameAddr(t.to?.hash, AGENT)) continue;
@@ -104,10 +104,10 @@ export function activityRows(address, transfers = [], sent = []) {
     const reg = op ? null : decodeRegistration(t.raw_input);
     if (!op && !reg) continue;
     const label = op
-      ? (op.t === "" ? "You released your Lokal tag" : `You claimed @${op.t}${op.n ? ` (${op.n})` : ""}`)
+      ? (op.t === "" ? "You released your LokalPay tag" : `You claimed @${op.t}${op.n ? ` (${op.n})` : ""}`)
       : `You made a payment link for ${reg.a} ${CORRIDORS[reg.d]?.sell === "cNGN" ? "cNGN" : "USD₮"}`;
     rows.push({ hash, time: t.timestamp, kind: op ? "tag" : "link", status: txStatus(t), tagged: isTagged(t),
-      label, sub: op ? "Lokal tag (older memo)" : "Get paid", link: reg && t.status === "ok" ? `pay.html#tx=${hash}` : null, token: null, amount: null });
+      label, sub: op ? "LokalPay tag (older memo)" : "Get paid", link: reg && t.status === "ok" ? `pay.html#tx=${hash}` : null, token: null, amount: null });
   }
   rows.sort((a, b) => Date.parse(b.time ?? 0) - Date.parse(a.time ?? 0));
   return rows;

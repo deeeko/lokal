@@ -84,7 +84,7 @@ export function findDepositRecord({ key, tx, logIndex }, { requests = [], regist
   const p = ntagPayments?.[key];
   if (p) {
     const untouched = p.status === "refused" && !p.paidAt && !p.retrying && !p.hashes?.payout && !p.hashes?.swap;
-    if (!untouched) payout ??= { what: `Lokal tag payment ${key}`, paid: Boolean(p.paidAt) };
+    if (!untouched) payout ??= { what: `LokalPay tag payment ${key}`, paid: Boolean(p.paidAt) };
     else if (!refundable) {
       let amount = p.amount;
       try { if (p.dust && amount != null) amount = add6(amount, p.dust); } catch { /* keep it */ }
@@ -215,7 +215,7 @@ export async function readDepositOnchain(pub, { tx, logIndex }, agent) {
   const log = (rc.logs ?? []).find((l) => Number(l.logIndex) === logIndex);
   if (!log) throw new Error(`Transaction ${tx} has no log ${logIndex}. Check the deposit key with "node src/agent.mjs refunds". Nothing was sent.`);
   const token = REFUND_TOKENS.find((t) => lc(t.address) === lc(log.address));
-  if (!token) throw new Error(`Log ${logIndex} of ${tx} is not a transfer of a token Lokal knows (${REFUND_TOKENS.map((t) => t.symbol).join(", ")}). Nothing was sent.`);
+  if (!token) throw new Error(`Log ${logIndex} of ${tx} is not a transfer of a token LokalPay knows (${REFUND_TOKENS.map((t) => t.symbol).join(", ")}). Nothing was sent.`);
   const [ev] = parseEventLogs({ abi: erc20Abi, eventName: "Transfer", logs: [log], strict: true });
   if (!ev) throw new Error(`Log ${logIndex} of ${tx} is not an ERC-20 Transfer. Nothing was sent.`);
   if (lc(ev.args.to) !== lc(agent)) throw new Error(`Log ${logIndex} of ${tx} is a transfer to ${ev.args.to}, not to the agent. Nothing was sent.`);

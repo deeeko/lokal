@@ -2,6 +2,19 @@
 
 Newest first. This was the README's progress log; it moved here when the README was cut to one page.
 
+## 2026-11-23: Renamed to LokalPay
+
+- **The product is now LokalPay** everywhere a person reads its name: every page's title, meta and share tags, the
+  wordmark, top bars, sidebar and footer, the README and docs, the CLI help and messages, alerts ("LokalPay agent:"),
+  the Windows installer and the ERC-8004 card in `src/register8004.mjs` (the onchain card changes the next time it
+  is rewritten with `setAgentURI`). "Lokal tag" reads "LokalPay tag".
+- **`lokalpay` is another name for the command line**: `package.json` bin, and the installer writes
+  `bin\lokalpay.cmd` next to `lokal.cmd` and `ntag.cmd`. `lokal` stays the main name.
+- **Unchanged on purpose:** the hero's *lokal* wordplay and the logo; the deployed `LokalTags` and `LokalPots`
+  contracts; the repo and its addresses (lokalpay.vercel.app, naira-payout.vercel.app); storage keys, receipt
+  prefixes, the attribution code, the onchain memo formats; and the sign-in text ("Sign in to Lokal…"), which the
+  server checks, so sessions keep working. Refusal reasons written before the rename keep their codes.
+
 ## 2026-11-22: calmer payment screens
 
 - **Show what you need, hide what you might need** ([the website](ARCHITECTURE.md#the-website-landing-sign-up-dashboard)):

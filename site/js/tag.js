@@ -69,7 +69,7 @@ function readTag() {
 function finderCard(heading, value) {
   return el("section", { class: "card" }, el("div", { class: "card-b stack" },
     heading ? el("h2", { class: "section-title", style: "font-size:20px" }, heading) : null,
-    ntagFinder({ id: "tag-find", label: "Find a Lokal tag", value, address: () => getSession()?.address })));
+    ntagFinder({ id: "tag-find", label: "Find a LokalPay tag", value, address: () => getSession()?.address })));
 }
 
 // ---------- page ----------
@@ -86,21 +86,21 @@ async function render() {
   const tag = readTag();
   shownTag = tag;
   if (!tag) {
-    document.title = "Pay by Lokal tag · Lokal";
-    title.replaceChildren("Find a ", el("em", {}, "Lokal tag"));
-    lead.textContent = "A Lokal tag is a short name tied to a Celo wallet. Pay the tag in dollars and the agent pays that wallet in naira, rupiah or pesos.";
+    document.title = "Pay by LokalPay tag · LokalPay";
+    title.replaceChildren("Find a ", el("em", {}, "LokalPay tag"));
+    lead.textContent = "A LokalPay tag is a short name tied to a Celo wallet. Pay the tag in dollars and the agent pays that wallet in naira, rupiah or pesos.";
     root.replaceChildren(finderCard(null));
     return;
   }
   const err = ntagError(tag);
   if (err && !/reserved/.test(err)) {
-    title.replaceChildren("Pay by ", el("em", {}, "Lokal tag"));
+    title.replaceChildren("Pay by ", el("em", {}, "LokalPay tag"));
     root.replaceChildren(el("div", { class: "stack" },
-      alertBox("warn", "alert", el("p", {}, el("b", {}, `@${tag} isn't a valid Lokal tag. `), `It ${err.replace(/^use /, "should use ").replace(/^must /, "must ").replace(/^can't /, "can't ")}. Check the link with whoever sent it.`)),
+      alertBox("warn", "alert", el("p", {}, el("b", {}, `@${tag} isn't a valid LokalPay tag. `), `It ${err.replace(/^use /, "should use ").replace(/^must /, "must ").replace(/^can't /, "can't ")}. Check the link with whoever sent it.`)),
       finderCard("Look someone up", tag)));
     return;
   }
-  document.title = `@${tag} · Lokal`;
+  document.title = `@${tag} · LokalPay`;
   title.replaceChildren("Pay ", el("em", {}, "@" + tag));
   root.replaceChildren(el("p", { class: "small muted", role: "status" }, el("span", { class: "skel", style: "width:14px;height:14px;border-radius:50%;margin-right:8px" }), `Looking up @${tag} on Celo…`));
   let found;
@@ -150,7 +150,7 @@ function renderProfile(tag, entry) {
   const gets = pref ? `prefers ${pref.plural}` : C && entry.receive === "usdt" ? "prefers dollars" : "gets paid in their own money";
   if (entry.name) lead.replaceChildren(nameText(entry.name), ` ${gets}. You send dollars; the agent pays their wallet.`);
   else lead.textContent = `@${tag} ${gets}. You send dollars; the agent pays their wallet.`;
-  const card = ntagCard({ tag, name: entry.name, address: entry.owner, since: entry.since, currency: entry.currency, as: "button", label: `Lokal tag @${tag}. Copy the link to this page` });
+  const card = ntagCard({ tag, name: entry.name, address: entry.owner, since: entry.since, currency: entry.currency, as: "button", label: `LokalPay tag @${tag}. Copy the link to this page` });
   card.dataset.copy = ntagUrl(tag);
   card.dataset.copyLabel = "Link copied";
   const who = whoCard(tag, entry);

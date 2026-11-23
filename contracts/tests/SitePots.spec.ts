@@ -75,7 +75,7 @@ describe("Site pot calldata on the real LokalPots", () => {
     const ok = { title: "Party", closesAt: now + DAY, potCapUsd6: usd(10), perPayerCapUsd6: usd(2) };
     const noTag = await refusal(bob, potsAddress, site.createPotData(ok), { creating: true });
     expect(noTag.name).to.equal("HostNotEligible");
-    expect(noTag.message).to.match(/holds a Lokal tag can open a pot/);
+    expect(noTag.message).to.match(/holds a LokalPay tag can open a pot/);
     const late = await refusal(ada, potsAddress, site.createPotData({ ...ok, closesAt: now + 15 * DAY }), { creating: true });
     expect(late.name).to.equal("InvalidCloseTime");
     const caps = await refusal(ada, potsAddress, site.createPotData({ ...ok, potCapUsd6: usd(101) }), { creating: true });

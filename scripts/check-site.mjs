@@ -17,7 +17,7 @@ for (const p of ["app.html", "start.html", "account.html", "tag.html"]) if (!pag
 /** Pages with their own chrome on purpose: the landing, the sign-up gateway, and the public Proof and Features pages (see the CHROME comment below). */
 const OWN_CHROME = new Set(["index.html", "start.html", "proof.html", "features.html"]);
 if (!pages.includes("proof.html")) fail("site/proof.html is missing (the public Proof page)");
-if (!pages.includes("features.html")) fail("site/features.html is missing (everything Lokal does, each with its label)");
+if (!pages.includes("features.html")) fail("site/features.html is missing (everything LokalPay does, each with its label)");
 /** The app sidebar, in order (the owner's brief, 21 Nov 2026). Account is an entry now; the user chip stays too. */
 const SIDEBAR = "Dashboard=app.html, Send=quote.html, Get paid=get-paid.html, Activity=transactions.html, Account=account.html, Docs=docs.html";
 
@@ -72,11 +72,11 @@ for (const page of pages) {
     if (!/\sid="nav-user"/.test(html)) fail(`${page}: top bar is missing the sign-in button slot (id="nav-user")`);
     // the notification bell's slot sits right before the account button, hidden until a session exists (assets/bell.js)
     if (!/<div class="nav-bell" id="nav-bell" hidden><\/div>\s*<div class="nav-user" id="nav-user">/.test(html)) fail(`${page}: top bar is missing the notification bell slot (<div class="nav-bell" id="nav-bell" hidden></div> before #nav-user)`);
-    // signed out, the user chip leads to the sign-up gateway; the footer leads back to the landing ("About Lokal")
+    // signed out, the user chip leads to the sign-up gateway; the footer leads back to the landing ("About LokalPay")
     if (!/<div class="sb-user" id="sb-user"><a [^>]*href="(?:\/lokal\/)?start\.html"/.test(html)) fail(`${page}: the signed-out user chip should link to start.html (the sign-up gateway)`);
-    if (!/<footer class="site-footer">[^]*?href="(?:\/lokal\/)?index\.html\?about"/.test(html)) fail(`${page}: the footer should link "About Lokal" (index.html?about)`);
+    if (!/<footer class="site-footer">[^]*?href="(?:\/lokal\/)?index\.html\?about"/.test(html)) fail(`${page}: the footer should link "About LokalPay" (index.html?about)`);
     const footProduct = (html.match(/<h4>Product<\/h4>\s*<ul>.*?<\/ul>/) || [""])[0];
-    if (!/href="account\.html"/.test(footProduct)) fail(`${page}: footer Product list is missing the Lokal tag page (account.html)`);
+    if (!/href="account\.html"/.test(footProduct)) fail(`${page}: footer Product list is missing the LokalPay tag page (account.html)`);
     for (const id of ["user", "logout", "updown", "copy", "home", "info"]) if (!new RegExp(`<symbol id="i-${id}"`).test(html)) fail(`${page}: icon sprite is missing i-${id} (used by the user menu)`);
   }
 

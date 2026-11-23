@@ -1,4 +1,4 @@
-> **Legacy wire format.** This is the original spec for Lokal tags (first called "nTags"): the `NT1:` claim and
+> **Legacy wire format.** This is the original spec for LokalPay tags (first called "nTags"): the `NT1:` claim and
 > `NTP:` memo formats. Since block 83,405,000 new claims go to the LokalTags contract; `NTP:` memo payments to tags
 > claimed before then are still paid, which is why this format is kept and documented. See docs/WHO-ENFORCES-WHAT.md.
 

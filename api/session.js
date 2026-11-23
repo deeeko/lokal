@@ -8,7 +8,7 @@ import { celo } from "viem/chains";
 import { parseSignInMessage, signInMessageError } from "../site/assets/session.js";
 
 export const MAX_BODY = 4096;
-// lokalpay.vercel.app is the address since the rename to Lokal; the older ones keep working.
+// lokalpay.vercel.app is the address since the rename to LokalPay; the older ones keep working.
 export const KNOWN_HOSTS = ["lokalpay.vercel.app", "naira-payout.vercel.app", "celo-naira-payout-agent.vercel.app"];
 export const VERIFY_TIMEOUT_MS = 8000;
 // 65 bytes for a normal wallet; contract wallets may return longer signatures (still bounded by the body size)

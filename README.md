@@ -1,4 +1,4 @@
-# Lokal
+# LokalPay
 
 Send dollars. They receive their local money.
 
@@ -9,7 +9,7 @@ Send dollars. They receive their local money.
 Pay someone's @tag or link from your own wallet on Celo. An agent converts the dollars (USD₮) on Textile FX and pays
 naira, rupiah or pesos into their own wallet. Two contracts refuse any payment over a limit before money moves.
 
-![The Lokal landing page: "Send dollars. They receive their lokal money." with the live converter](docs/assets/landing.jpg)
+![The LokalPay landing page: "Send dollars. They receive their lokal money." with the live converter](docs/assets/landing.jpg)
 
 **[Live app](https://lokalpay.vercel.app)** ·
 Demo video (coming soon) ·
@@ -37,7 +37,7 @@ Built for **Agents Open for Business** on Celo, **Track 3: Stablecoin Corridors 
 
 ## What you can do
 
-- **Pay a Lokal tag** (`/@name`): the payer picks naira, rupiah, Argentine or Colombian pesos, or dollars.
+- **Pay a LokalPay tag** (`/@name`): the payer picks naira, rupiah, Argentine or Colombian pesos, or dollars.
 - **Get paid by link:** ask for an exact amount; share it, with a QR code when you need one. One link, one payout.
 - **Pots:** one link for many guests (weddings, birthdays, group gifts), with a live Spray Wall; close or delete
   them from your dashboard.
@@ -48,11 +48,11 @@ Built for **Agents Open for Business** on Celo, **Track 3: Stablecoin Corridors 
   payout; a checker for any transaction's attribution tag.
 - **Refunds:** a payment the agent can't pay goes back to the exact wallet it came from, with an RF- receipt.
 - **Cash-out guide:** a checked route from each currency to a bank.
-- **The `lokal` command:** `lokal send ada 10 --to rupiah` from PowerShell, with an encrypted wallet on your PC.
+- **The `lokal` command:** `lokal send ada 10 --to rupiah` from PowerShell, with an encrypted wallet on your PC (`lokalpay` is the same command).
 
 ## What's real, with receipts
 
-Each row links to its proof on Celo. Everything Lokal does is on the
+Each row links to its proof on Celo. Everything LokalPay does is on the
 [Features page](https://lokalpay.vercel.app/features.html); what's next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 | What | Status | Receipt |
@@ -60,8 +60,8 @@ Each row links to its proof on Celo. Everything Lokal does is on the
 | LokalTags contract (tags and payments), source verified | **Live** | [deploy tx](https://celoscan.io/tx/0x4d4aa9adba3417e9a7017a4c2e45b4cafe2380702e75f6f9350af7ac58af858e) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) |
 | LokalPots contract (one link, many payers), source verified | **Live** | [deploy tx](https://celoscan.io/tx/0x8e56d2a9e391a54589ab9e72d683d8307355c5f8b8fb2dd697bab62b65c3ebd9) · [Sourcify, exact match](https://repo.sourcify.dev/42220/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) |
 | Contract admin handed to a separate wallet (two-step) | **Live** | [accepted tx](https://celoscan.io/tx/0xbee2dd85e15c4fb664397f06e1a0a932214c6c6a65aaa3aa99e599905c2ec3a6) |
-| First Lokal tag claimed through LokalTags | **Live** | [claim tx](https://celoscan.io/tx/0x4ae77beb9f14d14a1c39525e617a0d6cc50fd08fab68d07a2f3106c8f5e0aeec) |
-| ERC-8004 identity, agentId 10079, card updated to Lokal | **Live** | [register tx](https://celoscan.io/tx/0x080d54275f02a722a3b0daa408f02a1af760e29f9e39092a9a48d22b964cf62e) · [card update tx](https://celoscan.io/tx/0x30d6545ebb388ce73111eb05cb9c7e49ac6ae55f620e9140561bcf68a1e9f966) |
+| First LokalPay tag claimed through LokalTags | **Live** | [claim tx](https://celoscan.io/tx/0x4ae77beb9f14d14a1c39525e617a0d6cc50fd08fab68d07a2f3106c8f5e0aeec) |
+| ERC-8004 identity, agentId 10079, card updated to Lokal (LokalPay name update pending) | **Live** | [register tx](https://celoscan.io/tx/0x080d54275f02a722a3b0daa408f02a1af760e29f9e39092a9a48d22b964cf62e) · [card update tx](https://celoscan.io/tx/0x30d6545ebb388ce73111eb05cb9c7e49ac6ae55f620e9140561bcf68a1e9f966) |
 | Payouts in naira, rupiah and pesos; tags, links, pots, refunds, "Who am I paying?" | **Built, not yet used on mainnet** | 372 tests and 135 contract tests, run on every push |
 | First real user payout | **Pending** | It will be listed here and on the [Proof page](https://lokalpay.vercel.app/proof.html) with its transactions |
 
@@ -74,7 +74,7 @@ tag `celo_7360953d1b53`; [Verify](https://lokalpay.vercel.app/verify.html) check
 sequenceDiagram
   actor Payer as Payer (own wallet)
   participant Tags as LokalTags contract
-  participant Agent as Lokal agent
+  participant Agent as LokalPay agent
   participant Textile as Textile FX
   actor Ada as Ada (own wallet)
 
@@ -135,7 +135,7 @@ chain: [docs/PROTOCOL.md](docs/PROTOCOL.md#currencies).
 
 ## Why Celo and Textile FX
 
-Celo gives sub-cent fees, fast finality and MiniPay on millions of phones in the countries Lokal serves. Textile FX
+Celo gives sub-cent fees, fast finality and MiniPay on millions of phones in the countries LokalPay serves. Textile FX
 gives firm-quoted liquidity for real local stablecoins on Celo (cNGN, IDRX, wARS and wCOP), so every conversion is
 priced up front and settled onchain, and the payer sees the exact amount before signing.
 
@@ -162,7 +162,7 @@ The demo deploys both contracts on a local chain and plays out 28 payments, ever
 
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): the site, tags, pots, a payout end to end, limits, the code map, the deploy gate, tests
 - [CONTRACTS.md](docs/CONTRACTS.md): LokalTags and LokalPots, the 28-step demo, addresses and admin
-- [PROTOCOL.md](docs/PROTOCOL.md): currencies, Lokal tag rules and the cutover, payment links, contract payments; the wire specs [NTAGS.md](docs/spec/NTAGS.md) and [REGISTRATIONS.md](docs/spec/REGISTRATIONS.md)
+- [PROTOCOL.md](docs/PROTOCOL.md): currencies, LokalPay tag rules and the cutover, payment links, contract payments; the wire specs [NTAGS.md](docs/spec/NTAGS.md) and [REGISTRATIONS.md](docs/spec/REGISTRATIONS.md)
 - [CLI.md](docs/CLI.md): the `lokal` command, the agent CLI, every flag and environment variable
 - [OPERATOR.md](docs/OPERATOR.md): running the agent: status server, refunds, the lock, alerts, `doctor`
 - [RUNBOOK.md](docs/RUNBOOK.md): the first real payout, step by step

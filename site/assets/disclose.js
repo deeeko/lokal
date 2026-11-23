@@ -78,7 +78,7 @@ export function tagAgeText(ago) {
 export function trustSummary(tag, a, ago = null) {
   const p = a?.payments;
   const paid = !p || p.state !== "ok" ? null
-    : p.count === 0 ? "not paid through Lokal yet"
+    : p.count === 0 ? "not paid through LokalPay yet"
       : p.count === 1 && !p.capped ? "paid once" : `paid ${p.count}${p.capped ? "+" : ""} times`;
   const unknown = a?.unknown?.length ?? 0;
   const text = summaryLine(["@" + tag, a?.age?.since ? tagAgeText(ago) : "tag age unknown", paid,
@@ -267,7 +267,7 @@ export function qrDisclosure(text, label, { caption = null, size = "" } = {}) {
  * QR disclosure below. opts: { url, title, text, whatsappText, copyLabel, qrLabel, qrCaption, qr = true, link = true }.
  */
 export function shareRow(opts) {
-  const { url, title = "Lokal", text = "", copyLabel = "Link copied" } = opts;
+  const { url, title = "LokalPay", text = "", copyLabel = "Link copied" } = opts;
   const buttons = shareActions(canWebShare()).map((kind, i) => {
     const cls = `btn ${i === 0 ? "btn-primary" : "btn-secondary"} btn-sm`;
     if (kind === "copy") return el("button", { class: cls, type: "button", dataset: { copy: url, copyLabel } }, icon("copy"), "Copy link");

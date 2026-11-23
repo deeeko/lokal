@@ -74,6 +74,14 @@ test("reason codes: refusal messages map to the codes the site explains", () => 
   assert.equal(reasonCode("the transfer looks like a Lokal tag payment, but its memo is not a valid one"), "bad_memo");
   assert.equal(reasonCode("below the Lokal tag minimum of 1"), "below_minimum");
   assert.equal(reasonCode("token not accepted for Lokal tag payments"), "token_not_accepted");
+  // and as written since the rename to LokalPay (both older wordings above keep their codes)
+  assert.equal(reasonCode("unknown LokalPay tag"), "unknown_tag");
+  assert.equal(reasonCode("LokalPay tag claim not found"), "unknown_tag");
+  assert.equal(reasonCode(`LokalPay tag claim ${h(1)} does not check out onchain (not the agent). Not paid.`), "claim_invalid");
+  assert.equal(reasonCode("the LokalPay tag memo does not match this transfer"), "bad_memo");
+  assert.equal(reasonCode("the transfer looks like a LokalPay tag payment, but its memo is not a valid one"), "bad_memo");
+  assert.equal(reasonCode("below the LokalPay tag minimum of 1"), "below_minimum");
+  assert.equal(reasonCode("token not accepted for LokalPay tag payments"), "token_not_accepted");
   assert.equal(reasonCode("something new"), "other");
   const failed = ev(1, { status: "failed" });
   assert.equal(failed.reason, "payout_error");

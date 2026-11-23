@@ -1,4 +1,4 @@
-// "Who am I paying?": what a payer can learn about a Lokal tag before paying it, read from Celo, plus calm warnings.
+// "Who am I paying?": what a payer can learn about a LokalPay tag before paying it, read from Celo, plus calm warnings.
 // Used by the tag page (js/tag.js). The top level stays free of window/document access, so every rule is tested in
 // Node (test/trust.test.mjs).
 //
@@ -333,7 +333,7 @@ export function assessTag({ tag, entry, history = null, legacyClaims = null, pai
   // lookalike
   const look = lookalikeOf(tag, paid.tags);
   if (look?.kind === "paid") add("lookalike", "warn", `Looks like @${look.of}, a tag you've paid before.`, `${at} is one letter away from @${look.of}. Check you have the right tag.`);
-  else if (look?.kind === "reserved") add("lookalike", "warn", `Looks like “${look.of}”, a name nobody can claim.`, `Names like @${look.of} are kept back so nobody can pose as Lokal, a wallet or a bank. ${at} is not one of them.`);
+  else if (look?.kind === "reserved") add("lookalike", "warn", `Looks like “${look.of}”, a name nobody can claim.`, `Names like @${look.of} are kept back so nobody can pose as LokalPay, a wallet or a bank. ${at} is not one of them.`);
   else if (!paid.consent) add("lookalike", "unknown", "Couldn't compare it with tags you've paid.", "This browser doesn't keep that list unless you allow it in Privacy choices. It isn't close to any reserved name.");
   else add("lookalike", "ok", "Not a lookalike of a tag you've paid or a reserved name.", "");
 
@@ -345,7 +345,7 @@ export function assessTag({ tag, entry, history = null, legacyClaims = null, pai
   else if (lastRename && Number(nowSec) - lastRename.time < WINDOWS.nameChange) add("name", "warn", `Name changed ${agoText(lastRename.time, nowSec)}.`, "The display name is set by the owner and not checked by anyone. A new name doesn't mean a new person, but ask if it surprises you.");
   else add("name", "ok", "Name unchanged in the last 7 days.", "");
 
-  // payments received through Lokal (the current holder only; never who paid)
+  // payments received through LokalPay (the current holder only; never who paid)
   let payments;
   if (!contract) payments = { state: "unknown", count: null, since: null, capped: false, reason: "Payments to older memo tags aren't counted here." };
   else if (!history) payments = { state: "unknown", count: null, since: null, capped: false, reason: "Couldn't read this tag's payments from Celo." };

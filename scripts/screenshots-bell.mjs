@@ -167,7 +167,7 @@ for (const width of [390, 1440]) {
   console.log(`${width}px after Esc: open=${await page.getAttribute(".np-bell", "aria-expanded")}, badge hidden=${await page.evaluate(() => document.querySelector(".np-bell-badge").hidden)}, focus on bell=${await page.evaluate(() => document.activeElement?.classList.contains("np-bell"))}`);
   await ctx.close();
 }
-// the landing's own top bar ("About Lokal" while signed in): the bell sits before "Dashboard"
+// the landing's own top bar ("About LokalPay" while signed in): the bell sits before "Dashboard"
 for (const width of [390, 1440]) {
   const ctx = await context({ width, mock: mockChain() });
   const page = await ctx.newPage();

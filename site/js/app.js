@@ -1,4 +1,4 @@
-// The dashboard (app.html): the signed-in wallet's own Lokal, built in the browser from Celo. Nothing here is stored
+// The dashboard (app.html): the signed-in wallet's own LokalPay, built in the browser from Celo. Nothing here is stored
 // on a server. Your tag and how to share it, the money you received, your recent payments (only yours: the same
 // "Yours" rows as Activity), your payment links, "Add <token> to your wallet", and settings (display name, default
 // currency, release) as LokalTags calls from your own wallet, each simulated before the wallet opens.
@@ -46,10 +46,10 @@ function setHead(view, tag) {
     title.replaceChildren("Hello, ", el("em", {}, "@" + tag));
   } else if (view === "no-tag" || view === "loading") {
     eyebrow.textContent = greeting();
-    title.replaceChildren("Welcome to ", el("em", {}, "Lokal"));
+    title.replaceChildren("Welcome to ", el("em", {}, "LokalPay"));
   } else {
     eyebrow.textContent = "Dashboard";
-    title.replaceChildren("Your ", el("em", {}, "Lokal"));
+    title.replaceChildren("Your ", el("em", {}, "LokalPay"));
   }
 }
 
@@ -60,10 +60,10 @@ function signedOutPanel() {
       el("span", { class: "gate-icon", "aria-hidden": "true" }, icon("lock")),
       el("div", {},
         el("h2", { id: "so-h" }, "Sign in to see your dashboard"),
-        el("p", { class: "soft mt-8" }, "Your dashboard shows your Lokal tag, the money you receive and your payment links. Your wallet is your account: no email, no password. If you were signed in, your wallet may be locked or on another account."),
+        el("p", { class: "soft mt-8" }, "Your dashboard shows your LokalPay tag, the money you receive and your payment links. Your wallet is your account: no email, no password. If you were signed in, your wallet may be locked or on another account."),
         el("div", { class: "row mt-16" },
           el("a", { class: "btn btn-primary", href: "start.html" }, "Sign in with your wallet"),
-          linkRow("index.html?about", "About Lokal")))));
+          linkRow("index.html?about", "About LokalPay")))));
 }
 
 // ---------- your tag ----------
@@ -73,13 +73,13 @@ function heroSection(s) {
     return el("section", { class: "dash-hero", "aria-labelledby": "hero-h" },
       stage(card),
       el("div", { class: "dash-hero-copy" },
-        el("h2", { id: "hero-h", class: "dash-h2" }, "Claim your Lokal tag"),
+        el("h2", { id: "hero-h", class: "dash-h2" }, "Claim your LokalPay tag"),
         el("p", { class: "soft" }, "A tag like @ada is how people pay you: they send dollars and choose what you receive, and the agent pays this wallet. One wallet, one tag. It takes one transaction and a fee well under a cent."),
         D.legacyTag ? alertBox("", "info", el("p", {}, `You hold @${D.legacyTag} from the older memo system. Claim it again to keep it on the LokalTags contract.`)) : null,
         el("div", { class: "row" }, el("a", { class: "btn btn-primary", href: "start.html" }, "Claim your tag"), linkRow("get-paid.html", "Or make a payment link"))));
   }
   const tag = D.tag;
-  const card = ntagCard({ tag, name: D.entry?.name, address: s.address, since: D.entry?.since, currency: D.entry?.currency, as: "button", label: `Your Lokal tag @${tag}. Copy the link to your pay page` });
+  const card = ntagCard({ tag, name: D.entry?.name, address: s.address, since: D.entry?.since, currency: D.entry?.currency, as: "button", label: `Your LokalPay tag @${tag}. Copy the link to your pay page` });
   card.dataset.copy = ntagUrl(tag);
   card.dataset.copyLabel = "Link copied";
   return el("section", { class: "dash-hero", "aria-labelledby": "hero-h" },
@@ -120,7 +120,7 @@ function receivedSection() {
 
 function recentSection() {
   const body = el("div", { class: "card-b", "aria-busy": "true" }, el("p", { class: "small muted" }, el("span", { class: "skel" }), " Reading your payments from Celo…"));
-  const sec = section("recent", "Recent payments", body, el("div", { class: "card-f" }, el("span", { class: "micro muted" }, "Only your wallet's payments with Lokal."), linkRow("transactions.html", "All your activity")));
+  const sec = section("recent", "Recent payments", body, el("div", { class: "card-f" }, el("span", { class: "micro muted" }, "Only your wallet's payments with LokalPay."), linkRow("transactions.html", "All your activity")));
   sec.fill = (rows, failed, retry) => {
     body.removeAttribute("aria-busy");
     if (failed) {
@@ -132,7 +132,7 @@ function recentSection() {
     if (!rows.length) {
       body.replaceChildren(el("div", { class: "dash-empty" },
         el("p", { class: "dash-empty-title" }, "No payments yet"),
-        el("p", { class: "small soft" }, "Payments you send and receive through Lokal show here, each with its transaction and receipt."),
+        el("p", { class: "small soft" }, "Payments you send and receive through LokalPay show here, each with its transaction and receipt."),
         el("div", { class: "row mt-8" }, linkRow("quote.html", "Send money"))));
       return;
     }
@@ -334,7 +334,7 @@ function potsSection(s) {
       el("a", { class: "text-link small", href: "https://celoscan.io/address/" + LOKAL_POTS }, "LokalPots on Celoscan ", el("span", { class: "arrow", "aria-hidden": "true" }, "→"))));
   if (view !== "host") {
     list.replaceChildren(el("div", { class: "dash-empty" }, el("p", { class: "dash-empty-title" }, "Claim your tag to host a pot"),
-      el("p", { class: "small soft" }, "Pots are hosted from a Lokal tag, so the agent knows who to pay."),
+      el("p", { class: "small soft" }, "Pots are hosted from a LokalPay tag, so the agent knows who to pay."),
       el("div", { class: "row mt-8" }, linkRow("start.html", "Claim your tag"))));
     return sec;
   }
@@ -663,7 +663,7 @@ async function render() {
     return;
   }
   setHead("loading");
-  root.replaceChildren(el("p", { class: "small muted", role: "status" }, el("span", { class: "skel" }), " Reading your Lokal tag from Celo…"));
+  root.replaceChildren(el("p", { class: "small muted", role: "status" }, el("span", { class: "skel" }), " Reading your LokalPay tag from Celo…"));
   try {
     D.tag = await readTagOf(s.address);
     D.entry = D.tag ? contractEntry(await readTagInfo(D.tag)) : null;
@@ -673,7 +673,7 @@ async function render() {
     if (my !== seq) return;
     const retry = el("button", { class: "btn btn-secondary btn-sm", type: "button" }, icon("refresh"), "Try again");
     retry.addEventListener("click", () => { D.rendered = undefined; render(); });
-    root.replaceChildren(alertBox("err", "alert", el("p", {}, "Couldn't reach Celo to read your Lokal tag. Your tag is safe onchain; this page just can't read it right now."), el("div", { class: "row mt-8" }, retry)));
+    root.replaceChildren(alertBox("err", "alert", el("p", {}, "Couldn't reach Celo to read your LokalPay tag. Your tag is safe onchain; this page just can't read it right now."), el("div", { class: "row mt-8" }, retry)));
     return;
   }
   if (my !== seq) return;

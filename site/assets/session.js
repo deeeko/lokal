@@ -14,7 +14,7 @@ export const SESSION_DAYS = 7;
 export const CELO_CHAIN = "0xa4ec"; // 42220
 export const CELO_CHAIN_ID = 42220;
 export const SIGN_IN_STATEMENT = "Sign in to Lokal. This is free and sends nothing.";
-// Signed before the rename to Lokal. Still accepted, so a sign-in from then stays valid until it expires (7 days at most).
+// Signed before the rename to LokalPay. Still accepted, so a sign-in from then stays valid until it expires (7 days at most).
 export const LEGACY_SIGN_IN_STATEMENTS = ["Sign in to Naira Payout. This is free and sends nothing."];
 const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -287,16 +287,16 @@ const BODY_FACE = "font-family:var(--sans);font-style:normal;font-weight:600;fon
 /** info: undefined (still looking up), { tag: null } or { tag, name }. */
 function userMenu(id, s, info) {
   const tag = info?.tag ?? null;
-  const who = tag ? el("b", {}, "@" + tag) : el("b", { style: BODY_FACE }, info === undefined ? "Signed in" : "No Lokal tag yet");
+  const who = tag ? el("b", {}, "@" + tag) : el("b", { style: BODY_FACE }, info === undefined ? "Signed in" : "No LokalPay tag yet");
   const items = [
     el("div", { class: "np-menu-head" }, avatar(s.address, "lg"),
       el("div", { class: "np-menu-who" }, who, el("span", { class: "mono", title: s.address }, short(s.address)))),
     el("a", { class: "np-menu-item", href: "app.html" }, icon("home"), "Dashboard"),
     tag || info === undefined
       ? el("a", { class: "np-menu-item", href: "account.html" }, icon("user"), "Account")
-      : el("a", { class: "np-menu-item", href: "start.html" }, icon("user"), "Claim your Lokal tag"),
+      : el("a", { class: "np-menu-item", href: "start.html" }, icon("user"), "Claim your LokalPay tag"),
     el("button", { class: "np-menu-item", type: "button", dataset: { copy: s.address, copyLabel: "Address copied" } }, icon("copy"), "Copy wallet address"),
-    el("a", { class: "np-menu-item", href: "index.html?about" }, icon("info"), "About Lokal"),
+    el("a", { class: "np-menu-item", href: "index.html?about" }, icon("info"), "About LokalPay"),
   ];
   const out = el("button", { class: "np-menu-item", type: "button" }, icon("logout"), "Sign out");
   out.addEventListener("click", () => { closeMenu(); chipSignOut(); });
@@ -330,7 +330,7 @@ function renderSidebarChip(slot, s, info) {
     avatar(s.address),
     el("span", { class: "sb-user-text sb-label" },
       el("b", { class: tag ? "np-tagname" : "mono" }, label),
-      el("span", {}, info === undefined ? "Signed in" : tag ? (info.name ? el("bdi", {}, info.name) : "Signed in") : "Claim your Lokal tag")),
+      el("span", {}, info === undefined ? "Signed in" : tag ? (info.name ? el("bdi", {}, info.name) : "Signed in") : "Claim your LokalPay tag")),
     icon("updown", "i sb-user-more sb-label"));
   const menu = userMenu("sb-user-menu", s, info);
   wireMenu(trigger, menu);

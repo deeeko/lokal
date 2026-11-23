@@ -43,7 +43,7 @@ If the quote fails, stop: Textile has no price right now. Try again later.
 2. Make the link:
 
    ```powershell
-   node src/agent.mjs request --to tunde --amount 2 --note "First Lokal payout"
+   node src/agent.mjs request --to tunde --amount 2 --note "First LokalPay payout"
    ```
 
    It prints a link with a **unique amount** (for example 2.37 USD₮). The payer must send exactly that.
@@ -57,7 +57,7 @@ If the quote fails, stop: Textile has no price right now. Try again later.
 5. Within a minute or two, autopilot prints `paid` with a receipt number (`NP-XXXX-XXXX`). Open the receipt link it
    prints. The recipient should see the cNGN in MetaMask.
 
-## 3. Path B: a Lokal tag (best for traction)
+## 3. Path B: a LokalPay tag (best for traction)
 
 1. The recipient opens https://lokalpay.vercel.app/account.html, connects MetaMask, signs in and claims a tag (e.g.
    `tunde`). Claiming is one small transaction, so they need a little CELO for gas (0.01 CELO is plenty).

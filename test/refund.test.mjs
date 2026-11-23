@@ -40,7 +40,7 @@ test("records: paid or payout-recorded deposits are never refundable; refused, u
   assert.equal(findDepositRecord(k, { requests: [{ id: "r_1", deposit: dep, paidAt: "x" }] }).payout.paid, true);
   assert.equal(findDepositRecord(k, { requests: [{ id: "r_1", deposit: dep, error: "boom" }] }).payout.paid, false, "a failed payout is still a payout");
   assert.ok(findDepositRecord(k, { registrations: { a: { hash: "0xa", deposit: dep } } }).payout);
-  const refusedNtag = { [k.key]: { status: "refused", reason: "unknown Lokal tag", token: "USDT", amount: "5", deposit: dep, tag: "zed" } };
+  const refusedNtag = { [k.key]: { status: "refused", reason: "unknown LokalPay tag", token: "USDT", amount: "5", deposit: dep, tag: "zed" } };
   const r = findDepositRecord(k, { ntagPayments: refusedNtag });
   assert.equal(r.payout, null);
   assert.equal(r.refundable.category, "refused");
@@ -205,7 +205,7 @@ test("a refunded deposit is never paid: autopilot skips any deposit with a refun
   assert.equal(w.calls.length, 0);
 });
 
-test("retry --force-refused refuses a refunded Lokal tag deposit (the CLI, offline, on temp files)", () => {
+test("retry --force-refused refuses a refunded LokalPay tag deposit (the CLI, offline, on temp files)", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "np-refund-cli-"));
   const k = `${h(1001)}:3`;
   const env = {

@@ -464,7 +464,7 @@ function showDone(hash, reg, from) {
   $("#done-card").hidden = false;
   setText($("#done-lead"), `Share it with the person paying you. They send exactly ${send}; the agent pays your wallet in ${isNaira() ? cur().plural : "dollars"}.`);
   const text = `Hi, you can pay me ${send} on Celo with this link${reg.m ? ` (${reg.m})` : ""}.`;
-  $("#done-share").replaceChildren(shareRow({ url, title: "Pay me with Lokal", text, whatsappText: `${text} ${url}`,
+  $("#done-share").replaceChildren(shareRow({ url, title: "Pay me with LokalPay", text, whatsappText: `${text} ${url}`,
     qrLabel: "QR code of your payment link", qrCaption: "The payer can scan this to open your link." }));
   setText($("#done-sum"), `${send} · expires ${lagosTime(reg.e * 1000)} WAT`);
   setText($("#d-send"), send);

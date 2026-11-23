@@ -99,7 +99,7 @@ function signStep() {
       msg.replaceChildren(alertBox("err", "alert", el("p", {}, errText(e))));
     }
   });
-  screen("sign", ["Sign in to ", el("em", {}, "Lokal"), "."], "Your wallet shows a short message to sign. It proves this wallet is yours.",
+  screen("sign", ["Sign in to ", el("em", {}, "LokalPay"), "."], "Your wallet shows a short message to sign. It proves this wallet is yours.",
     el("div", { class: "gw-who" }, avatar(G.account, "lg"), el("div", {}, el("span", { class: "mono", title: G.account }, short(G.account)), el("small", {}, "Connected on Celo"))),
     el("ul", { class: "gw-facts" }, fact("Free: no gas, no transaction, nothing sent."), fact("The message names this site and expires in 7 days."), fact("No approval and no spending permission is asked for.")),
     el("div", { class: "gw-actions" }, b), msg);
@@ -107,7 +107,7 @@ function signStep() {
 
 /** After sign-in: a wallet that already holds a tag goes straight to Welcome. */
 async function afterSignIn(s) {
-  root.replaceChildren(el("p", { class: "small muted", role: "status" }, el("span", { class: "skel" }), " Checking for your Lokal tag on Celo…"));
+  root.replaceChildren(el("p", { class: "small muted", role: "status" }, el("span", { class: "skel" }), " Checking for your LokalPay tag on Celo…"));
   try { G.tag = await readTagOf(s.address); } catch { G.tag = null; }
   if (G.tag) { G.claimed = { tag: G.tag, name: (await readTagInfo(G.tag).catch(() => ({}))).name || "", fresh: false }; welcomeStep(); }
   else tagStep();
@@ -173,7 +173,7 @@ function tagStep() {
   next.addEventListener("click", () => { if (kind === "free") nameStep(); });
   screen("tag", ["Choose your ", el("em", {}, "@tag"), "."], "This is how people find and pay you. Lowercase letters, numbers and _, 3 to 20 characters.",
     el("div", { class: "gw-preview" }, stage(card)),
-    el("label", { class: "sr-only", for: "gw-tag" }, "Your Lokal tag"), box, msg, sugg,
+    el("label", { class: "sr-only", for: "gw-tag" }, "Your LokalPay tag"), box, msg, sugg,
     el("ul", { class: "nt-rules", id: "gw-tag-rules", "aria-label": "Tag rules" }, ruleEls),
     el("div", { class: "gw-actions" }, next, el("a", { class: "text-link", href: "app.html" }, "Skip for now ", el("span", { class: "arrow", "aria-hidden": "true" }, "→"))));
   setTimeout(() => { onInput(); input.focus({ preventScroll: true }); }, 0);
@@ -283,7 +283,7 @@ function nameStep() {
 function welcomeStep() {
   const addr = getSession()?.address;
   const { tag, name, fresh } = G.claimed ?? { tag: G.tag, name: "" };
-  const card = ntagCard({ tag, name, address: addr, since: Math.floor(Date.now() / 1000), as: "button", label: `Your Lokal tag @${tag}. Copy the link to your pay page` });
+  const card = ntagCard({ tag, name, address: addr, since: Math.floor(Date.now() / 1000), as: "button", label: `Your LokalPay tag @${tag}. Copy the link to your pay page` });
   card.dataset.copy = ntagUrl(tag);
   card.dataset.copyLabel = "Link copied";
   screen("welcome", ["Welcome, ", el("em", {}, "@" + tag), "."], fresh ? "Your tag is yours. Share your link: people pay you in dollars and choose what you receive, and the agent pays this wallet." : "You already hold this tag. Here is your link, and what to do next.",

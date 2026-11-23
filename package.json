@@ -1,7 +1,7 @@
 {
   "name": "lokal",
   "version": "0.1.0",
-  "description": "Lokal: pay anyone in their local money. An agent that pays out in local stablecoins (cNGN today) on Celo via Textile FX",
+  "description": "LokalPay: pay anyone in their local money. An agent that pays out in local stablecoins (cNGN today) on Celo via Textile FX",
   "engines": {
     "node": ">=20"
   },
@@ -12,6 +12,7 @@
     "requests": "node src/agent.mjs requests",
     "watch": "node src/agent.mjs watch",
     "lokal": "node src/ntag.mjs",
+    "lokalpay": "node src/ntag.mjs",
     "ntag": "node src/ntag.mjs"
   },
   "keywords": [],
@@ -24,6 +25,7 @@
   },
   "bin": {
     "lokal": "src/ntag.mjs",
+    "lokalpay": "src/ntag.mjs",
     "ntag": "src/ntag.mjs"
   },
   "devDependencies": {

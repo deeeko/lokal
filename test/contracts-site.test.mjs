@@ -117,7 +117,7 @@ test("the USD₮ permit: the live domain separator, a signature the token would 
 test("reverts in plain English, for every refusal a payer or owner can hit", () => {
   const err = (name, args = []) => encodeErrorResult({ abi: [...tagsAbi, ...potsAbi], errorName: name, args });
   const say = (name, args, ctx = { tag: "ada", token: USDT }) => C.explainRevert(err(name, args), ctx).message;
-  assert.match(say("TagNotFound"), /@ada isn't claimed on the Lokal contract/);
+  assert.match(say("TagNotFound"), /@ada isn't claimed on the LokalPay contract/);
   assert.match(say("OverPaymentLimit", [30_000_000n, 25_000_000n]), /\$25\.00 limit for one payment in USD₮/);
   assert.match(say("BelowMinimum", [500_000n, 1_000_000n]), /smallest payment in USD₮ is \$1\.00/);
   assert.match(say("OverRecipientDailyLimit", [10_000_000n, 4_500_000n]), /@ada can receive only \$4\.50 more in USD₮ today/);

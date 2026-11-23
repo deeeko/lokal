@@ -467,7 +467,7 @@ export function ntagNameError(n) {
 }
 /** Validates a decoded nTag op body: claim/update {t[,n][,c]} (c = preferred currency) or release {t:""}. Error string or null. */
 export function ntagOpError(op) {
-  if (!op || typeof op !== "object" || Array.isArray(op)) return "not a Lokal tag op";
+  if (!op || typeof op !== "object" || Array.isArray(op)) return "not a LokalPay tag op";
   const keys = Object.keys(op);
   if (keys.some((k) => k !== "t" && k !== "n" && k !== "c")) return "unexpected field";
   if (typeof op.t !== "string") return "invalid tag";
@@ -644,7 +644,7 @@ export async function loadNtagOps(maxPages = 200, opts = {}) {
       next = d.next_page_params ?? null;
       if (!next) return ops.sort((x, y) => x.block - y.block || x.position - y.position);
     }
-    throw new Error("partial Lokal tag list");
+    throw new Error("partial LokalPay tag list");
   })();
   ntagCache = { promise };
   try {

@@ -30,7 +30,7 @@ const potPaid = (n, potId, host, token, amount, block) => ({
   blockNumber: "0x" + block.toString(16), logIndex: "0x2", transactionHash: h(n),
 });
 
-test("attribution detection: Lokal's ERC-8021 tag at the end of the input", () => {
+test("attribution detection: LokalPay's ERC-8021 tag at the end of the input", () => {
   const base = transfer(ADA, 1);
   assert.equal(P.hasAttribution(base), true);
   assert.equal(P.hasAttribution(transfer(ADA, 1, false)), false, "no suffix");
@@ -51,7 +51,7 @@ test("attribution detection: Lokal's ERC-8021 tag at the end of the input", () =
   assert.equal(P.hasAttribution(null), false);
 });
 
-test("payoutFromTx keeps only the agent's successful transfers of Lokal tokens", () => {
+test("payoutFromTx keeps only the agent's successful transfers of LokalPay tokens", () => {
   const p = P.payoutFromTx(tx(1, CNGN, ADA, 14_400_000_000n));
   assert.equal(p.hash, h(1));
   assert.equal(p.units, 14_400_000_000n);

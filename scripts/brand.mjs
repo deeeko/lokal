@@ -1,4 +1,4 @@
-// Re-renders every image made from the Lokal logo (docs/brand/lokal-mark.svg, the white cursive L with the yellow
+// Re-renders every image made from the LokalPay logo (docs/brand/lokal-mark.svg, the white cursive L with the yellow
 // swoosh). Run it after editing the logo:
 //
 //   node scripts/brand.mjs

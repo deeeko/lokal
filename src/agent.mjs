@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Lokal agent CLI entry point. Corridors: usdt-cngn (default, pay in naira), usdt-idrx (rupiah), usdt-wars (Argentine
+// LokalPay agent CLI entry point. Corridors: usdt-cngn (default, pay in naira), usdt-idrx (rupiah), usdt-wars (Argentine
 // pesos), usdt-wcop (Colombian pesos), cngn-usdt (pay in dollars) and, for pay/quote only, celo-cngn (pay in naira from
 // CELO: two swaps, CELO -> USDT -> cNGN; amount in CELO). --to-currency NAME picks the usdt-<currency> corridor by name:
 // naira | rupiah | argentina-peso | colombia-peso (or the codes cngn | idrx | wars | wcop, or NGN | IDR | ARS | COP).
@@ -347,10 +347,10 @@ async function main() {
       const kind = flag("ntag") != null ? "ntag" : flag("registration") != null ? "registration" : "request";
       const id = flag("ntag") ?? flag("registration") ?? flag("request");
       if (!id) throw new Error("Usage: retry --request ID | --registration HASH | --ntag TX:LOGINDEX [--force-refused] [--execute] [--yes]");
-      const what = kind === "ntag" ? "Lokal tag payment" : kind;
+      const what = kind === "ntag" ? "LokalPay tag payment" : kind;
       const isReg = kind !== "request";
       const force = has("force-refused");
-      if (force && kind !== "ntag") throw new Error("--force-refused is only for Lokal tag payments (retry --ntag TX:LOGINDEX --force-refused).");
+      if (force && kind !== "ntag") throw new Error("--force-refused is only for LokalPay tag payments (retry --ntag TX:LOGINDEX --force-refused).");
       const r = target(kind, id);
       if (!r) throw new Error(`No ${what} with that id.`);
       const refused = kind === "ntag" && r.status === "refused";
@@ -448,7 +448,7 @@ async function main() {
       let tag;
       if (isAddress(q)) {
         tag = ntagOf(state, q);
-        if (!tag) { console.log(`${q} holds no Lokal tag right now.`); break; }
+        if (!tag) { console.log(`${q} holds no LokalPay tag right now.`); break; }
       } else {
         tag = normalizeNtag(q);
       }
@@ -482,12 +482,12 @@ async function main() {
       // Every tag held right now (Blockscout, all pages, same resolver as the site).
       const ops = await discoverNtagOps({ agent: agentAddress() });
       const { tags } = resolveNtags(ops, nowSec());
-      if (!tags.size) { console.log("No Lokal tags yet. Claim one at site/account.html."); break; }
+      if (!tags.size) { console.log("No LokalPay tags yet. Claim one at site/account.html."); break; }
       const list = [...tags].sort((a, b) => a[1].since - b[1].since);
       for (const [tag, e] of list) {
         console.log(`@${tag.padEnd(20)}  ${e.owner}  since ${iso(e.since).slice(0, 10)}  ${(e.currency ?? "cngn").padEnd(4)}${e.name ? `  ${e.name}` : ""}`);
       }
-      console.log(`${list.length} Lokal tag(s).`);
+      console.log(`${list.length} LokalPay tag(s).`);
       break;
     }
     case "ntag-data": {
@@ -508,10 +508,10 @@ async function main() {
       const units = parseUnits(amount, 6);
       if (units < parseUnits(NTAG_MIN[corridor0], 6)) {
         throw new Error(tok === "usdt"
-          ? `The smallest Lokal tag payment is ${NTAG_MIN[corridor0]} USDT; smaller deposits are not paid.`
-          : `The smallest Lokal tag payment is about ${NTAG_MIN_USD} USD of cNGN (and never under ${NTAG_MIN[corridor0]} cNGN); smaller deposits are not paid.`);
+          ? `The smallest LokalPay tag payment is ${NTAG_MIN[corridor0]} USDT; smaller deposits are not paid.`
+          : `The smallest LokalPay tag payment is about ${NTAG_MIN_USD} USD of cNGN (and never under ${NTAG_MIN[corridor0]} cNGN); smaller deposits are not paid.`);
       }
-      if (tok === "usdt" && units > parseUnits(MAX_USD, 6)) throw new Error(`The largest Lokal tag payment is ${MAX_USD} USDT (per-payout cap); larger deposits are not paid automatically.`);
+      if (tok === "usdt" && units > parseUnits(MAX_USD, 6)) throw new Error(`The largest LokalPay tag payment is ${MAX_USD} USDT (per-payout cap); larger deposits are not paid automatically.`);
       const { entry } = await resolveOwner(tag);
       const code = tok === "cngn" ? null : currency ?? entry.currency ?? "cngn"; // default: the tag's preference, else naira
       const corridor = tok === "cngn" ? "cngn-usdt" : corridorFor(code);
@@ -658,12 +658,12 @@ async function main() {
       break;
     }
     default:
-      console.log("Lokal agent. Commands: keygen | status | quote | pay | ask | request | requests | registrations | ntag | ntags | ntag-data | watch | retry | refunds | refund | status-sync | alert-test | doctor | register | verify  (see docs/CLI.md)");
+      console.log("LokalPay agent. Commands: keygen | status | quote | pay | ask | request | requests | registrations | ntag | ntags | ntag-data | watch | retry | refunds | refund | status-sync | alert-test | doctor | register | verify  (see docs/CLI.md)");
       console.log("  Refunds: refunds (what can be refunded) · refund --deposit TX:LOGINDEX [--execute] [--yes] [--retry] · watch --execute --auto-refund");
       console.log("    A refund sends a refused, unmatched or ambiguous deposit back to its sender, same token and amount (docs/REFUNDS.md).");
       console.log("  One agent at a time: watch --execute and pay/ask/retry/register/refund --execute take agent.lock; after a crash add --clear-stale-lock.");
       console.log("  Alerts: set ALERT_TELEGRAM_TOKEN + ALERT_TELEGRAM_CHAT_ID and/or ALERT_WEBHOOK_URL; alert-test sends a test message.");
-      console.log("  Lokal tags: ntag <@tag|address> · ntags · pay @tag <amount> [--to-currency X] [--execute] · ntag-data @tag <amount> [--token usdt|cngn] [--to-currency X] · retry --ntag TX:LOGINDEX [--force-refused]");
+      console.log("  LokalPay tags: ntag <@tag|address> · ntags · pay @tag <amount> [--to-currency X] [--execute] · ntag-data @tag <amount> [--token usdt|cngn] [--to-currency X] · retry --ntag TX:LOGINDEX [--force-refused]");
       console.log("  Currencies (--to-currency): naira (cngn) · rupiah (idrx) · argentina-peso (wars) · colombia-peso (wcop). quote --all shows them side by side.");
       console.log("  In PowerShell quote the tag ('@ada') or leave out the @ (ntag ada, pay --ntag ada --amount 5).");
       console.log("  Status server: autopilot (watch --execute) reports each deposit's status (paid, refused, received) and the day's");

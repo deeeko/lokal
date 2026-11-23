@@ -1,4 +1,4 @@
-// Proof: every real Lokal payout, read from Celo when the page opens (proof.html; the landing's Proof section shows the
+// Proof: every real LokalPay payout, read from Celo when the page opens (proof.html; the landing's Proof section shows the
 // newest few). Nothing here is typed in by hand:
 //   - payouts: the agent's own outgoing token transfers (Blockscout), each checked for the attribution tag in its input;
 //   - deposits: the TagPaid / PotPaid events on the contracts (eth_getLogs), matched to the payout that paid them, and
@@ -21,12 +21,12 @@ const tokenBySymbol = (s) => Object.values(TOKENS).find((t) => t.symbol === s ||
 /** What a token pays someone in a sentence: "naira", "rupiah", "Argentine pesos", "dollars". */
 const receiveWord = (t) => (t?.currency ? CURRENCIES.find((c) => c.code === t.currency)?.plural ?? t.symbol : "dollars");
 
-/** True when the transaction input ends in an ERC-8021 suffix that carries Lokal's attribution tag (celo_7360953d1b53). */
+/** True when the transaction input ends in an ERC-8021 suffix that carries LokalPay's attribution tag (celo_7360953d1b53). */
 export const hasAttribution = (input) => Boolean(decodeTag(input)?.codes?.includes(TAG));
 
 /**
  * A Blockscout transaction item from the agent -> the payout it is, or null: a successful transfer(to, amount) of a
- * token Lokal pays out in. { hash, time (ms), block, token (address), symbol, units (bigint), to, tagged }.
+ * token LokalPay pays out in. { hash, time (ms), block, token (address), symbol, units (bigint), to, tagged }.
  * `to` stays inside this module (unique-recipient count, deposit matching); it is never rendered.
  */
 export function payoutFromTx(tx) {

@@ -64,7 +64,7 @@ function notFound(message, detail) {
     el("div", {}, el("h2", {}, message),
       el("p", { class: "soft mt-8" }, "Ask the host to send the link again, or open your own pot from the dashboard."),
       el("div", { class: "row mt-16" }, el("a", { class: "btn btn-secondary", href: "app.html#pots" }, "Open a pot"),
-        el("a", { class: "text-link", href: "index.html?about" }, "About Lokal ", el("span", { class: "arrow", "aria-hidden": "true" }, "→")))))));
+        el("a", { class: "text-link", href: "index.html?about" }, "About LokalPay ", el("span", { class: "arrow", "aria-hidden": "true" }, "→")))))));
 }
 
 async function start() {
@@ -84,7 +84,7 @@ async function start() {
     S.hostTag = await readTagOf(S.host);
     if (S.hostTag) S.hostReceive = (await readTagInfo(S.hostTag)).receive;
   } catch { /* shown as a short address */ }
-  document.title = `${S.info.title} · Lokal pot`;
+  document.title = `${S.info.title} · LokalPay pot`;
   render();
 }
 

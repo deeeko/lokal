@@ -1,5 +1,5 @@
 // Multi-currency: the shared registry (site <-> agent), decimals-aware amounts (cNGN 6, IDRX 2, wARS 18, wCOP 18),
-// rounding down only, the corridors, the currency in Lokal tag memos and tag preferences, the currency_unavailable
+// rounding down only, the corridors, the currency in LokalPay tag memos and tag preferences, the currency_unavailable
 // refusal, the status server's paid token, and the rates feed. No network (Textile, Blockscout and RPC are faked).
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -197,7 +197,7 @@ test("Get paid registrations: the new corridors are valid on the site and the ag
   assert.equal(site.decodeRegistration(data).d, "usdt-wars");
 });
 
-// ---------- Lokal tag memos and preferences (ported block) ----------
+// ---------- LokalPay tag memos and preferences (ported block) ----------
 
 const AGENT = AGENT_ADDRESS;
 const hex = (s) => Buffer.from(s, "utf8").toString("hex");

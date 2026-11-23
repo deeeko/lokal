@@ -40,7 +40,7 @@ test("a live holder on this computer is refused with who holds it and since when
   assert.equal(readLock(file).pid, 100);
   a.release();
   const b = acquireLock({ file, command: "pay --execute", host: HOST, pid: 200, isAlive: () => true, onExit: false });
-  assert.throws(() => acquireLock({ file, host: HOST, pid: 300, isAlive: () => true, onExit: false }), /Another Lokal command is running \(pay --execute/);
+  assert.throws(() => acquireLock({ file, host: HOST, pid: 300, isAlive: () => true, onExit: false }), /Another LokalPay command is running \(pay --execute/);
   b.release();
 });
 

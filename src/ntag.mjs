@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// lokal (also installed as ntag, its name before the rename): send money to a Lokal tag (@ada) from your own terminal,
+// lokal (also installed as ntag, its name before the rename): send money to a LokalPay tag (@ada) from your own terminal,
 // with your own wallet.
 //
 //   node src/ntag.mjs <command>      npm run lokal -- <command>      lokal <command>   (after `npm link`; `ntag` works too)
@@ -43,7 +43,7 @@ import { CURRENCIES, currencyOf, findCurrency, formatCurrency, formatCurrencyUni
 export const AGENT = "0x8a695cf54CB44753c8b784EB36d266f748617a1e";
 export const RPC_URL = process.env.CELO_RPC_URL || "https://forno.celo.org";
 export const DEFAULT_WALLET_FILE = path.join(os.homedir(), ".lokal", "wallet.json");
-// Where the wallet lived before the rename to Lokal. Still used, in place, when it exists and the new one doesn't:
+// Where the wallet lived before the rename to LokalPay. Still used, in place, when it exists and the new one doesn't:
 // ntag never moves a wallet by itself.
 export const LEGACY_WALLET_FILE = path.join(os.homedir(), ".naira-payout", "wallet.json");
 // Marker (next to the old wallet) that the "still using your old wallet" note was shown, so it appears only once.
@@ -63,7 +63,7 @@ const markLegacyNoticeShown = () => fs.writeFileSync(LEGACY_NOTICE_FILE, new Dat
 export function legacyWalletNotice({ env = process.env, exists = fs.existsSync, markShown = markLegacyNoticeShown } = {}) {
   if (!usesLegacyWallet(env, exists) || exists(LEGACY_NOTICE_FILE)) return null;
   try { markShown(); } catch { /* shown again next time */ }
-  return `Naira Payout is now Lokal. Your wallet stays where it was, ${LEGACY_WALLET_FILE}, and lokal keeps using it there. `
+  return `Naira Payout is now LokalPay. Your wallet stays where it was, ${LEGACY_WALLET_FILE}, and lokal keeps using it there. `
     + `New wallets go to ${DEFAULT_WALLET_FILE}. To move yours, close lokal and move the file there (keep a backup); nothing else changes.`;
 }
 
@@ -144,7 +144,7 @@ export function parseArgs(argv) {
 /** What they receive, from "--to": naira | rupiah | argentina-peso | colombia-peso (or cngn, idrx, ars, cop ...). */
 export function parseCurrencyArg(input) {
   const c = findCurrency(input);
-  if (!c) throw new UsageError(`"${input}" is not a currency Lokal pays in. Use --to naira, rupiah, argentina-peso or colombia-peso.`);
+  if (!c) throw new UsageError(`"${input}" is not a currency LokalPay pays in. Use --to naira, rupiah, argentina-peso or colombia-peso.`);
   return c.code;
 }
 /** "🇮🇩 Rupiah (IDRX)" */
@@ -152,10 +152,10 @@ export const currencyText = (code) => { const c = currencyOf(code ?? "cngn"); re
 
 /** "@Ada" -> "ada". Throws UsageError with the exact rule broken. */
 export function parseTag(input) {
-  if (input == null || String(input).trim() === "") throw new UsageError("Which Lokal tag? For example: ada (in PowerShell leave out the @, or write '@ada' in quotes)");
+  if (input == null || String(input).trim() === "") throw new UsageError("Which LokalPay tag? For example: ada (in PowerShell leave out the @, or write '@ada' in quotes)");
   const t = normalizeNtag(input);
   const err = ntagError(t);
-  if (err) throw new UsageError(`@${t || String(input).trim()} is not a valid Lokal tag: ${err}.`);
+  if (err) throw new UsageError(`@${t || String(input).trim()} is not a valid LokalPay tag: ${err}.`);
   return t;
 }
 
@@ -403,7 +403,7 @@ export function passwordProblem(pw, { tag, address } = {}) {
   const digits = "01234567890", rev = "09876543210", abc = "abcdefghijklmnopqrstuvwxyz";
   if (digits.includes(l) || rev.includes(l) || abc.includes(l)) return "don't use a simple sequence";
   const t = tag ? normalizeNtag(tag) : "";
-  if (t && (l === t || l === `@${t}` || l.replace(/[^a-z0-9]/g, "") === t.replace(/_/g, ""))) return "don't use your Lokal tag as your password";
+  if (t && (l === t || l === `@${t}` || l.replace(/[^a-z0-9]/g, "") === t.replace(/_/g, ""))) return "don't use your LokalPay tag as your password";
   if (address && l.replace(/^0x/, "") === String(address).toLowerCase().replace(/^0x/, "")) return "don't use your wallet address";
   return null;
 }
@@ -690,7 +690,7 @@ async function discoverOps() {
     opsCache = opsCache ? await refreshNtagOpsCache(opsCache, { agent: AGENT }) : await loadNtagOpsCache({ agent: AGENT });
     return opsCache.ops;
   } catch (e) {
-    throw new CliError(`Could not load the Lokal tag list from Blockscout (${e.message}). Check your connection and try again.`);
+    throw new CliError(`Could not load the LokalPay tag list from Blockscout (${e.message}). Check your connection and try again.`);
   }
 }
 
@@ -1074,16 +1074,16 @@ const ok = (s) => out(`${c.green("✓")} ${s}`);
 const warn = (s) => out(`${c.yellow("!")} ${s}`);
 
 function cmdHelp() {
-  out(`${c.bold("lokal")}: send money to a Lokal tag (@handle) on Celo, from your own wallet. Lokal: pay anyone in their local money.
-(The old name, ntag, runs the same command.)
+  out(`${c.bold("lokal")}: send money to a LokalPay tag (@handle) on Celo, from your own wallet. LokalPay: pay anyone in their local money.
+(lokalpay, the product's name, and ntag, the old name, run the same command.)
 
 ${c.bold("Get started")}
   lokal wallet new                  create your wallet (key encrypted with a send password)
   lokal wallet import               use a wallet you already have (key typed hidden, or NTAG_PRIVATE_KEY)
-  lokal wallet                      address, CELO / USD₮ / cNGN balances and your Lokal tag
+  lokal wallet                      address, CELO / USD₮ / cNGN balances and your LokalPay tag
 
 ${c.bold("Pay someone")}
-  lokal whois ada                   who owns the Lokal tag @ada
+  lokal whois ada                   who owns the LokalPay tag @ada
   lokal send ada 10                 you send $10 USD₮, @ada gets their preferred currency (else naira)
   lokal send ada 10 --to rupiah     ... and @ada gets rupiah (IDRX); also naira, argentina-peso, colombia-peso
   lokal send ada 14000 --dollars    you send ₦14,000 cNGN, @ada gets dollars (USD₮)
@@ -1207,7 +1207,7 @@ async function walletShow() {
     ["CELO", fmtCelo(celoBal)],
     ["USD₮", fmtUsd(usdt)],
     ["cNGN", fmtNgn(cngn)],
-    ["Lokal tag", tag ? `@${tag}` : tag === null ? `none yet (lokal claim <name>)` : "could not load"],
+    ["LokalPay tag", tag ? `@${tag}` : tag === null ? `none yet (lokal claim <name>)` : "could not load"],
   ], { color: useColor() }));
   if (celoBal === 0n) warn("You have no CELO, so you can't pay network fees yet. Add a little CELO first.");
 }
@@ -1219,7 +1219,7 @@ async function cmdWhois(args) {
     let tag = await contractTagOf(pub, args[0]);
     let older = false;
     if (!tag) { tag = ntagOf(resolveNtags(legacyNtagOps(await discoverOps())), args[0]); older = Boolean(tag); }
-    out(tag ? `${getAddress(args[0])} is @${tag}${older ? " (an older memo tag)" : ""}` : `${getAddress(args[0])} has no Lokal tag.`);
+    out(tag ? `${getAddress(args[0])} is @${tag}${older ? " (an older memo tag)" : ""}` : `${getAddress(args[0])} has no LokalPay tag.`);
     return;
   }
   const tag = parseTag(args[0]);
@@ -1555,7 +1555,7 @@ async function cmdRelease(args, flags) {
     try { older = ntagOf(resolveNtags(legacyNtagOps(await discoverOps())), account.address); } catch { /* offline: nothing to add */ }
     out(older
       ? `This wallet holds @${older} only as an older memo tag. Memo tags can no longer be changed or released; claim a tag on the contract with: lokal claim <name>`
-      : "This wallet has no Lokal tag, so there is nothing to release.");
+      : "This wallet has no LokalPay tag, so there is nothing to release.");
     return;
   }
   out(`Your tag is @${tag}.`);
@@ -1585,7 +1585,7 @@ async function cmdStatus(args) {
 
   if (to === AGENT.toLowerCase() && decodeNtagOp(tx.input)) {
     const op = decodeNtagOp(tx.input);
-    out(formatBox("Lokal tag " + (op?.t ? "claim" : "release"), [["Tag", op?.t ? `@${op.t}` : "(release)"], ["From", tx.from], ["Status", confirmed], ["Link", celoscanTx(hash)]], { color: useColor() }));
+    out(formatBox("LokalPay tag " + (op?.t ? "claim" : "release"), [["Tag", op?.t ? `@${op.t}` : "(release)"], ["From", tx.from], ["Status", confirmed], ["Link", celoscanTx(hash)]], { color: useColor() }));
     if (rc?.status === "success") {
       const ops = await discoverOps();
       const found = ops.find((o) => o.hash.toLowerCase() === hash.toLowerCase());
@@ -1602,7 +1602,7 @@ async function cmdStatus(args) {
       rows.unshift(["Tag", `@${paid.tag}`], ["Paid", tokenAmountText(paid.amount, paid.token)], ["They get", code ? receiveText(code) : "their default currency (else naira)"], ["Owner then", getAddress(paid.recipient)]);
     } else if (rc && rc.status !== "success") rows.push(["Result", c.red("refused by the contract: nothing moved")]);
     rows.push(["Transaction", celoscanTx(hash)]);
-    out(formatBox("Lokal tag payment", rows, { color: useColor() }));
+    out(formatBox("LokalPay tag payment", rows, { color: useColor() }));
     if (paid) out(c.dim(`  The agent pays @${paid.tag} when autopilot runs; the receipt shows on lokalpay.vercel.app/@${paid.tag} and in your wallet's activity.`));
     return;
   }
@@ -1613,7 +1613,7 @@ async function cmdStatus(args) {
   const tr = parseTransferCalldata(tx.input);
   const token = to === USDT.address.toLowerCase() ? "USDT" : to === CNGN.address.toLowerCase() ? "CNGN" : null;
   if (!tag || !tr || !token || tr.to.toLowerCase() !== AGENT.toLowerCase()) {
-    out("This is not a Lokal tag payment (no tag memo on a USD₮ / cNGN transfer to the agent).");
+    out("This is not a LokalPay tag payment (no tag memo on a USD₮ / cNGN transfer to the agent).");
     process.exitCode = 1;
     return;
   }
@@ -1634,7 +1634,7 @@ async function cmdStatus(args) {
     try { r = await checkNtagPayout(pub, { tag, owner, token, dep, claimBlock: Number(e.block), rate: await loadRate(), currency }); } catch { /* shown as unknown */ }
     rows.push(...(r ? payoutRows(tag, r, token === "CNGN" ? "USDT" : currencyOf(currency).token.toUpperCase()) : [["Payout", c.yellow("could not check right now")]]));
   }
-  out(formatBox("Lokal tag payment", rows, { color: useColor() }));
+  out(formatBox("LokalPay tag payment", rows, { color: useColor() }));
 }
 
 // ---------- main ----------

@@ -89,7 +89,7 @@ test("Who am I paying?: one line with a check when every check passes", () => {
   const once = assess({ paid: 1 });
   assert.equal(trustSummary("ada", once, agoOf(once)).text, "@ada · tag 41 days old · paid once");
   const none = assess({ paid: 0 });
-  assert.equal(trustSummary("ada", none, agoOf(none)).text, "@ada · tag 41 days old · not paid through Lokal yet");
+  assert.equal(trustSummary("ada", none, agoOf(none)).text, "@ada · tag 41 days old · not paid through LokalPay yet");
 });
 
 test("Who am I paying?: any warning keeps the card open, and the line never claims all is well", () => {

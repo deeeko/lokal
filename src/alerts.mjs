@@ -68,14 +68,14 @@ export function scrub(text, secrets = []) {
   return t;
 }
 
-/** "[URGENT] Lokal agent: <text>", at most MAX_TEXT characters. */
+/** "[URGENT] LokalPay agent: <text>", at most MAX_TEXT characters. */
 export function alertText(kind, text) {
   const level = ALERT_KINDS[kind] ?? "info";
   // Wallet addresses are shortened (0x1234…abcd): alerts go through a third party (Telegram or a webhook) and the
   // operator only needs to recognise the wallet. Transaction hashes (64 hex) and links stay whole.
   const body = String(text ?? "").replace(/\s+/g, " ").trim()
     .replace(/\b0x([0-9a-fA-F]{4})[0-9a-fA-F]{32}([0-9a-fA-F]{4})(?![0-9a-fA-F])/g, "0x$1…$2");
-  const t = `[${LABEL[level]}] Lokal agent: ${body}`;
+  const t = `[${LABEL[level]}] LokalPay agent: ${body}`;
   return t.length > MAX_TEXT ? t.slice(0, MAX_TEXT - 1) + "…" : t;
 }
 

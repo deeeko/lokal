@@ -126,7 +126,7 @@ test("combineAllowance: the smaller room wins; 'exact' only when they agree or t
 
 test("wording: reasons in plain words, paid amounts, source notes", () => {
   assert.match(reasonText("over_wallet_cap"), /over \$25 in 24 hours/);
-  assert.match(reasonText("unknown_tag"), /Nobody held this Lokal tag/);
+  assert.match(reasonText("unknown_tag"), /Nobody held this LokalPay tag/);
   assert.equal(reasonText("made_up"), reasonText("other"));
   assert.equal(reasonText("toString"), reasonText("other"));
   assert.equal(paidText({ paidAmount: "14400", paidToken: "cNGN" }), "₦14,400.00 in cNGN");

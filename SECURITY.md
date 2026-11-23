@@ -1,6 +1,6 @@
 # Security policy
 
-Lokal moves real money on Celo mainnet, so security reports are welcome and taken seriously.
+LokalPay moves real money on Celo mainnet, so security reports are welcome and taken seriously.
 
 ## Reporting a vulnerability
 

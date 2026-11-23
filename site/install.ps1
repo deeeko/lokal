@@ -1,17 +1,18 @@
-# Lokal (formerly Naira Payout): install the `lokal` command on Windows (`ntag` keeps working as another name for it).
+# LokalPay (formerly Naira Payout): install the `lokal` command on Windows (`lokalpay` and `ntag` are other names for it).
 #
 #   irm https://lokalpay.vercel.app/install.ps1 | iex
 #
 # You can read this whole file before running it. What it does:
 #   1. Checks that Node.js 20 or newer is installed. If not, it tells you how to get it and stops.
 #      It never installs system software for you.
-#   2. Downloads the Lokal code from GitHub (github.com/deeeko/lokal) as a zip.
+#   2. Downloads the LokalPay code from GitHub (github.com/deeeko/lokal) as a zip.
 #   3. Installs the libraries the command line needs with npm, at the exact versions in package-lock.json
 #      (no install scripts are run; libraries only the website uses are skipped).
 #   4. Puts the code in  %LOCALAPPDATA%\lokal\app  (replacing an older copy in one step)
-#      and two small launchers in  %LOCALAPPDATA%\lokal\bin: lokal.cmd, and ntag.cmd (the old name, same command)
-#   5. Adds that bin folder to YOUR user PATH, so `lokal` (and `ntag`) work in any new terminal.
-#   6. Cleans up an install from before the rename to Lokal: removes %LOCALAPPDATA%\naira-payout\app and \bin
+#      and three small launchers in  %LOCALAPPDATA%\lokal\bin: lokal.cmd, lokalpay.cmd (the product's name, same command)
+#      and ntag.cmd (the old name, same command)
+#   5. Adds that bin folder to YOUR user PATH, so `lokal` (and `lokalpay`, `ntag`) work in any new terminal.
+#   6. Cleans up an install from before the rename to LokalPay: removes %LOCALAPPDATA%\naira-payout\app and \bin
 #      and takes that old bin folder out of your user PATH.
 #
 # What it never does:
@@ -126,7 +127,8 @@
   $Bin        = Join-Path $Root 'bin'
   $Shim       = Join-Path $Bin 'lokal.cmd'
   $AliasShim  = Join-Path $Bin 'ntag.cmd'    # the command's name before the rename; runs the same thing
-  # Where installs went before the rename to Lokal. Cleaned up on install, update and uninstall.
+  $PayShim    = Join-Path $Bin 'lokalpay.cmd' # the product's name, LokalPay; runs the same thing
+  # Where installs went before the rename to LokalPay. Cleaned up on install, update and uninstall.
   $OldRoot    = Join-Path $env:LOCALAPPDATA 'naira-payout'
   $OldApp     = Join-Path $OldRoot 'app'
   $OldBin     = Join-Path $OldRoot 'bin'
@@ -148,7 +150,7 @@
     return @(Get-ChildItem -LiteralPath $Root -Directory -Force | Where-Object { $_.Name -like '.new-*' -or $_.Name -like '.old-*' } | ForEach-Object { $_.FullName })
   }
 
-  # Removes an install from before the rename to Lokal (%LOCALAPPDATA%\naira-payout): its app and bin folders,
+  # Removes an install from before the rename to LokalPay (%LOCALAPPDATA%\naira-payout): its app and bin folders,
   # leftovers of an interrupted run, and its bin folder in the user PATH and in this window's PATH. Never a wallet:
   # wallets were never stored there. Returns $true if anything was found.
   function Remove-OldInstall {
@@ -179,7 +181,7 @@
   # Uninstall ($env:NTAG_UNINSTALL = "1")
   # ---------------------------------------------------------------------------------------------
   if ($Uninstall) {
-    Say 'Lokal: uninstalling the lokal command (and its other name, ntag)' White
+    Say 'LokalPay: uninstalling the lokal command (and its other names, lokalpay and ntag)' White
     Say "This removes $App, $Bin and the PATH entry. Your wallet file is not touched."
     Say ''
     try {
@@ -187,7 +189,7 @@
       # Remove the app, the launcher, and any leftovers from an interrupted install.
       foreach ($dir in @($App, $Bin) + @(Get-Leftovers)) {
         if (-not (Test-Path -LiteralPath $dir)) { continue }
-        if (Remove-Folder $dir) { Step "Removed $dir" } else { $ok = $false; Say "  Could not remove $dir. Close any window running lokal or ntag and run the uninstall again." Yellow }
+        if (Remove-Folder $dir) { Step "Removed $dir" } else { $ok = $false; Say "  Could not remove $dir. Close any window running lokal, lokalpay or ntag and run the uninstall again." Yellow }
       }
       # Remove the lokal folder itself if nothing else is left in it.
       if ((Test-Path -LiteralPath $Root) -and -not (Get-ChildItem -LiteralPath $Root -Force)) { Remove-Item -LiteralPath $Root -Force }
@@ -202,7 +204,7 @@
         else { Step 'Your user PATH did not contain the bin folder' }
       }
       $env:Path = Remove-PathEntry $env:Path $Bin
-      # And anything left from an install made before the rename to Lokal.
+      # And anything left from an install made before the rename to LokalPay.
       $null = Remove-OldInstall
 
       Say ''
@@ -219,8 +221,8 @@
   # ---------------------------------------------------------------------------------------------
   # Install
   # ---------------------------------------------------------------------------------------------
-  Say 'Lokal: installing the lokal command' White
-  Say "  1. Check Node.js $MinNode or newer      2. Download Lokal ($Ref) from GitHub"
+  Say 'LokalPay: installing the lokal command' White
+  Say "  1. Check Node.js $MinNode or newer      2. Download LokalPay ($Ref) from GitHub"
   Say '  3. Install its libraries with npm    4. Add "lokal" (and "ntag") to your PATH'
   Say "Into $Root. No admin rights needed; your wallet is never touched."
   Say ''
@@ -273,8 +275,8 @@
       $status = 0
       try { $status = [int]$_.Exception.Response.StatusCode } catch { }
       if ($status -eq 404) { Fail "GitHub has no branch, tag or commit called `"$Ref`" in $Repo. Check NTAG_REF, or clear it to install main: Remove-Item Env:NTAG_REF" }
-      if ($status -gt 0) { Fail "GitHub answered with error $status while downloading Lokal. Try again in a few minutes." }
-      Fail "Could not download Lokal from GitHub. Check your internet connection (and any proxy or firewall), then try again. Details: $($_.Exception.Message)"
+      if ($status -gt 0) { Fail "GitHub answered with error $status while downloading LokalPay. Try again in a few minutes." }
+      Fail "Could not download LokalPay from GitHub. Check your internet connection (and any proxy or firewall), then try again. Details: $($_.Exception.Message)"
     }
     Step "Downloaded $Repo ($Ref)"
 
@@ -326,19 +328,21 @@
     Step "Installed in $App"
 
     # The launchers: small .cmd files that run node on app\src\ntag.mjs with all your arguments.
-    # lokal.cmd is the command; ntag.cmd is the same launcher under the old name, so older notes keep working.
+    # lokal.cmd is the command; lokalpay.cmd is the same launcher under the product's name, and ntag.cmd under the old name,
+    # so older notes keep working.
     # (.cmd files, not .ps1, so they work even where PowerShell scripts are disabled.)
     $null = New-Item -ItemType Directory -Force -Path $Bin
     $shimText = @(
       '@echo off',
-      'rem Lokal launcher, written by https://lokalpay.vercel.app/install.ps1',
-      'rem Runs the lokal command (also called ntag) from the app folder next to this one. Your wallet is not stored here.',
+      'rem LokalPay launcher, written by https://lokalpay.vercel.app/install.ps1',
+      'rem Runs the lokal command (also called lokalpay and ntag) from the app folder next to this one. Your wallet is not stored here.',
       'where node >nul 2>nul || (echo lokal needs Node.js 20 or newer: https://nodejs.org 1>&2 & exit /b 1)',
       'node "%~dp0..\app\src\ntag.mjs" %*'
     ) -join "`r`n"
     [System.IO.File]::WriteAllText($Shim, $shimText + "`r`n", [System.Text.Encoding]::ASCII)
+    [System.IO.File]::WriteAllText($PayShim, $shimText + "`r`n", [System.Text.Encoding]::ASCII)
     [System.IO.File]::WriteAllText($AliasShim, $shimText + "`r`n", [System.Text.Encoding]::ASCII)
-    Step "Created $Shim (and $AliasShim, the old name)"
+    Step "Created $Shim (and $PayShim, plus $AliasShim, the old name)"
 
     # --- Step 5: PATH --------------------------------------------------------------------------
     if ($NoPath) {
@@ -352,9 +356,9 @@
       $env:Path = Add-PathEntry $env:Path $Bin
     }
 
-    # Updating from an install made before the rename to Lokal: take the old naira-payout bin folder out of PATH
+    # Updating from an install made before the rename to LokalPay: take the old naira-payout bin folder out of PATH
     # (so the old ntag can't shadow this one) and delete the old copy.
-    if (Remove-OldInstall) { Step 'Cleaned up the install from before the rename (Naira Payout is now Lokal)' }
+    if (Remove-OldInstall) { Step 'Cleaned up the install from before the rename (Naira Payout is now LokalPay)' }
 
     # Final check, through the launcher itself.
     $r = Invoke-Native $Shim @('help')
@@ -386,10 +390,10 @@
   Say 'Next steps (in PowerShell, leave out the @ or put the tag in quotes: ada or ''@ada''):' White
   Say '  lokal wallet new         create your wallet, protected by a send password you choose'
   Say '  lokal wallet             shows your address: send it some USDT (Tether on Celo) and a little CELO for fees'
-  Say '  lokal whois ada          who owns the Lokal tag @ada'
+  Say '  lokal whois ada          who owns the LokalPay tag @ada'
   Say '  lokal send ada 10        you send $10 USDT, @ada gets naira'
   Say '  lokal help               everything else'
-  Say '  The old name still works too: ntag send ada 10 does the same thing.' DarkGray
+  Say '  Other names for the same command: lokalpay send ada 10 and ntag send ada 10 do the same thing.' DarkGray
   Say ''
   Say 'Your wallet' White
   Say "  It lives in $WalletFile (separate from the app; update and uninstall never touch it)."

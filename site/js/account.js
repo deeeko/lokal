@@ -22,7 +22,7 @@ import { currencyPicker, flagIcon } from "../assets/currency-ui.js";
 
 initChrome();
 
-// Account: sign in with a wallet, claim / change / release a Lokal tag, choose the currency you receive, share it, and
+// Account: sign in with a wallet, claim / change / release a LokalPay tag, choose the currency you receive, share it, and
 // see the wallet and payments to the tag. All of it happens on the LokalTags contract, from the user's own wallet:
 // claim(tag, name), setName(name), setReceiveToken(token) and release(), each simulated first so a refusal is explained
 // before the wallet opens, and each with the attribution suffix. The tag is read back from the contract over RPC.
@@ -143,7 +143,7 @@ const AVAIL_LABEL = { free: "Available", yours: "Yours", taken: "Taken", reserve
 function guide(mode, s, current) {
   const addr = s?.address ?? null;
   const ids = mode === "change" ? ["name", "claim", "done"] : ["signin", "name", "claim", "done"];
-  const labels = { signin: "Sign in", name: "Your name", claim: mode === "change" ? "Your Lokal tag" : "Claim your Lokal tag", done: "Done" };
+  const labels = { signin: "Sign in", name: "Your name", claim: mode === "change" ? "Your LokalPay tag" : "Claim your LokalPay tag", done: "Done" };
   const f = { tag: mode === "change" ? current.tag : prefill || A.legacy?.tag || "", name: current?.name ?? A.legacy?.entry?.name ?? "", agree: false, hash: null, celoAnyway: false };
   const isRename = () => mode === "change" && f.tag === current.tag;
   let started = false; // focus follows the steps only after the person has done something
@@ -165,7 +165,7 @@ function guide(mode, s, current) {
   });
   steps.get("name").edit.addEventListener("click", () => { if (!A.busy) go("name"); });
   const layout = el("div", { class: "nt-claim" }, el("div", { class: "stack", style: "gap:20px" }, list), side);
-  const head = el("div", { class: "card-h" }, el("h2", { id: "claim-h" }, mode === "change" ? "Change your Lokal tag" : "Set up your Lokal tag"));
+  const head = el("div", { class: "card-h" }, el("h2", { id: "claim-h" }, mode === "change" ? "Change your LokalPay tag" : "Set up your LokalPay tag"));
   if (mode === "change") {
     const cancel = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, icon("x"), "Cancel");
     cancel.addEventListener("click", () => { if (A.busy) return; A.view = null; renderTag(s); focusHeading($("#tag-h")); });
@@ -288,7 +288,7 @@ function guide(mode, s, current) {
     const after = el("div", { class: "nt-actions" });
     const pick = el("div", { class: "stack", style: "gap:14px" },
       el("p", { class: "small soft" }, "This is how people find and pay you. Lowercase; we tidy it up as you type."),
-      el("label", { class: "sr-only", for: "claim-tag" }, "Your Lokal tag"),
+      el("label", { class: "sr-only", for: "claim-tag" }, "Your LokalPay tag"),
       box, msg, sugg, rules,
       el("ul", { class: "kv-list" },
         el("li", {}, el("span", {}, "Wallet"), el("a", { class: "mono link", href: celoscanAddr(addr), title: addr }, short(addr))),
@@ -496,7 +496,7 @@ function guide(mode, s, current) {
     const t = f.tag;
     const entry = A.tag === t ? A.entry : null;
     const url = ntagUrl(t);
-    const card = ntagCard({ tag: t, name: entry?.name ?? f.name, address: addr, since: entry?.since ?? Math.floor(Date.now() / 1000), as: "button", label: `Your Lokal tag @${t}. Copy the link to your pay page` });
+    const card = ntagCard({ tag: t, name: entry?.name ?? f.name, address: addr, since: entry?.since ?? Math.floor(Date.now() / 1000), as: "button", label: `Your LokalPay tag @${t}. Copy the link to your pay page` });
     card.dataset.copy = url;
     card.dataset.copyLabel = "Link copied";
     const doneBtn = el("button", { class: "btn btn-ghost", type: "button" }, "Go to your account");
@@ -532,7 +532,7 @@ function guide(mode, s, current) {
 function ownedView(s, tag, entry) {
   const addr = s.address;
   const url = ntagUrl(tag);
-  const card = ntagCard({ tag, name: entry.name, address: addr, since: entry.since, currency: entry.currency, as: "button", label: `Your Lokal tag @${tag}. Copy the link to your pay page` });
+  const card = ntagCard({ tag, name: entry.name, address: addr, since: entry.since, currency: entry.currency, as: "button", label: `Your LokalPay tag @${tag}. Copy the link to your pay page` });
   card.dataset.copy = url;
   card.dataset.copyLabel = "Link copied";
   const receive = preferredCurrency(s, tag, entry);
@@ -552,7 +552,7 @@ function ownedView(s, tag, entry) {
   const note = A.note ? alertBox("", "info", el("p", {}, A.note)) : null;
   A.note = null;
   return el("section", { class: "card", id: "tag-section", "aria-labelledby": "tag-h" },
-    el("div", { class: "card-h" }, el("h2", { id: "tag-h" }, "Your Lokal tag"), el("span", { class: "badge ok" }, el("span", { class: "dot" }), "Live")),
+    el("div", { class: "card-h" }, el("h2", { id: "tag-h" }, "Your LokalPay tag"), el("span", { class: "badge ok" }, el("span", { class: "dot" }), "Live")),
     el("div", { class: "card-b stack" },
       note,
       el("div", { class: "nt-owned" },
@@ -748,8 +748,8 @@ function renderTag(s) {
     const retry = el("button", { class: "btn btn-secondary btn-sm", type: "button" }, icon("refresh"), "Try again");
     retry.addEventListener("click", async () => { tagSlot.replaceChildren(tagSkeleton()); await loadState(s.address); renderTag(s); renderPayments(s); });
     tagSlot.replaceChildren(el("section", { class: "card", id: "tag-section" },
-      el("div", { class: "card-h" }, el("h2", {}, "Your Lokal tag")),
-      el("div", { class: "card-b" }, alertBox("err", "alert", el("p", {}, "Couldn't reach Celo to read your Lokal tag from the contract. Your tag is safe onchain; this page just can't read it right now."), el("div", { class: "row mt-8" }, retry)))));
+      el("div", { class: "card-h" }, el("h2", {}, "Your LokalPay tag")),
+      el("div", { class: "card-b" }, alertBox("err", "alert", el("p", {}, "Couldn't reach Celo to read your LokalPay tag from the contract. Your tag is safe onchain; this page just can't read it right now."), el("div", { class: "row mt-8" }, retry)))));
     return;
   }
   const tag = A.tag;
@@ -769,8 +769,8 @@ function renderTag(s) {
   tagSlot.replaceChildren(ownedView(s, tag, entry));
 }
 const tagSkeleton = () => el("section", { class: "card", id: "tag-section", "aria-busy": "true" },
-  el("div", { class: "card-h" }, el("h2", {}, "Your Lokal tag"), el("span", { class: "skel" })),
-  el("div", { class: "card-b" }, el("p", { class: "small muted", role: "status" }, el("span", { class: "skel", style: "width:14px;height:14px;border-radius:50%;margin-right:8px" }), "Reading Lokal tags from Celo…")));
+  el("div", { class: "card-h" }, el("h2", {}, "Your LokalPay tag"), el("span", { class: "skel" })),
+  el("div", { class: "card-b" }, el("p", { class: "small muted", role: "status" }, el("span", { class: "skel", style: "width:14px;height:14px;border-radius:50%;margin-right:8px" }), "Reading LokalPay tags from Celo…")));
 
 // ---------- wallet ----------
 const walletSlot = el("div", {});
@@ -891,7 +891,7 @@ function renderPayments(s) {
   const body = el("div", { class: "card-b" });
   const head = el("div", { class: "card-h" }, el("h2", { id: "payments-h" }, tag ? el("span", {}, "Payments to ", el("span", { class: "np-tagname", style: "font-size:17px" }, "@" + tag)) : "Payments to your tag"));
   paySlot.replaceChildren(el("section", { class: "card", "aria-labelledby": "payments-h" }, head, body));
-  if (!A.loaded) { body.replaceChildren(el("p", { class: "small muted" }, "Waiting for the Lokal tag lookup.")); return; }
+  if (!A.loaded) { body.replaceChildren(el("p", { class: "small muted" }, "Waiting for the LokalPay tag lookup.")); return; }
   if (!tag) {
     body.replaceChildren(el("div", { class: "nt-empty" }, el("span", { class: "nt-empty-icon" }, icon("receipt")),
       el("p", {}, "Claim a tag above and payments to it show up here, with a receipt for each payout.")));

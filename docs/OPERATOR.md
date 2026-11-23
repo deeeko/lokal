@@ -111,7 +111,7 @@ node src/agent.mjs refund --deposit 0x<tx>:<logIndex> --execute
   the chain for a transfer from the agent to that payer of that token and amount after the record time (and checks a
   saved refund tx); only when there is none does it send again. A crash mid-send leaves `sending`, which blocks
   everything until `--retry` (after 10 minutes) settles it the same way.
-- **Auto-refund is opt-in:** `watch --execute --auto-refund` refunds refused Lokal tag and "Get paid" deposits right
+- **Auto-refund is opt-in:** `watch --execute --auto-refund` refunds refused LokalPay tag and "Get paid" deposits right
   after refusing them, at most 3 per payer per 24 hours. Unmatched and ambiguous deposits are always refunded by hand. A
   failed auto-refund is recorded and alerted and never stops autopilot.
 

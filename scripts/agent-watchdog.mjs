@@ -19,13 +19,13 @@ export function watchdogDecision(state = {}, view = {}, now = Date.now()) {
   const healthy = view?.ok === true && Number.isFinite(age) && age <= STALE_SEC;
   if (healthy) {
     return state.down
-      ? { state: { down: false, alertedAt: null }, message: `Lokal agent is back online (last heartbeat ${age} s ago).` }
+      ? { state: { down: false, alertedAt: null }, message: `LokalPay agent is back online (last heartbeat ${age} s ago).` }
       : { state: { down: false, alertedAt: null }, message: null };
   }
   const why = view?.error ? `the status server could not be read (${view.error})`
     : view?.agent ? `its last heartbeat was ${Math.round(age / 60)} minutes ago (${view.agent.lastSeen})`
       : "no heartbeat has been stored yet";
-  const msg = `[URGENT] Lokal agent looks offline: ${why}. Autopilot pays nothing while it is stopped. On the agent's PC run: node src/agent.mjs watch --execute`;
+  const msg = `[URGENT] LokalPay agent looks offline: ${why}. Autopilot pays nothing while it is stopped. On the agent's PC run: node src/agent.mjs watch --execute`;
   if (!state.down) return { state: { down: true, alertedAt: now }, message: msg };
   if (state.alertedAt == null || now - state.alertedAt >= REALERT_MS) return { state: { down: true, alertedAt: now }, message: `${msg} (still down)` };
   return { state, message: null };

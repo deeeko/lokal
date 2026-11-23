@@ -5,7 +5,7 @@ the operator's: quotes, payouts, autopilot, refunds. Running the agent day to da
 
 ## The `lokal` command line (PowerShell)
 
-`src/ntag.mjs` (the `lokal` command; `ntag`, its name before the rename, runs the same thing) lets anyone pay a Lokal
+`src/ntag.mjs` (the `lokal` command; `lokalpay`, the product's name, and `ntag`, its name before the rename, run the same thing) lets anyone pay a LokalPay
 tag from **their own wallet** in a terminal. It never touches the agent's key and
 refuses to use it.
 
@@ -26,10 +26,10 @@ You can read [`site/install.ps1`](../site/install.ps1) (served as plain text at 
    unless `$env:NTAG_REF` names a branch, tag or commit), over TLS 1.2 in Windows PowerShell 5.1 too;
 3. runs `npm ci --omit=dev --ignore-scripts --no-audit --no-fund` in a staging folder and checks that `lokal help` runs;
 4. swaps it into `%LOCALAPPDATA%\lokal\app` with a rename (a failed update keeps the previous install);
-5. writes `%LOCALAPPDATA%\lokal\bin\lokal.cmd`, plus `ntag.cmd` (the command's old name, so `ntag` keeps working),
+5. writes `%LOCALAPPDATA%\lokal\bin\lokal.cmd`, plus `lokalpay.cmd` (the product's name) and `ntag.cmd` (the command's old name, so `ntag` keeps working),
    and adds that folder to your **user** PATH (and to the current window). `$env:NTAG_NO_PATH = "1"` skips the PATH
    change and prints the folder to add instead;
-6. cleans up an install from before the rename to Lokal: deletes `%LOCALAPPDATA%\naira-payout\app` and `bin` and takes
+6. cleans up an install from before the rename to LokalPay: deletes `%LOCALAPPDATA%\naira-payout\app` and `bin` and takes
    the old bin folder out of your user PATH, so the old `ntag` can never shadow the new one.
 
 Then: `lokal wallet new`, send USD₮ and a little CELO (for fees) to the address `lokal wallet` shows, `lokal whois ada`,
@@ -54,7 +54,7 @@ npm link                          # optional: makes "lokal" (and "ntag") a comma
 
 lokal wallet new                  # creates a wallet, encrypted with a send password you choose (min 8 characters, typed twice)
 lokal wallet import               # or use a key you already have (typed at a hidden prompt, or NTAG_PRIVATE_KEY)
-lokal wallet                      # address, CELO / USD₮ / cNGN balances and your Lokal tag
+lokal wallet                      # address, CELO / USD₮ / cNGN balances and your LokalPay tag
 ```
 
 The wallet file (default `%USERPROFILE%\.lokal\wallet.json`, or the older `.naira-payout\wallet.json` if only that exists; override with `NTAG_WALLET_FILE`) holds the key
@@ -198,7 +198,7 @@ node src/agent.mjs verify 0x<txhash>                     # shows a transaction's
 | `ntag <@tag or address>` | none |
 | `ntag-data @tag N` | `--token usdt` (default) or `cngn` |
 | `watch` | `--execute`, `--interval SECONDS` (default 15, minimum 5), `--auto-refund` (with `--execute`), `--clear-stale-lock` |
-| `retry` | `--request ID`, `--registration HASH` or `--ntag TX:LOGINDEX`; `--force-refused` (Lokal tag only; refused when the deposit has a refund record), `--execute`, `--yes`, `--clear-stale-lock` |
+| `retry` | `--request ID`, `--registration HASH` or `--ntag TX:LOGINDEX`; `--force-refused` (LokalPay tag only; refused when the deposit has a refund record), `--execute`, `--yes`, `--clear-stale-lock` |
 | `refunds` | none |
 | `refund` | `--deposit TX:LOGINDEX`, `--execute`, `--yes`, `--retry` (after a failed or stuck refund), `--clear-stale-lock` |
 | `alert-test`, `doctor` | none |
@@ -220,7 +220,7 @@ All optional (see `.env.example`).
 | Variable | Default | Controls |
 |---|---|---|
 | `MAX_USD` | `25` | Largest single payout, in USD |
-| `MAX_WALLET_DAILY_USD` | `25` | Most USD paid to any one wallet in a rolling 24 h (Get paid and Lokal tag payouts) |
+| `MAX_WALLET_DAILY_USD` | `25` | Most USD paid to any one wallet in a rolling 24 h (Get paid and LokalPay tag payouts) |
 | `MAX_DAILY_USD` | `100` | Most USD paid out in any rolling 24 h |
 | `MAX_SLIPPAGE_BPS` | `300` | Allowed gap between preview and firm quote (300 = 3%), per swap |
 | `MIN_CELO_RESERVE` | `2` | CELO the agent must still hold after a `celo-cngn` payout |
@@ -234,7 +234,7 @@ All optional (see `.env.example`).
 | `REQUESTS_FILE` | `requests.json` | Operator payment requests |
 | `WATCH_STATE_FILE` | `watch-state.json` | Autopilot block cursor (written only with `--execute`) |
 | `REGISTRATIONS_STATE_FILE` | `registrations-state.json` | "Get paid" deposits and payouts |
-| `NTAG_PAYMENTS_FILE` | `ntag-payments.json` | Lokal tag deposits seen by autopilot, keyed by `tx:logIndex` |
+| `NTAG_PAYMENTS_FILE` | `ntag-payments.json` | LokalPay tag deposits seen by autopilot, keyed by `tx:logIndex` |
 | `BLOCKSCOUT_API` | `https://celo.blockscout.com/api/v2` | Where registrations and tag claims are discovered |
 | `CELO_RPC_URL` | Forno | RPC for `watch`, the agent's read commands and the `lokal` CLI |
 | `TEXTILE_API` | `https://api.textilecredit.com/v2` | Textile FX RFQ endpoint |

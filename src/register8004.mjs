@@ -13,9 +13,9 @@ const abi = [
 export function registrationFile({ repoUrl, agentId } = {}) {
   return {
     type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
-    name: "Lokal",
+    name: "LokalPay",
     description:
-      "Lokal (formerly Naira Payout): pay anyone in their local money. Payers send USD₮ on Celo to a Lokal tag or payment link; the LokalTags and LokalPots contracts check every limit before money moves, and the agent converts on Textile FX and pays the recipient's own wallet in naira (cNGN), rupiah (IDRX), Argentine or Colombian pesos (wARS, wCOP) or dollars. Non-custodial, capped, refundable, and every transaction carries the ERC-8021 tag.",
+      "LokalPay (formerly Naira Payout): pay anyone in their local money. Payers send USD₮ on Celo to a LokalPay tag or payment link; the LokalTags and LokalPots contracts check every limit before money moves, and the agent converts on Textile FX and pays the recipient's own wallet in naira (cNGN), rupiah (IDRX), Argentine or Colombian pesos (wARS, wCOP) or dollars. Non-custodial, capped, refundable, and every transaction carries the ERC-8021 tag.",
     services: [
       { name: "web", endpoint: "https://lokalpay.vercel.app" },
       { name: "source", endpoint: repoUrl },
@@ -28,7 +28,7 @@ export function registrationFile({ repoUrl, agentId } = {}) {
 }
 
 /**
- * Rewrites the agent card of an existing identity (setAgentURI), e.g. after the rename to Lokal. Dry run by default:
+ * Rewrites the agent card of an existing identity (setAgentURI), e.g. after the rename to LokalPay. Dry run by default:
  * prints the new card and the current one. Only the identity's owner (the agent wallet) can send it.
  */
 export async function updateCard({ repoUrl, agentId, execute = false }) {

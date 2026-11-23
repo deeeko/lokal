@@ -124,7 +124,7 @@ html.lp body { padding-top: 0; }
 .lp-countries .c-rate small { display: block; font-size: 12.5px; color: var(--text-3); letter-spacing: 0; font-weight: 400; }
 .lp-also { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 14px; margin-top: 24px; font-size: 15px; color: var(--text-2); }
 
-/* ---------- everything Lokal does: the index (features.html) ---------- */
+/* ---------- everything LokalPay does: the index (features.html) ---------- */
 .lp-page { border-top: 0; padding-top: clamp(40px, 6vw, 72px); }
 .lp-index-head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 18px 64px; align-items: end; }
 .lp-index-head .lp-lead { font-size: 17px; }

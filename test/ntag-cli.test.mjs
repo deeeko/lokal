@@ -142,7 +142,7 @@ test("wallet file location: NTAG_WALLET_FILE overrides the default", () => {
   assert.equal(walletFile({}, () => false), DEFAULT_WALLET_FILE);
 });
 
-test("wallet file location after the rename to Lokal: an old wallet is used in place, and the note shows once", () => {
+test("wallet file location after the rename to LokalPay: an old wallet is used in place, and the note shows once", () => {
   const files = new Set();
   const exists = (f) => files.has(f);
   assert.ok(LEGACY_WALLET_FILE.endsWith(path.join(".naira-payout", "wallet.json")));
@@ -154,12 +154,12 @@ test("wallet file location after the rename to Lokal: an old wallet is used in p
   assert.equal(usesLegacyWallet({}, exists), true);
   assert.equal(walletFile({}, exists), LEGACY_WALLET_FILE);
   const note = legacyWalletNotice({ env: {}, exists, markShown: () => files.add(LEGACY_NOTICE_FILE) });
-  assert.match(note, /now Lokal/);
+  assert.match(note, /now LokalPay/);
   assert.ok(note.includes(LEGACY_WALLET_FILE) && note.includes(DEFAULT_WALLET_FILE));
   assert.equal(legacyWalletNotice({ env: {}, exists, markShown: () => files.add(LEGACY_NOTICE_FILE) }), null);
   // a marker that can't be written never breaks the command (the note just shows again next time)
   files.delete(LEGACY_NOTICE_FILE);
-  assert.match(legacyWalletNotice({ env: {}, exists, markShown: () => { throw new Error("read-only"); } }), /now Lokal/);
+  assert.match(legacyWalletNotice({ env: {}, exists, markShown: () => { throw new Error("read-only"); } }), /now LokalPay/);
   // both exist: the new place wins; NTAG_WALLET_FILE always wins
   files.add(DEFAULT_WALLET_FILE);
   assert.equal(walletFile({}, exists), DEFAULT_WALLET_FILE);
@@ -236,8 +236,8 @@ test("weak passwords are rejected", () => {
   for (const bad of ["", "short", "password", "Password1", "12345678", "87654321", "11111111", "aaaaaaaa", "abcdefgh", "qwerty123", "passw0rd99"]) {
     assert.ok(passwordProblem(bad), `should reject ${JSON.stringify(bad)}`);
   }
-  assert.match(passwordProblem("adaobi_ng", { tag: "adaobi_ng" }), /Lokal tag/);
-  assert.match(passwordProblem("@AdaObi_NG", { tag: "adaobi_ng" }), /Lokal tag/);
+  assert.match(passwordProblem("adaobi_ng", { tag: "adaobi_ng" }), /LokalPay tag/);
+  assert.match(passwordProblem("@AdaObi_NG", { tag: "adaobi_ng" }), /LokalPay tag/);
   const addr = "0x1111111111111111111111111111111111111111";
   assert.match(passwordProblem(addr, { address: addr }), /address/);
   assert.equal(passwordProblem("correct horse battery", { tag: "ada" }), null);
