@@ -24,6 +24,9 @@ function totals(t) {
   T.usd.replaceChildren(money(t.usd), ...(t.usdMissing ? [el("small", {}, ` + ${t.usdMissing} not priced`)] : []));
   T.currencies.textContent = t.currencies.length ? [...new Set(t.currencies.map(curWord))].join(", ") : "None yet";
   T.recipients.textContent = String(t.recipients);
+  // the builder's own test payouts are listed (labelled) but not counted above
+  const note = $("#pf-team-note") ?? (() => { const p = el("p", { id: "pf-team-note", class: "small muted pf-team-note" }); T.payouts.closest("dl, div, section")?.after(p); return p; })();
+  note.textContent = t.team ? `Totals count payouts to people outside the team. Another ${t.team} ${t.team === 1 ? "payout was a test" : "payouts were tests"} between the builder's own wallets, labelled "Team test" below.` : "";
 }
 
 function row(r, depositsRead) {
@@ -37,6 +40,7 @@ function row(r, depositsRead) {
     el("div", { class: "pf-tx" }, deposit, tx(r.payoutHash, "Payout")),
     el("div", { class: `pf-attr ${r.tagged ? "ok" : "bad"}`, title: r.tagged ? `The payout's input carries LokalPay's attribution tag ${TAG}.` : `The payout's input does not carry ${TAG}.` },
       icon(r.tagged ? "check" : "x"), el("span", { class: "mono" }, TAG), r.tagged ? null : el("span", {}, "missing")),
+    r.team ? el("p", { class: "pf-team" }, el("span", { class: "status-pill", "data-status": "planned" }, "Team test"), " Between the builder's own wallets; not counted in the totals.") : null,
     r.user ? el("p", { class: "pf-user" }, el("b", {}, r.user.label), [r.user.city, r.user.usedFor].filter(Boolean).map((s) => " · " + s).join("")) : null);
 }
 
@@ -50,7 +54,7 @@ async function run() {
     body.replaceChildren(el("p", { class: "pf-empty" }, icon("alert"), "Couldn't read the agent's payouts from Celo just now. Reload in a minute."));
     return;
   }
-  const model = proofModel({ payouts: data.payouts, deposits: data.deposits, events: data.events, users: data.users ?? [] });
+  const model = proofModel({ payouts: data.payouts, deposits: data.deposits, events: data.events, users: data.users ?? [], team: data.team ?? [] });
   totals(model.totals);
   timeEl.textContent = `Read at ${lagosClock(Date.now())} WAT`;
   const mismatched = model.users.mismatched.map(({ entry }) => el("li", { class: "pf-bad" }, icon("x"),

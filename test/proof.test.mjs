@@ -88,7 +88,18 @@ test("proof aggregation from fixture logs: matching, corridors, totals, no addre
   assert.deepEqual([r3.from, r3.to, r3.kind, r3.usd, r3.outText], ["cNGN", "dollars", "pot", 9.5, "9.50 USD₮"]);
   assert.deepEqual([r4.depositHash, r4.inText, r4.matchedBy, r4.usd], [null, null, null, null], "no deposit: said, not guessed");
 
-  assert.deepEqual(m.totals, { payouts: 4, usd: 24.5, usdMissing: 1, currencies: ["USD₮", "cNGN", "IDRX"], recipients: 2, tagged: 3 });
+  assert.deepEqual(m.totals, { payouts: 4, usd: 24.5, usdMissing: 1, currencies: ["USD₮", "cNGN", "IDRX"], recipients: 2, tagged: 3, team: 0 });
+
+  // the builder's own test payouts: listed and labelled, but kept out of the headline totals
+  // (the fixture hashes all share one receipt prefix, so give the payouts distinct ones here)
+  const distinct = payouts.map((p, i) => ({ ...p, hash: "0x" + String(i + 1).repeat(8) + p.hash.slice(10) }));
+  const teamNo = receiptNo(distinct[1].hash); // the rupiah payout
+  const t = P.proofModel({ payouts: distinct, deposits, events: [], users: [], team: [teamNo, "not-a-receipt"] });
+  assert.equal(t.rows.find((r) => r.receiptNo === teamNo).team, true);
+  assert.equal(t.rows.filter((r) => r.team).length, 1, "only the listed receipt is a team test");
+  assert.equal(t.totals.team, 1);
+  assert.equal(t.totals.payouts, 3, "the team test isn't counted in the payouts");
+  assert.ok(!t.totals.currencies.includes("IDRX"), "nor its currency");
   const dump = JSON.stringify(m, (k, v) => (typeof v === "bigint" ? String(v) : v)).toLowerCase();
   for (const a of [ADA, BOB, PAYER]) assert.ok(!dump.includes(a.slice(2).toLowerCase()), "no address in the model");
 });
@@ -126,7 +137,7 @@ test("named users: shown only on a matching payout; a mismatched one is reported
   const empty = P.proofModel({ payouts: [], users: [users[0]] });
   assert.equal(empty.rows.length, 0);
   assert.equal(empty.users.mismatched.length, 1);
-  assert.deepEqual(empty.totals, { payouts: 0, usd: 0, usdMissing: 0, currencies: [], recipients: 0, tagged: 0 });
+  assert.deepEqual(empty.totals, { payouts: 0, usd: 0, usdMissing: 0, currencies: [], recipients: 0, tagged: 0, team: 0 });
   assert.equal(P.userEntryOk({ receiptNo: real, label: "x".repeat(61) }), false);
   assert.equal(P.userEntryOk({ receiptNo: real, label: "Ada", city: 5 }), false);
 });

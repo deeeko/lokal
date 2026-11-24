@@ -71,7 +71,10 @@ export function userEntryOk(u) {
  * Each row: { receiptNo, payoutHash, depositHash, time, from (symbol or null), to ("naira", ...), inText, outText, usd,
  * tagged, matchedBy ("agent" | "chain" | null), kind ("tag" | "pot" | null), user }.
  */
-export function proofModel({ payouts = [], deposits = [], events = [], users = [] } = {}) {
+export function proofModel({ payouts = [], deposits = [], events = [], users = [], team = [] } = {}) {
+  // team: receipt numbers of the builder's own test payouts (site/proof-team.json). Listed, labelled, and kept out of
+  // the headline totals, so the totals only count payouts to people outside the team.
+  const teamSet = new Set((Array.isArray(team) ? team : []).filter((n) => RECEIPT_RE.test(String(n))));
   const paid = new Map();
   for (const e of events ?? []) if (e?.status === "paid" && HASH_RE.test(lc(e.payoutTx))) paid.set(lc(e.payoutTx), e);
   const byHash = new Map((deposits ?? []).map((d) => [d.hash, d]));
@@ -107,7 +110,7 @@ export function proofModel({ payouts = [], deposits = [], events = [], users = [
     rows.push({
       receiptNo: receiptNo(p.hash), payoutHash: p.hash, depositHash: depHash, time: p.time, from: inTok?.symbol ?? null,
       to: receiveWord(out), outSymbol: out?.symbol ?? null, inText, outText: unitsText(p.units, out), usd: usd == null ? null : Math.round(usd * 100) / 100,
-      tagged: Boolean(p.tagged), matchedBy, kind: dep?.kind ?? null, user: null,
+      tagged: Boolean(p.tagged), matchedBy, kind: dep?.kind ?? null, user: null, team: teamSet.has(receiptNo(p.hash)),
     });
   }
   rows.reverse();
@@ -124,17 +127,19 @@ export function proofModel({ payouts = [], deposits = [], events = [], users = [
     matched.push({ entry, row });
   }
 
-  const usdRows = rows.filter((r) => r.usd != null);
+  const real = rows.filter((r) => !r.team);
+  const usdRows = real.filter((r) => r.usd != null);
   // in the registry's order: USD₮, then the local currencies as the site lists them
   const order = Object.values(TOKENS).map((t) => t.symbol);
-  const currencies = [...new Set(rows.flatMap((r) => [r.from, r.outSymbol]).filter(Boolean))].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  const currencies = [...new Set(real.flatMap((r) => [r.from, r.outSymbol]).filter(Boolean))].sort((a, b) => order.indexOf(a) - order.indexOf(b));
   const totals = {
-    payouts: rows.length,
+    payouts: real.length,
     usd: Math.round(usdRows.reduce((s, r) => s + r.usd, 0) * 100) / 100,
-    usdMissing: rows.length - usdRows.length,
+    usdMissing: real.length - usdRows.length,
     currencies,
-    recipients: new Set((payouts ?? []).filter(Boolean).map((p) => lc(p.to))).size,
+    recipients: new Set((payouts ?? []).filter((p) => p && !teamSet.has(receiptNo(p.hash))).map((p) => lc(p.to))).size,
     tagged: rows.filter((r) => r.tagged).length,
+    team: rows.length - real.length,
   };
   return { rows, totals, users: { matched, mismatched } };
 }
@@ -153,7 +158,7 @@ async function contractLogs(address, topic0, fromBlock, fetchJson, explorerRpc) 
  * proof-users.json couldn't be read), complete (every agent transaction page was read), checked (transactions read) }.
  * Throws only when the agent's transactions can't be read at all.
  */
-export async function loadProof({ maxPages = 20, fetchJson = getJson, explorerRpc = EXPLORER_RPC, statusFor = null, usersUrl = "proof-users.json", txPage = loadTxPage } = {}) {
+export async function loadProof({ maxPages = 20, fetchJson = getJson, explorerRpc = EXPLORER_RPC, statusFor = null, usersUrl = "proof-users.json", teamUrl = "proof-team.json", txPage = loadTxPage } = {}) {
   const items = [];
   let next = null, complete = false;
   for (let p = 0; p < maxPages; p++) {
@@ -165,6 +170,8 @@ export async function loadProof({ maxPages = 20, fetchJson = getJson, explorerRp
   const payouts = items.map(payoutFromTx).filter(Boolean);
   let users = null;
   try { const u = await fetchJson(usersUrl, { cache: "no-store" }); users = Array.isArray(u) ? u : null; } catch { users = null; }
+  let team = [];
+  try { const t = await fetchJson(teamUrl, { cache: "no-store" }); team = Array.isArray(t) ? t : []; } catch { team = []; }
   let deposits = [], depositsCapped = false, events = [];
   if (payouts.length) {
     try {
@@ -181,5 +188,5 @@ export async function loadProof({ maxPages = 20, fetchJson = getJson, explorerRp
       events = answers.flatMap((a) => (Array.isArray(a?.events) ? a.events : []));
     }
   }
-  return { payouts, deposits, depositsCapped, events, users, complete, checked: items.length };
+  return { payouts, deposits, depositsCapped, events, users, team, complete, checked: items.length };
 }
