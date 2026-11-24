@@ -3,9 +3,6 @@
 
 # Feature contract v2: "Get paid" (own wallet) + Receipt v2
 
-Read site/_spec/SPEC.md and site/_spec/FEATURES.md first. Same rules: design system only, honesty, no innerHTML
-with network data, CSP, 390px, one primary button per view. Agent wallet AGENT, agentId 10079, tag celo_7360953d1b53.
-
 ## A. "Get paid" — a recipient registers their own payment request onchain
 
 ### Registration transaction (made by the RECIPIENT's wallet, in the browser)

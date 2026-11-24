@@ -15,7 +15,6 @@ ntag-payments.json
 contract-payments.json
 status-outbox*
 status-secret
-.claude/
 refunds.json
 agent.lock
 alerts-outbox*

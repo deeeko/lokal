@@ -2,16 +2,11 @@
 > `NTP:` memo formats. Since block 83,405,000 new claims go to the LokalTags contract; `NTP:` memo payments to tags
 > claimed before then are still paid, which is why this format is kept and documented. See docs/WHO-ENFORCES-WHAT.md.
 
-# nTags — spec (owner-approved build, 21 Nov 2026)
+# nTags (LokalPay tags): legacy spec, 21 Nov 2026
 
 nTags are human handles (`@ada`) tied to a Celo wallet, plus wallet sign-in for the site. Anyone can pay an nTag in
 USD₮ (or cNGN) and the agent pays the tag owner's wallet in cNGN (or USD₮). Non-custodial: the site never holds keys or
 funds; the agent only converts and forwards a single deposit, under the same caps as every other payout.
-
-Repo: C:\Users\DEL\celo-naira-payout-agent. Static site in site/ (no framework, no bundler, no CDN; CSP `script-src 'self'`,
-`connect-src 'self' https://forno.celo.org https://celo.blockscout.com`). Agent in src/ (Node ESM, viem 2.58.2).
-Tests: `npm test` (node --test). Site check: `node scripts/check-site.mjs`. Never print/read the agent key file,
-.env*, or .vercel/. Never send a transaction. No "Claude"/"AI"/"generated" mentions anywhere in code, copy or commits.
 
 ## 1. Protocol (MUST be identical in site/assets/core.js and src/ntags.mjs; a test cross-checks them like registrations)
 
