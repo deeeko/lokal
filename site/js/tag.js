@@ -2,12 +2,12 @@ import {
   AGENT, CAP, TOKENS, $$, el, icon, badge, short, num2, naira, usd, celoscanAddr, celoscanTx, initChrome,
   toast, readContract, loadRate, loadNtagOps, resolveNtags, ownerOf, normalizeNtag, ntagError,
   encodeNtagTransfer, ntagUrl, receiptNo, walletDisconnected, markWalletConnected, parseMoneyInput, lagosTime, $,
-  currencyOf, formatCurrency, legacyNtagOps, getConsent,
+  currencyOf, formatCurrency, legacyNtagOps, getConsent, unitsToDecimal,
 } from "../assets/core.js";
 import {
   LOKAL_TAGS, ZERO_ADDRESS, approveData, checkPayment, currencyRef, payTagData, payTagWithPermitData, permitDomainOk,
   permitTypedData, readAllowance, readNonce, readPaymentRoom, readTagInfo, simulate, splitSignature, tokenAmountText,
-  payWithTokens, paySymbol, payDecimals, unitsFromCents, usdPerUnit, payUsdValue, localPayError,
+  payWithTokens, paySymbol, payDecimals, unitsFromCents, usdPerUnit, payUsdValue, localPayError, maxSendable,
 } from "../assets/lokal-contracts.js";
 import { currencyPicker } from "../assets/currency-ui.js";
 import {
@@ -19,7 +19,7 @@ import {
   nameText, LIMITS, LIMITS_TEXT, CNGN_CAP_USD, REFUSED_NOTE, receivableToday, allowanceResetAt, loadNtagStateFresh,
   loadTagLedger, slowNotice, scrollToNode, focusHeading, noWalletHelp, noCeloAlert, celoBalance,
   agentStatus, depositStatus, allowanceFromStatus, combineAllowance, receivedStale, paidText, sourceNote, refusedNote, refundedLine,
-  DELAYED_NOTE, SLOW_NOTE, payoutText, lookupTag,
+  DELAYED_NOTE, SLOW_NOTE, payoutText, lookupTag, maxButton, maxReasonText,
 } from "../assets/ntag-ui.js";
 import {
   assessTag, loadTagEvents, addBlockTimes, eventsNeedingTime, legacyHistory, readPaidTags, recordPaidTag,
@@ -261,8 +261,8 @@ function payCard(tag, entry, beforePay = null) {
   const sellToken = () => (P.pay === "usdt" ? TOKENS.USDT : TOKENS[payCur().token]);
   /** The route's id, as the receipt tracker and the agent name it: usdt-idrx, idrx-usdt, forward-usdt, ... */
   const corridorId = () => (passThrough() ? `forward-${P.pay}` : P.pay === "usdt" ? `usdt-${P.receive}` : `${P.pay}-usdt`);
-  /** Units of the paid token as text ("1,234.50"), by its own decimals. */
-  const unitsText = (u) => num2.format(Number(u) / 10 ** payDecimals(P.pay));
+  /** Units of the paid token as text ("1,234.50"), by its own decimals, rounded DOWN (a balance never shows more than it is). */
+  const unitsText = (u) => num2.format(Number(unitsToDecimal(u, payDecimals(P.pay), 2)));
   /** About `usdv` dollars in the paid local token ("Rp 446,369"), or null without a rate. */
   const localForUsd = (usdv) => { const u = usdPerUnit(P.pay, P.rate); return u ? formatCurrency(Math.floor(usdv / u.usdPer), P.pay) : null; };
   const pref = entry.currency ?? null;
@@ -304,8 +304,13 @@ function payCard(tag, entry, beforePay = null) {
     P.bal = null; P.room = null;
     refreshBalances(); refreshRoom();
   }
-  const amountIn = el("input", { id: "pay-amount", type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false", size: "4", value: START_AMOUNT[P.pay] ?? "10", "aria-describedby": "pay-amount-hint pay-refusal" });
+  const amountIn = el("input", { id: "pay-amount", type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false", size: "4", value: START_AMOUNT[P.pay] ?? "10", "aria-describedby": "pay-amount-hint pay-max-note pay-refusal" });
   const tokenEl = el("span", { class: "token" }, "USD₮");
+  const maxBtn = maxButton(() => useMax());
+  maxBtn.el.hidden = !eth;
+  // why Max stopped where it did (a limit, not the balance), or why it can't fill: shown while the field still holds it
+  const maxNote = el("p", { class: "hint money-max-note", id: "pay-max-note", hidden: true });
+  let maxShown = null; // { text: the field's value it belongs to, note, err }
   const amountHint = el("p", { class: "hint", id: "pay-amount-hint", hidden: true });
   const out = el("output", { for: "pay-amount", "aria-live": "polite" }, el("span", { class: "skel lg" }));
   const sRate = el("span", {}, "—"), sSend = el("span", {}, "—");
@@ -349,7 +354,7 @@ function payCard(tag, entry, beforePay = null) {
   const form = el("div", { class: "stack nt-payform" },
     el("h2", { id: "pay-h", class: "sr-only" }, "Pay @" + tag),
     choice.el, paySlot,
-    el("div", { class: "field" }, el("label", { class: "label", for: "pay-amount" }, "You send"), el("div", { class: "money" }, amountIn, tokenEl), amountHint),
+    el("div", { class: "field" }, el("label", { class: "label", for: "pay-amount" }, "You send"), el("div", { class: "money" }, amountIn, maxBtn.el, tokenEl), amountHint, maxNote),
     el("div", { class: "receive" }, el("div", { class: "label" }, el("span", {}, "@" + tag + " gets about")), out),
     refusal,
     el("div", { class: "nt-folds" }, rateRow.el, limitsRow.el),
@@ -360,8 +365,8 @@ function payCard(tag, entry, beforePay = null) {
 
   // ----- amount -----
   /** { cents, units (bigint, in the paid token's own decimals), usd } or { error } */
-  function readAmount() {
-    const p = parseMoneyInput(amountIn.value);
+  function readAmount(raw = amountIn.value) {
+    const p = parseMoneyInput(raw);
     if (p.error) return { error: p.error };
     const cents = p.cents;
     const units = unitsFromCents(cents, P.pay);
@@ -396,6 +401,82 @@ function payCard(tag, entry, beforePay = null) {
     return { cents, units, usd: value };
   }
   const fmtSend = (cents) => `${num2.format(cents / 100)} ${sellToken().symbol}`;
+
+  // ----- Max: the most this wallet can send right now -----
+  /**
+   * maxSendable() for this payment plus { who } (what set today's room: "recipient" | "payer" | "overall") and
+   * { min } (the smallest payment, base units), or null while the balance (or a local token's rate) is unknown.
+   * The limits are the same ones readAmount() checks: $25 (or the local token's ~$24.25 and Textile's maximum),
+   * the contract's tokenLimits and room today, the agent's room today for this recipient, and the $1 minimum.
+   */
+  function maxInfo() {
+    if (!P.account || !P.bal || !sameAddr(P.bal.token, sellToken().address)) return null;
+    const d = payDecimals(P.pay), cent = 10n ** BigInt(d - 2);
+    const fromCents = (c) => BigInt(Math.max(0, c)) * cent;
+    const lo = (a, b) => (a == null ? b : b == null ? a : b < a ? b : a);
+    const room = C && P.room && !P.room.error ? P.room : null;
+    const alw = P.allowance && !P.allowance.error ? P.allowance : null;
+    let per, agentToday = null, min;
+    if (P.pay === "usdt") {
+      const textile = isNaira() ? P.rate?.maxUsd?.[code()] : null;
+      per = lo(fromCents(USDT_MAX_CENTS), textile ? fromCents(Math.floor(textile * 100 + 1e-9)) : null);
+      if (alw) agentToday = fromCents(Math.floor(alw.leftUsd * 100 + 1e-9));
+      min = fromCents(USDT_MIN_CENTS);
+    } else {
+      // a local token is capped by its dollar value at today's rate: no rate, no Max
+      const u = usdPerUnit(P.pay, P.rate);
+      if (!u) return null;
+      const under = (usdv) => fromCents(Math.floor((usdv / u.usdPer) * 100 * (1 - 1e-12)));
+      per = under(CNGN_CAP_USD);
+      if (alw) agentToday = under(alw.leftUsd);
+      min = fromCents(Math.ceil(((u.approx ? 1.05 : 1) / u.usdPer) * 100 * (1 + 1e-12)));
+      if (P.pay === "cngn" && fromCents(NGN_MIN * 100) > min) min = fromCents(NGN_MIN * 100);
+    }
+    if (room) { per = lo(per, room.max); if (room.min > min) min = room.min; }
+    // today: the contract's three rooms and the agent's own; the smallest says why
+    let who = null, today = null;
+    for (const [w, v] of [["recipient", room?.remaining.forRecipient], ["payer", room?.remaining.forPayer], ["overall", room?.remaining.overall], ["recipient", agentToday]]) {
+      if (v != null && (today == null || v < today)) { today = v; who = w; }
+    }
+    const m = maxSendable({ balanceUnits: P.bal.units, decimals: d, inputDecimals: 2, perPaymentMax: per, roomToday: today, minUnits: min });
+    return m && { ...m, who, min };
+  }
+  /** "Max": fills the field with the most this wallet can send (then the usual input checks run), or says why it can't. */
+  function useMax() {
+    const m = P.busy ? null : maxInfo();
+    if (!m) return;
+    const amt = (u) => tokenAmountText(u, sellToken().address).replace(/\.00$/, "");
+    if (!m.ok) {
+      // under the minimum: the field isn't filled; the refusal the page would give for the smallest payment says why
+      const least = unitsInputTextUp(m.min);
+      const why = m.reason === "balance"
+        ? `This wallet has ${unitsText(P.bal.units)} ${sellToken().symbol}, less than the smallest payment (${amt(m.min)}).`
+        : readAmount(least).error ?? `The most you can send right now (${amt(m.units)}) is under the smallest payment (${amt(m.min)}).`;
+      maxShown = { text: amountIn.value, note: why, err: true };
+      renderForm();
+      return;
+    }
+    const check = readAmount(m.text);
+    if (check.error && !/^Loading/.test(check.error)) { maxShown = { text: amountIn.value, note: check.error, err: true }; renderForm(); return; }
+    maxShown = { text: m.text, note: maxReasonText(m.reason, amt(m.units), { who: m.who, name: "@" + tag }), err: false };
+    amountIn.value = m.text;
+    P.touched = true;
+    amountIn.dispatchEvent(new Event("input", { bubbles: true })); // the estimate, the summary and the refusal checks
+    amountIn.focus();
+  }
+  /** Base units -> the field's text, rounded UP to a cent (for the smallest payment). */
+  const unitsInputTextUp = (u) => {
+    const cent = 10n ** BigInt(payDecimals(P.pay) - 2), c = (u + cent - 1n) / cent;
+    return `${c / 100n}.${String(c % 100n).padStart(2, "0")}`;
+  };
+  function renderMax() {
+    maxBtn.set(P.busy ? "busy" : maxInfo() ? "on" : P.account ? "wait" : "off");
+    const n = maxShown && amountIn.value === maxShown.text ? maxShown : null;
+    const text = n?.note ?? "";
+    if (maxNote.textContent !== text) maxNote.textContent = text;
+    maxNote.hidden = !text;
+    maxNote.classList.toggle("err", Boolean(n?.err));
+  }
   /** Why the contract would refuse an amount over its room today, in plain English. */
   const roomError = (r) => {
     const t = sellToken().address, amt = (u) => tokenAmountText(u, t);
@@ -551,6 +632,7 @@ function payCard(tag, entry, beforePay = null) {
   const setActions = (node) => { if (actions.childNodes.length !== 1 || actions.firstChild !== node) actions.replaceChildren(node); };
   let problemKey = "";
   function renderWallet() {
+    renderMax();
     if (P.busy) return;
     if (!eth) {
       if (!noWalletBox.firstChild) noWalletBox.append(noWalletHelp({ action: "pay" }));

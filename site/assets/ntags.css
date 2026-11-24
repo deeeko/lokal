@@ -577,3 +577,18 @@ a.nt-linkfield:focus-visible { outline: 2px solid var(--mint); outline-offset: 2
 .nt-from { margin: 0; }
 .nt-from .badge { margin-left: 6px; }
 .ok-details > .dc-toggle { justify-self: center; }
+
+/* "Max" inside an amount field, next to the token label (tag pay form and pot spray) */
+.money-max {
+  flex: none; margin: 0 8px 0 4px; min-height: 32px; padding: 0 10px; border-radius: var(--r-pill); cursor: pointer;
+  font: 600 var(--fs-micro)/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--mint);
+  background: rgba(111, 240, 176, .08); border: 1px solid rgba(111, 240, 176, .28);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.money-max:hover:not(:disabled) { background: rgba(111, 240, 176, .16); border-color: rgba(111, 240, 176, .5); }
+.money-max:active:not(:disabled) { transform: scale(.97); transition: transform var(--t-press) ease-out; }
+.money-max:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+.money-max:disabled { cursor: not-allowed; color: var(--text-3); background: transparent; border-color: var(--line); opacity: .7; }
+.money-max[hidden] { display: none; }
+.money-max-note { margin-top: 6px; }
+@media (prefers-reduced-motion: reduce) { .money-max:active:not(:disabled) { transform: none; } }

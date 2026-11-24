@@ -16,12 +16,12 @@ import {
 import {
   LOKAL_POTS, approveData, payPotData, currencyRef, readPotInfo, readPotRemaining, readUnitsPerUsd, readTokenLimits, readAllowance,
   readTagOf, readTagInfo, checkPotPayment, simulate, potUsdValue, decodeRevert, tokenAmountText, payoutRoute, decodePotPaid,
-  payWithTokens, paySymbol, payDecimals, unitsFromCents, usdPerUnit, payUsdValue, localPayError,
+  payWithTokens, paySymbol, payDecimals, unitsFromCents, usdPerUnit, payUsdValue, localPayError, maxSendable,
 } from "../assets/lokal-contracts.js";
 import { currencyPicker } from "../assets/currency-ui.js";
 import { currencyChoice, successPanel, successHeadline } from "../assets/disclose.js";
 import { injectedWallet, ensureCelo, explainWalletError, CELO_CHAIN } from "../assets/session.js";
-import { alertBox, plainError, sameAddr, waitForReceipt, noWalletHelp, noCeloAlert, celoBalance, slowNotice, CNGN_CAP_USD } from "../assets/ntag-ui.js";
+import { alertBox, plainError, sameAddr, waitForReceipt, noWalletHelp, noCeloAlert, celoBalance, slowNotice, CNGN_CAP_USD, maxButton, maxReasonText } from "../assets/ntag-ui.js";
 import {
   potIdFrom, potState, timeLeftText, closeText, usd6Text, sprayRoom, sprayError, maxUnitsForUsd6, QUICK_AMOUNTS,
   sprayToken, loadPotSprays, pollPotSprays, mergeSprays, sprayOf, agoText,
@@ -233,8 +233,13 @@ function sprayForm() {
   // what the host gets first ("They receive: Dollars · Change"), then what the guest pays with ("You pay with: USD₮ ·
   // Change"): USD₮ for any currency; for dollars also cNGN, IDRX, wARS or wCOP; for a local currency also that token
   const paySlot = el("div", {});
-  const amountIn = el("input", { id: "spray-amount", type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false", size: "4", value: "2", "aria-describedby": "spray-hint" });
+  const amountIn = el("input", { id: "spray-amount", type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false", size: "4", value: "2", "aria-describedby": "spray-hint spray-max-note" });
   const tokenEl = el("span", { class: "token" }, "USD₮");
+  const maxBtn = maxButton(() => useMax());
+  maxBtn.el.hidden = !eth;
+  // why Max stopped where it did (a limit, not the balance), or why it can't fill: shown while the field still holds it
+  const maxNote = el("p", { class: "hint money-max-note", id: "spray-max-note", hidden: true });
+  let maxShown = null; // { text: the field's value it belongs to, note, err }
   const prefix = el("span", { class: "pot-cur", "aria-hidden": "true" }, "$");
   const quick = el("div", { class: "pot-quick", role: "group", "aria-label": "Quick amounts" });
   const hint = el("p", { class: "hint", id: "spray-hint" });
@@ -297,8 +302,8 @@ function sprayForm() {
   }
 
   /** { units, usd6 } or { error }. */
-  function readAmount() {
-    const p = parseMoneyInput(amountIn.value);
+  function readAmount(raw = amountIn.value) {
+    const p = parseMoneyInput(raw);
     if (p.error) return { error: p.error };
     const units = unitsFromCents(p.cents, S.payCode); // in the paid token's own decimals (USD₮ 6, IDRX 2, wARS 18 ...)
     const rpu = S.rpu[S.payCode];
@@ -314,6 +319,65 @@ function sprayForm() {
     }) : null;
     const error = sprayError({ units, usd6, limits: S.limits[S.payCode], room: r, fmt }) ?? local;
     return error ? { units, usd6, error } : { units, usd6 };
+  }
+  /**
+   * maxSendable() for this spray plus { who } (what set the pot's room: "pot" | "host" | "today") and { min }, or null
+   * while the balance or the contract's rate is unknown. The limits are the ones readAmount() checks: the token's
+   * min/max on the contract, the pot's room and this guest's cap left (in dollars, turned into the token at the
+   * contract's own rate), and for a local token converted to dollars the agent's ~$24.25 cap and the $1 minimum.
+   */
+  function maxInfo() {
+    if (!S.account || !S.bal || !sameAddr(S.bal.token, token())) return null;
+    const rpu = S.rpu[S.payCode], lim = S.limits[S.payCode], rem = S.remaining && !S.remaining.error ? S.remaining : null;
+    if (!rpu) return null;
+    const cent = centUnits();
+    let per = lim ? lim.max : null, min = lim ? lim.min : cent;
+    if (S.payCode !== "usdt" && receiveCode() === "usdt") {
+      const u = usdPerUnit(S.payCode, S.rate);
+      if (!u) return null;
+      const capUnits = BigInt(Math.max(0, Math.floor((CNGN_CAP_USD / u.usdPer) * 100 * (1 - 1e-12)))) * cent;
+      const least = BigInt(Math.ceil(((u.approx ? 1.05 : 1) / u.usdPer) * 100 * (1 + 1e-12))) * cent;
+      per = per == null || capUnits < per ? capUnits : per;
+      if (least > min) min = least;
+    }
+    let potRoom = null, who = null;
+    if (rem) for (const [w, v] of [["pot", rem.forPot], ["host", rem.forHost], ["today", rem.forToday]]) if (potRoom == null || BigInt(v) < potRoom) { potRoom = BigInt(v); who = w; }
+    const m = maxSendable({
+      balanceUnits: S.bal.units, decimals: payDecimals(S.payCode), inputDecimals: 2, perPaymentMax: per, minUnits: min,
+      potRoom: potRoom == null ? null : maxUnitsForUsd6(potRoom, rpu), guestRoom: rem ? maxUnitsForUsd6(rem.forPayer, rpu) : null,
+    });
+    return m && { ...m, who, min };
+  }
+  /** "Max": fills the field with the most this wallet can spray (then the usual checks run), or says why it can't. */
+  function useMax() {
+    const m = S.busy ? null : maxInfo();
+    if (!m) return;
+    const amt = (u) => fmt(u).replace(/\.00$/, "");
+    if (!m.ok) {
+      // under the smallest spray: the field isn't filled; the page's own refusal for the smallest spray says why
+      const cent = centUnits(), c = (m.min + cent - 1n) / cent;
+      const least = `${c / 100n}.${String(c % 100n).padStart(2, "0")}`;
+      const why = m.reason === "balance"
+        ? `This wallet has ${fmt(S.bal.units)} in ${paySymbol(S.payCode)}, less than the smallest spray (${amt(m.min)}).`
+        : readAmount(least).error ?? `The most you can spray right now (${amt(m.units)}) is under the smallest spray (${amt(m.min)}).`;
+      maxShown = { text: amountIn.value, note: why, err: true };
+      paint();
+      return;
+    }
+    const check = readAmount(m.text);
+    if (check.error && !/^Loading/.test(check.error)) { maxShown = { text: amountIn.value, note: check.error, err: true }; paint(); return; }
+    maxShown = { text: m.text, note: maxReasonText(m.reason, amt(m.units), { who: m.who }), err: false };
+    amountIn.value = m.text;
+    amountIn.dispatchEvent(new Event("input", { bubbles: true })); // the estimate, the quick amounts and the checks
+    amountIn.focus();
+  }
+  function paintMax() {
+    maxBtn.set(S.busy ? "busy" : maxInfo() ? "on" : S.account ? "wait" : "off");
+    const n = maxShown && amountIn.value === maxShown.text ? maxShown : null;
+    const text = n?.note ?? "";
+    if (maxNote.textContent !== text) maxNote.textContent = text;
+    maxNote.hidden = !text;
+    maxNote.classList.toggle("err", Boolean(n?.err));
   }
   function paintQuick() {
     const rpu = S.rpu[S.payCode];
@@ -399,7 +463,7 @@ function sprayForm() {
     hint.classList.toggle("err", Boolean(show));
     hint.textContent = show ? a.error : "";
     amountIn.setAttribute("aria-invalid", String(Boolean(show)));
-    paintQuick(); paintEstimate(a); paintRoom(); paintWallet(a);
+    paintQuick(); paintMax(); paintEstimate(a); paintRoom(); paintWallet(a);
   }
 
   async function loadTokenFacts() {
@@ -555,7 +619,7 @@ function sprayForm() {
   const node = el("div", { class: "card-b stack pot-form" },
     el("div", { class: "field" }, pickerSlot, paySlot),
     el("div", { class: "field" }, el("label", { class: "label", for: "spray-amount" }, "How much?"),
-      el("div", { class: "money" }, prefix, amountIn, tokenEl), quick, hint),
+      el("div", { class: "money" }, prefix, amountIn, maxBtn.el, tokenEl), quick, hint, maxNote),
     el("div", { class: "field" }, estimate),
     room, walletBox, actions, msg);
   const formKids = [...node.childNodes];

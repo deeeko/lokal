@@ -2,6 +2,18 @@
 
 Newest first. This was the README's progress log; it moved here when the README was cut to one page.
 
+## 2026-11-24: "Max" in the amount field
+
+- **Max** inside the amount field on tag pages and pot sprays fills in the most the connected wallet can send right
+  now: the smallest of its balance of the token being paid, the most per payment ($25, or about $24.25 in a local
+  token, and the contract's `tokenLimits`), today's room for that recipient and payer, and for a pot its room and the
+  guest's cap left. It rounds down to the field's 2 decimals, never fills less than the $1 minimum (it says why
+  instead), and when a limit rather than the balance sets it, one line says which ("Max is $25: the most per payment").
+  Off until a wallet is connected and its balance is read; payment links keep their fixed amount.
+- `maxSendable()` (site/assets/lokal-contracts.js) does the arithmetic, with table-driven tests for 2, 6 and 18
+  decimals, every limit binding, rounding down, a balance under the minimum and an unknown balance. The wallet line on
+  tag pages now rounds the balance down too, so it never shows more than Max will fill.
+
 ## 2026-11-23: pay in rupiah or pesos, they get dollars
 
 - **Three reverse corridors**, `idrx-usdt`, `wars-usdt` and `wcop-usdt`, next to `cngn-usdt`: the payer sends IDRX,
