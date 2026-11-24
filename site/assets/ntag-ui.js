@@ -38,6 +38,24 @@ export const BLOCKSCOUT_API = "https://celo.blockscout.com/api/v2";
 
 // ---------- pure helpers (tested in test/ntag-ui.test.mjs) ----------
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+/**
+ * Why "Max" stopped where it did, when a limit (not the wallet's balance) set it: "Max is $25: the most per payment."
+ * reason: maxSendable()'s; amt: the max as text ("$25", "₦36,000"); who: what set today's or the pot's room
+ * ("recipient" | "payer" | "overall" for a tag, "pot" | "host" | "today" for a pot); name: "@ada". null for the balance.
+ */
+export function maxReasonText(reason, amt, { who = null, name = "the recipient" } = {}) {
+  const why = {
+    perPayment: "the most per payment",
+    today: who === "payer" ? "what you can still pay today"
+      : who === "overall" ? "what the contract can still take today across everyone"
+        : `what ${name} can still receive today`,
+    pot: who === "host" ? "what the host's pots can still take today"
+      : who === "today" ? "what all pots can still take today"
+        : "what this pot can still take",
+    guest: "the most you can still spray into this pot",
+  }[reason];
+  return why ? `Max is ${amt}: ${why}.` : null;
+}
 /** "Nov 2026" from unix seconds, in Lagos time. */
 export const monthYear = (sec) => lagos(sec * 1000, { month: "short", year: "numeric" });
 /** "21 Dec 2026" from unix seconds, in Lagos time. */
@@ -758,6 +776,22 @@ export function noWalletHelp({ action = "continue" } = {}) {
       el("li", {}, "Paste the link there.")),
     el("div", { class: "row mt-16" }, copy,
       el("a", { class: "btn btn-secondary btn-sm", href: "https://metamask.app.link/dapp/" + page.replace(/^https?:\/\//, "") }, icon("ext"), "Open in MetaMask")));
+}
+/**
+ * "Max" inside an amount field (next to the token label): fills the field with the most the payer can send right now.
+ * set(state): "on" (enabled), "off" (no wallet: disabled, says to connect), "wait" (the balance is still loading).
+ * The page decides what to fill on click (maxSendable in lokal-contracts.js).
+ */
+export function maxButton(onClick) {
+  const btn = el("button", { type: "button", class: "money-max", "aria-label": "Use the most you can send" }, "Max");
+  btn.addEventListener("click", onClick);
+  const set = (state) => {
+    btn.disabled = state !== "on";
+    const title = state === "off" ? "Connect your wallet to see your balance" : state === "wait" ? "Checking your balance…" : "Use the most you can send";
+    if (btn.title !== title) btn.title = title;
+  };
+  set("off");
+  return { el: btn, set };
 }
 /** The "no CELO for the network fee" warning, with a Get CELO link and an optional "… anyway" button. */
 export function noCeloAlert(onAnyway, anywayLabel = "Send anyway") {

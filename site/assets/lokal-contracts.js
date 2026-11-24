@@ -270,6 +270,39 @@ export function localPayError(v, capUsd, fmtMax) {
   if (v.usd < (v.approx ? 1.05 : 1)) return "That's worth less than $1. Send a little more.";
   return null;
 }
+/** Base units as the amount field takes them: at most `inputDecimals` decimals, rounded DOWN, no grouping ("24.25", "184000"). */
+export function unitsInputText(units, decimals, inputDecimals = 2) {
+  const u = BigInt(units), d = Number(decimals);
+  const p = Math.max(0, Math.min(Number(inputDecimals), d));
+  const one = 10n ** BigInt(d);
+  const whole = u / one;
+  if (p === 0) return whole.toString();
+  const frac = ((u % one) / 10n ** BigInt(d - p)).toString().padStart(p, "0");
+  return /^0+$/.test(frac) ? whole.toString() : `${whole}.${frac}`;
+}
+/**
+ * The "Max" button: the most a payer can send right now, in base units of the paid token. The smallest of the wallet's
+ * balance (`balanceUnits`), the most one payment may be (`perPaymentMax`), today's room for this recipient and payer
+ * (`roomToday`), and for a pot its room (`potRoom`) and this guest's cap left (`guestRoom`); null limits are unknown and
+ * left out. Rounded DOWN to what the field takes (`inputDecimals`), so it never exceeds any of them.
+ * Returns null while the balance is unknown, else { units, text, reason, ok }: reason names the binding limit
+ * ("balance" | "perPayment" | "today" | "pot" | "guest", the balance winning a tie); ok is false (and text "") when the
+ * result is under `minUnits` (the smallest payment the contract or the agent takes), so the field is not filled.
+ */
+export function maxSendable({ balanceUnits, decimals, inputDecimals = 2, perPaymentMax = null, roomToday = null, potRoom = null, guestRoom = null, minUnits = 0n } = {}) {
+  if (balanceUnits == null || decimals == null) return null;
+  let best = null, reason = null;
+  for (const [k, v] of [["balance", balanceUnits], ["perPayment", perPaymentMax], ["today", roomToday], ["pot", potRoom], ["guest", guestRoom]]) {
+    if (v == null) continue;
+    const b = BigInt(v) < 0n ? 0n : BigInt(v);
+    if (best == null || b < best) { best = b; reason = k; }
+  }
+  const d = Number(decimals), p = Math.max(0, Math.min(Number(inputDecimals), d));
+  const step = 10n ** BigInt(d - p);
+  const units = best - (best % step);
+  const ok = units > 0n && units >= BigInt(minUnits ?? 0n);
+  return { units, text: ok ? unitsInputText(units, d, p) : "", reason, ok };
+}
 
 // ---------- decoding ----------
 const TAG_INFO_OUT = ["address", "string", "uint256", "address", "uint256", "address"];

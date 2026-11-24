@@ -1,6 +1,8 @@
 // Screenshots of the payment screens at 390 px and 1440 px, to compare how much each one shows by default:
 //   - the tag pay page with no warnings, with warnings (first-time payee, new tag), and with a refusal (over the room
 //     the contract has left today);
+//   - "Max" in the amount field (ONLY=max): before a tap, after one capped by the wallet's balance, by the $25 per
+//     payment and by what @ada can still receive today;
 //   - the success state after paying a tag, and after paying a payment link;
 //   - the payment-link page;
 //   - Get paid with a created link (the QR code collapsed, then opened);
@@ -76,7 +78,7 @@ const usd = (n) => BigInt(Math.round(n * 1e6));
 const day = (h) => new Date((NOW - 30 * HOUR + h * HOUR) * 1000).toISOString();
 
 /** roomUsd: how much more the recipient can receive on the contract today (USD₮). */
-function mockChain({ roomUsd = 25, me = OWNER } = {}) {
+function mockChain({ roomUsd = 25, me = OWNER, balUsd = 48.5 } = {}) {
   const st = { sent: null, link: null };
   const tagInfo = (t) => {
     const x = TAGS[t];
@@ -95,7 +97,7 @@ function mockChain({ roomUsd = 25, me = OWNER } = {}) {
       return "0x" + w64(0);
     }
     if (lc(to) === lc(USDT_ADDRESS) && sel === FN.DOMAIN_SEPARATOR) return USDT_DOMAIN_SEPARATOR;
-    if (sel === FN.balanceOf) return "0x" + w64(usd(48.5));
+    if (sel === FN.balanceOf) return "0x" + w64(usd(balUsd));
     if (sel === FN.allowance || sel === FN.nonces) return "0x" + w64(0);
     if (sel === "0x313ce567") return "0x" + w64(CURRENCIES.find((c) => lc(c.address) === lc(to))?.decimals ?? 6);
     return "0x" + w64(0);
@@ -223,6 +225,28 @@ for (const width of [390, 1440]) {
       await settle(page, 1200);
       await tall(page, `success-tag-${width}`);
     }
+    await ctx.close();
+  }
+
+  // ---------- "Max" in the amount field ----------
+  if (want("max"))
+  for (const s of [
+    { name: "tag-max-visible", balUsd: 48.5 },
+    { name: "tag-max-by-balance", balUsd: 13.379, tap: true },
+    { name: "tag-max-by-25-limit", balUsd: 48.5, tap: true },
+    { name: "tag-max-by-today", balUsd: 48.5, roomUsd: 12, tap: true },
+  ]) {
+    const mock = mockChain({ roomUsd: s.roomUsd ?? 25, me: PAYER, balUsd: s.balUsd });
+    const ctx = await context({ width, mock, consent: "accepted", paid: ["ada", "tunde"], wallet: PAYER });
+    const page = await ctx.newPage();
+    await page.goto(`${ORIGIN}/tag.html?t=ada`);
+    await hideConsent(page);
+    await page.waitForSelector(".money-max:not([disabled])", { timeout: 30000 });
+    await page.waitForFunction(() => !/Checking the contract/.test(document.querySelector("#pay-contract-room")?.textContent ?? ""), null, { timeout: 30000 });
+    await settle(page, 1200);
+    if (s.tap) { await page.click(".money-max"); await settle(page, 700); }
+    await page.locator("section.card:has(#pay-amount)").screenshot({ path: path.join(OUT, `${s.name}-${width}.png`) });
+    shots.push(`${s.name}-${width}.png`);
     await ctx.close();
   }
 

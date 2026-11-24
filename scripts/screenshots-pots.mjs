@@ -379,6 +379,26 @@ if (ONLY === "delete") {
   check(await delBtn(page, "Bisi's 30th").count() === 1 && await page.locator("#pots .pot-deleted-toggle").count() === 0, "storage full: back after a reload");
   await ctx.close();
 }
+// ---------- "Max" in the spray amount (ONLY=max): before a tap, then capped by this guest's $5 left; 360 checked too ----------
+if (ONLY === "max") {
+  for (const width of [390, 1440, 360]) {
+    const mock = mockChain();
+    const ctx = await context({ width, mock, wallet: { connected: true, account: GUEST } });
+    const page = await ctx.newPage();
+    await page.goto(ORIGIN + "/pot.html?id=7");
+    await hideConsent(page);
+    await page.waitForSelector(".pot-spray .money-max:not([disabled])", { timeout: 30000 });
+    await settle(page, 1200);
+    const w = width === 360 ? "360" : String(width);
+    await save(page.locator(".pot-spray"), `pot-max-visible-${w}`);
+    await page.click(".pot-spray .money-max");
+    await settle(page, 600);
+    check(await page.inputValue("#spray-amount") === "5", `${w}: Max fills this guest's $5 left`);
+    check(/Max is \$5/.test(await page.locator("#spray-max-note").textContent()), `${w}: and says why`);
+    await save(page.locator(".pot-spray"), `pot-max-by-guest-cap-${w}`);
+    await ctx.close();
+  }
+}
 for (const width of ONLY ? [] : [390, 1440]) {
   // ---------- the host: create a pot on the dashboard, see it made, the "Your pots" card ----------
   {
