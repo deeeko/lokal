@@ -164,9 +164,12 @@ test("loadProof reads pages, deposits and status records, and survives a missing
   await assert.rejects(P.loadProof({ txPage: async () => { throw new Error("down"); }, fetchJson: async () => [] }));
 });
 
-test("site/proof-users.json starts empty and valid", async () => {
+test("site/proof-users.json is a valid list of consented named users", async () => {
   const fs = await import("node:fs");
-  assert.deepEqual(JSON.parse(fs.readFileSync(new URL("../site/proof-users.json", import.meta.url), "utf8")), []);
+  const users = JSON.parse(fs.readFileSync(new URL("../site/proof-users.json", import.meta.url), "utf8"));
+  assert.ok(Array.isArray(users));
+  for (const u of users) assert.ok(P.userEntryOk(u), JSON.stringify(u));
+  assert.equal(new Set(users.map((u) => u.receiptNo)).size, users.length, "one entry per receipt");
 });
 
 test("the TOKENS registry covers every payout token the proof page reads", () => {
