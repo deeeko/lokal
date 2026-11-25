@@ -66,7 +66,9 @@ GET /api/status?agent=1
 ```
 
 Cached at the edge for 10 seconds like every GET. The site can show "Agent online · last seen N min ago" from `ageSec`
-(the watchdog below calls the agent offline after 10 minutes). Nothing on the site uses it yet.
+(the watchdog below calls the agent offline after 10 minutes). The tag pay page, the pot spray page and the
+payment-link page use it: when the last heartbeat is older than 15 minutes they show "The agent is offline right now"
+above the Pay button (a warning only; nothing when the status can't be read).
 
 **Watchdog** (`.github/workflows/agent-watchdog.yml`, `scripts/agent-watchdog.mjs`): every 15 minutes GitHub Actions
 reads `?agent=1` and sends a Telegram alert (repository secrets `ALERT_TELEGRAM_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`) when
@@ -122,7 +124,9 @@ node src/agent.mjs refund --deposit 0x<tx>:<logIndex> --execute
 flag, holding `{ pid, host, startedAt, command }`. A second one is refused: "Autopilot is already running (pid N,
 started T)." A lock whose process is gone (a crash) is **never removed automatically**: the command says a stale lock
 was found and asks you to check, then run it again with `--clear-stale-lock`. The lock is released on normal exit,
-Ctrl+C, SIGTERM and uncaught exceptions. Dry runs never take it.
+Ctrl+C, SIGTERM and uncaught exceptions. Dry runs never take it. On a server ([SERVER.md](SERVER.md)) the service's
+start check clears a stale lock by itself, but only one from the same machine whose process is gone, and never after
+a safety stop (exit code 3, `safety-stop.json`).
 
 **Alerts** (`src/alerts.mjs`, optional). Telegram (`ALERT_TELEGRAM_TOKEN` + `ALERT_TELEGRAM_CHAT_ID`) and/or any
 webhook (`ALERT_WEBHOOK_URL`, a JSON POST `{ text, content, level, kind, at }` that Slack and Discord read). Alerts wait

@@ -18,3 +18,5 @@ status-secret
 refunds.json
 agent.lock
 alerts-outbox*
+safety-stop.json
+server-migration-manifest.txt

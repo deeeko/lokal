@@ -211,7 +211,10 @@ refused while another one holds it; add `--clear-stale-lock` only after checking
 `ID` is `usdt-cngn` (default) or `cngn-usdt`; `pay` and `quote` also take `celo-cngn`. `NAME` must be in `contacts.json`
 (case-insensitive): copy `contacts.example.json` to `contacts.json` and add recipients, plus any `own_wallets` the agent
 must never pay. Autopilot needs a computer that keeps `watch --execute` running with the key file; it pays only while
-running.
+running. [SERVER.md](SERVER.md) runs it as a systemd service on a Linux server.
+
+`watch` exit codes: 0 after Ctrl+C / SIGTERM (a clean stop), **3 after a safety stop** (it stopped on purpose because
+something needs a human; a service manager must not restart it), 1 for anything else (a crash, a refused lock).
 
 ### Environment variables
 
@@ -248,6 +251,7 @@ All optional (see `.env.example`).
 | `REFUNDS_FILE` | `refunds.json` | Refunds, keyed by `tx:logIndex` (`sending`, `refunded`, `failed`, `too_small_to_refund`) |
 | `MAX_DAILY_REFUND_USD` | `100` | Most USD refunded in any rolling 24 h (refunds never count towards the payout caps) |
 | `MIN_REFUND_USD` | `1` | Deposits worth less are recorded as `too_small_to_refund` and left alone |
+| `SAFETY_STOP_FILE` | `safety-stop.json` (next to the lock) | Written when autopilot stops on purpose (exit code 3); the server service won't start while it exists ([SERVER.md](SERVER.md)) |
 | `AGENT_LOCK_FILE` | `agent.lock` (next to `watch-state.json`) | One agent at a time |
 | `LOW_CELO_WARN` | `3` | Autopilot warns (and alerts) when the agent holds less CELO |
 | `ALERT_TELEGRAM_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | not set | Telegram alerts (a bot token is a secret: never commit it) |

@@ -21,7 +21,7 @@ import {
 import { currencyPicker } from "../assets/currency-ui.js";
 import { currencyChoice, successPanel, successHeadline } from "../assets/disclose.js";
 import { injectedWallet, ensureCelo, explainWalletError, CELO_CHAIN } from "../assets/session.js";
-import { alertBox, plainError, sameAddr, waitForReceipt, noWalletHelp, noCeloAlert, celoBalance, slowNotice, CNGN_CAP_USD, maxButton, maxReasonText } from "../assets/ntag-ui.js";
+import { alertBox, plainError, sameAddr, waitForReceipt, noWalletHelp, noCeloAlert, celoBalance, slowNotice, CNGN_CAP_USD, maxButton, maxReasonText, agentNotice } from "../assets/ntag-ui.js";
 import {
   potIdFrom, potState, timeLeftText, closeText, usd6Text, sprayRoom, sprayError, maxUnitsForUsd6, QUICK_AMOUNTS,
   sprayToken, loadPotSprays, pollPotSprays, mergeSprays, sprayOf, agoText,
@@ -621,7 +621,7 @@ function sprayForm() {
     el("div", { class: "field" }, el("label", { class: "label", for: "spray-amount" }, "How much?"),
       el("div", { class: "money" }, prefix, amountIn, maxBtn.el, tokenEl), quick, hint, maxNote),
     el("div", { class: "field" }, estimate),
-    room, walletBox, actions, msg);
+    room, walletBox, agentNotice(), actions, msg);
   const formKids = [...node.childNodes];
   loadTokenFacts();
   refreshRoom();

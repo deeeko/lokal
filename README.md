@@ -169,6 +169,7 @@ The demo deploys both contracts on a local chain and plays out 28 payments, ever
 - [CLI.md](docs/CLI.md): the `lokal` command, the agent CLI, every flag and environment variable
 - [OPERATOR.md](docs/OPERATOR.md): running the agent: status server, refunds, the lock, alerts, `doctor`
 - [RUNBOOK.md](docs/RUNBOOK.md): the first real payout, step by step
+- [SERVER.md](docs/SERVER.md): running the agent 24/7 on a free Linux server (systemd, moving from the PC, safety stops)
 - [WHO-ENFORCES-WHAT.md](docs/WHO-ENFORCES-WHAT.md), [REFUNDS.md](docs/REFUNDS.md), [CASH-OUT.md](docs/CASH-OUT.md)
 - [ROADMAP.md](docs/ROADMAP.md) (status, roadmap, business model) and [CHANGELOG.md](docs/CHANGELOG.md)
 - [SECURITY.md](SECURITY.md): reporting a vulnerability

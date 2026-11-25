@@ -133,6 +133,13 @@ export const MAX_DAILY_REFUND_USD = process.env.MAX_DAILY_REFUND_USD ?? "100";
 export const MIN_REFUND_USD = process.env.MIN_REFUND_USD ?? "1";
 // One agent at a time: watch --execute and every --execute command take this lock (src/lock.mjs).
 export const AGENT_LOCK_FILE = process.env.AGENT_LOCK_FILE ?? path.join(path.dirname(WATCH_STATE_FILE), "agent.lock");
+// A deliberate safety stop (autopilot stopped on purpose: a payout failed, a swap brought no USD₮, a save failed, a cap
+// was reached, ...). watch exits with EXIT_SAFETY_STOP and, with --execute, records it in SAFETY_STOP_FILE next to the
+// lock. A service manager must NOT restart autopilot after it (scripts/server/lokalpay-agent.service:
+// RestartPreventExitStatus=3, and scripts/server/prestart.mjs refuses to start while the file exists). The owner
+// removes the file after fixing the cause (scripts/server/resume.sh on the server). Every other non-zero exit is 1.
+export const EXIT_SAFETY_STOP = 3;
+export const SAFETY_STOP_FILE = process.env.SAFETY_STOP_FILE ?? path.join(path.dirname(WATCH_STATE_FILE), "safety-stop.json");
 // Alerts (src/alerts.mjs): autopilot warns when the agent holds less CELO than this (it pays every network fee in CELO).
 export const LOW_CELO_WARN = process.env.LOW_CELO_WARN ?? "3";
 export const ALERTS_OUTBOX_FILE = process.env.ALERTS_OUTBOX_FILE ?? path.join(root, "alerts-outbox.jsonl");

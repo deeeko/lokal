@@ -10,7 +10,7 @@ import { bindDisclosures, qrDisclosure, successPanel, successHeadline, rateSumma
 import { ensureCelo, explainWalletError } from "../assets/session.js";
 import {
   agentStatus, depositStatus, allowanceFromStatus, globalFromStatus, receivedStale, statusFinal, sourceNote, refusedNote, refundedLine, refundedText,
-  DELAYED_NOTE, SLOW_NOTE, focusHeading,
+  DELAYED_NOTE, SLOW_NOTE, focusHeading, agentNotice,
 } from "../assets/ntag-ui.js";
 
 initChrome();
@@ -303,6 +303,9 @@ function initLink(req) {
   const agentWaiting = () => (state.payout ? null : state.agent?.status === "failed" ? "failed"
     : state.agent?.status === "received" ? (receivedStale(state.agent) ? "slow" : "paying") : null);
   let timer = null, busy = false;
+  // "The agent is offline right now ..." above the pay options: warns, never blocks; nothing when it can't be read
+  const agentLine = el("div", {}, agentNotice());
+  $("#l-wallet").before(agentLine);
   const expired = () => Date.now() >= req.exp;
   const regStatusAt = (sec) => registrationStatuses(state.regs, sec).get(req.id);
   /** null while unknown; "active" for #r= links. "in-use" = an earlier link took this amount. */
@@ -330,6 +333,7 @@ function initLink(req) {
     // and never while a payment from this tab is on its way (no second payment by accident)
     const canPay = canPayNow() && !sentActive();
     $("#l-actions").hidden = !canPay || Boolean(eth);
+    agentLine.hidden = !canPay;
     $("#l-open-alt").hidden = !eth;
     $("#l-other").hidden = !canPay;
     $("#l-amount-hint").hidden = !canPay;

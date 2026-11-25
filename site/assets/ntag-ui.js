@@ -444,6 +444,66 @@ export function units6Of(amount) {
   const m = /^(\d+)(?:\.(\d{1,18}))?$/.exec(String(amount ?? ""));
   return m ? BigInt(m[1]) * 1_000_000n + BigInt(((m[2] ?? "") + "000000").slice(0, 6)) : 0n;
 }
+// ---------- is the agent online? (GET /api/status?agent=1: the last heartbeat autopilot sent) ----------
+// The server stores a heartbeat at most every ~4 minutes, so the agent counts as offline only when the last one is older
+// than 15 minutes. The pay pages only WARN (never block: the payment is safe and is paid when the agent is back, or
+// refunded); when the status can't be read, they show nothing, so there are no false alarms.
+export const AGENT_OFFLINE_MS = 15 * 60_000;
+/**
+ * Online or offline from a ?agent=1 answer: { online: boolean, ageSec } or null when it can't tell (a malformed
+ * answer, no heartbeat ever stored). Uses the server's own ageSec; lastSeen + nowMs only when ageSec is missing.
+ */
+export function agentOnline(answer, nowMs = Date.now()) {
+  if (!answer || typeof answer !== "object" || answer.ok !== true || answer.source !== "agent") return null;
+  const a = answer.agent;
+  if (!a || typeof a !== "object") return null;
+  let ageSec = finite(a.ageSec) ? a.ageSec : null;
+  if (ageSec == null) {
+    const t = Date.parse(typeof a.lastSeen === "string" ? a.lastSeen : "");
+    if (!Number.isFinite(t) || !finite(nowMs)) return null;
+    ageSec = (nowMs - t) / 1000;
+  }
+  ageSec = Math.max(0, Math.round(ageSec));
+  return { online: ageSec * 1000 <= AGENT_OFFLINE_MS, ageSec };
+}
+/** "4 min ago", "3 h ago", "2 days ago". */
+export function agentAgeText(ageSec) {
+  const min = Math.max(1, Math.round((Number(ageSec) || 0) / 60));
+  if (min < 120) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
+}
+/** The calm offline sentence, or null while the agent is online (or unknown). */
+export function agentOfflineText(state) {
+  if (!state || state.online) return null;
+  return `The agent is offline right now (last seen ${agentAgeText(state.ageSec)}). Your payment is safe and will be paid when it's back, or it can be refunded.`;
+}
+/** Reads ?agent=1 and resolves agentOnline(answer), or null whenever it can't be read. opts.force/fetchImpl: tests. */
+export async function readAgentOnline({ fetchImpl = globalThis.fetch, force = false, base = "/api/status", ms = 6000, nowMs } = {}) {
+  if ((!HAS_API && !force) || typeof fetchImpl !== "function") return null;
+  try {
+    const r = await fetchImpl(`${base}?agent=1`, { headers: { accept: "application/json" }, signal: timeoutSignal(ms) });
+    if (!r || r.status !== 200) return null;
+    return agentOnline(await r.json(), nowMs ?? Date.now());
+  } catch {
+    return null;
+  }
+}
+/**
+ * The small line above a Pay button: hidden while the agent is online or its status is unknown, the calm offline
+ * sentence otherwise. Returns the element at once and fills it when the answer arrives.
+ */
+export function agentNotice(opts = {}) {
+  const box = el("div", { class: "agent-notice", role: "status", hidden: true });
+  readAgentOnline(opts).then((state) => {
+    const text = agentOfflineText(state);
+    if (!text) return;
+    box.replaceChildren(alertBox("", "info", el("p", {}, text)));
+    box.hidden = false;
+  }, () => {});
+  return box;
+}
+
 /** The small "where this status comes from" line. */
 export const sourceNote = (fromAgent, cls = "micro muted nt-source") => el("span", { class: cls }, fromAgent ? STATUS_SOURCE.agent : STATUS_SOURCE.chain);
 

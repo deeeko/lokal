@@ -1,0 +1,54 @@
+# LokalPay autopilot on a Linux server (docs/SERVER.md). Installed by scripts/server/setup.sh as
+# /etc/systemd/system/lokalpay-agent.service (setup.sh writes the real user and home in place of ubuntu / /home/ubuntu).
+#
+# ONLY ONE AGENT MAY EVER RUN. The PC agent must be stopped for good before this service starts.
+#
+# Restart policy:
+#   - a crash (an uncaught error, exit 1) or a kill by signal: restarted after 30 s (Restart=on-failure);
+#   - a network failure does not even end the process: autopilot retries Forno / Blockscout itself with backoff;
+#   - a DELIBERATE SAFETY STOP (exit code 3, e.g. "Swap succeeded but no USDT was received", a failed payout, a failed
+#     save, a cap reached): NEVER restarted (RestartPreventExitStatus=3). autopilot sends the urgent alert, prints
+#     "AUTOPILOT STOPPED: ..." and "SAFETY STOP (exit code 3)" in the journal, and writes safety-stop.json, which makes
+#     prestart.mjs refuse every later start (also after a reboot) until the owner runs scripts/server/resume.sh;
+#   - more than 5 starts in 10 minutes: systemd gives up (StartLimitBurst), so nothing can loop.
+# Before each start, prestart.mjs clears agent.lock only when it is from this machine and its process is gone (a crash
+# or a reboot), never after a safety stop and never while another agent runs.
+[Unit]
+Description=LokalPay agent (autopilot: watch --execute)
+Documentation=https://github.com/deeeko/lokal/blob/main/docs/SERVER.md
+Wants=network-online.target
+After=network-online.target time-sync.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/lokal
+Environment=NODE_ENV=production
+# Optional: ALERT_TELEGRAM_TOKEN, ALERT_TELEGRAM_CHAT_ID, ALERT_WEBHOOK_URL, CELO_RPC_URL, ... one KEY=value per line.
+# The leading "-" means the file may be missing.
+EnvironmentFile=-/home/ubuntu/.celo-naira-agent/env
+ExecStartPre=/usr/bin/node scripts/server/prestart.mjs
+ExecStart=/usr/bin/node src/agent.mjs watch --execute
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=3
+# SIGTERM = the same clean stop as Ctrl+C (src/watch.mjs): autopilot finishes the current step (a payout in flight is
+# never cut), saves, releases agent.lock and exits 0. A payout can take a while (approvals, swap, payout, receipts),
+# so it gets 120 s before systemd sends SIGKILL.
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=120
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lokalpay-agent
+# State files and the key stay private to this user; the rest of the system is read-only for autopilot.
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

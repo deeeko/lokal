@@ -19,7 +19,7 @@ import {
   nameText, LIMITS, LIMITS_TEXT, CNGN_CAP_USD, REFUSED_NOTE, receivableToday, allowanceResetAt, loadNtagStateFresh,
   loadTagLedger, slowNotice, scrollToNode, focusHeading, noWalletHelp, noCeloAlert, celoBalance,
   agentStatus, depositStatus, allowanceFromStatus, combineAllowance, receivedStale, paidText, sourceNote, refusedNote, refundedLine,
-  DELAYED_NOTE, SLOW_NOTE, payoutText, lookupTag, maxButton, maxReasonText,
+  DELAYED_NOTE, SLOW_NOTE, payoutText, lookupTag, maxButton, maxReasonText, agentNotice,
 } from "../assets/ntag-ui.js";
 import {
   assessTag, loadTagEvents, addBlockTimes, eventsNeedingTime, legacyHistory, readPaidTags, recordPaidTag,
@@ -358,7 +358,7 @@ function payCard(tag, entry, beforePay = null) {
     el("div", { class: "receive" }, el("div", { class: "label" }, el("span", {}, "@" + tag + " gets about")), out),
     refusal,
     el("div", { class: "nt-folds" }, rateRow.el, limitsRow.el),
-    beforePay, walletBox, actions, msg);
+    beforePay, walletBox, agentNotice(), actions, msg);
   const body = el("div", { class: "card-b" }, form);
   form.append(el("p", { class: "micro muted" }, "Your wallet asks before anything is sent."));
   const section = el("section", { class: "card", "aria-labelledby": "pay-h" }, body);

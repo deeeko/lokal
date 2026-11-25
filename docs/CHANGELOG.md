@@ -2,6 +2,27 @@
 
 Newest first. This was the README's progress log; it moved here when the README was cut to one page.
 
+## 2026-11-25: the agent on a server
+
+- **Run the agent 24/7 on a free Linux server** (Oracle Cloud Always Free, Ubuntu 24.04, x86 or ARM) instead of the
+  PC: [SERVER.md](SERVER.md). The same `watch --execute`, as the systemd service `lokalpay-agent`
+  (`scripts/server/lokalpay-agent.service`), installed by `scripts/server/setup.sh` (Node.js 22, the clone, `npm ci`,
+  secret and state-file checks, `doctor`), with `status.sh`, `update.sh` and `resume.sh` next to it.
+- **Moving from the PC is checked, not trusted:** `scripts/server/pc-export.ps1` refuses while the PC agent runs,
+  writes a SHA-256 manifest of every state file, and seals the PC with a lock that names another computer, so the PC
+  can't run a second agent. `setup.sh` refuses to install the service until the server's copies match the manifest. A
+  fresh start is not allowed when records exist.
+- **Safety stops are final until a human looks:** when autopilot stops on purpose it now exits with code **3** and
+  writes `safety-stop.json` (it already printed the reason and sent the urgent alert). The service never restarts it
+  (`RestartPreventExitStatus=3`), and its start check (`scripts/server/prestart.mjs`) refuses every later start, also
+  after a reboot, until `resume.sh`. Crashes restart after 30 s; a stale lock is cleared only when it is from this
+  machine and its process is gone.
+- **"The agent is offline right now"** on the tag pay page, the pot spray page and the payment-link page when the last
+  heartbeat is older than 15 minutes: a calm line above the Pay button that says the payment is safe and will be paid
+  when it's back, or refunded. It never blocks, and shows nothing when the status can't be read.
+- Tests: the prestart decision, the safety-stop record, the unit's restart policy, the shared file lists, `bash -n` of
+  every server script, and the online / offline decision.
+
 ## 2026-11-24: "Max" in the amount field
 
 - **Max** inside the amount field on tag pages and pot sprays fills in the most the connected wallet can send right

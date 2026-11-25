@@ -15,6 +15,7 @@
 //                                                               create a payment link with a unique amount
 //   node src/agent.mjs requests                                 list payment requests
 //   node src/agent.mjs watch [--execute] [--interval 15]        autopilot: pay matched deposits (DRY RUN by default)
+//                                                               exit code 3 = a deliberate safety stop (docs/SERVER.md)
 //   node src/agent.mjs registrations                            list "Get paid" registrations found onchain
 //   node src/agent.mjs retry --request ID [--execute] [--yes]  re-run a failed autopilot payout (DRY RUN by default)
 //   node src/agent.mjs retry --registration HASH [--execute] [--yes]   same, for a "Get paid" registration
@@ -44,8 +45,9 @@ import { loadContractDeposits } from "./contract-watch.mjs"; // contract payment
 import { verifyTx } from "@celo/attribution-tags";
 import {
   AGENT_ADDRESS, ATTRIBUTION_CODE, CELO_MIN_USDT, CHAIN, DEFAULT_CORRIDOR, MAX_DAILY_USD, MAX_USD, MAX_WALLET_DAILY_USD,
-  MIN_CELO_RESERVE, SITE_URL, STATUS_OUTBOX_FILE, STATUS_URL, TOKENS,
+  MIN_CELO_RESERVE, SITE_URL, STATUS_OUTBOX_FILE, STATUS_URL, TOKENS, EXIT_SAFETY_STOP, SAFETY_STOP_FILE,
 } from "./config.mjs";
+import { recordSafetyStop } from "./safety-stop.mjs";
 import { keygen, loadAccount, makeClients } from "./chain.mjs";
 import {
   assertRecipient, dailyUsedUnits, getCorridor, getPayCorridor, parseAmount, parseCurrency, payoutCorridor, resolveContact,
@@ -64,7 +66,7 @@ import {
   decodeNtagPayment, discoverNtagOps, encodeNtagTransfer, loadNtagPayments, normalizeNtag, ntagAvailability, ntagError, ntagOf,
   ownerOf, refusedRetryBlocker, resolveNtags, saveNtagPayments, verifyNtagOpOnchain,
 } from "./ntags.mjs";
-import { NTAG_MIN, NTAG_MIN_USD, ntagUsdFloor, watch } from "./watch.mjs";
+import { NTAG_MIN, NTAG_MIN_USD, firstSentence, ntagUsdFloor, watch } from "./watch.mjs";
 import { directEvent, eventsFromRecords, isDirectReceipt, makeStatusReporter, refundEvent, retryPaidEvent } from "./status-report.mjs";
 import { acquireLock } from "./lock.mjs";
 import { age, loadRefunds, refundDeposit, refundRows, saveRefunds } from "./refund.mjs";
@@ -579,7 +581,13 @@ async function main() {
         });
       } catch (e) {
         if (!e?.printed) throw e;
-        process.exitCode = 1; // autopilot already printed what happened and how to restart, as its last line
+        // A deliberate safety stop: autopilot already printed what happened and how to restart, and sent the urgent
+        // alert. Its own exit code tells a service manager not to restart it (docs/SERVER.md); with --execute it is
+        // also recorded in safety-stop.json, so a reboot doesn't restart it either.
+        const recorded = has("execute") && recordSafetyStop(firstSentence(e.message));
+        console.error(`SAFETY STOP (exit code ${EXIT_SAFETY_STOP}): autopilot stopped on purpose and must not be restarted automatically.` +
+          (recorded ? ` Recorded in ${SAFETY_STOP_FILE}; on the server, fix the cause, then run scripts/server/resume.sh.` : ""));
+        process.exitCode = EXIT_SAFETY_STOP;
       }
       break;
     case "refunds": {

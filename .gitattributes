@@ -1,0 +1,4 @@
+# The server scripts run on Linux: keep LF line endings on every checkout (also on Windows).
+scripts/server/*.sh text eol=lf
+scripts/server/*.service text eol=lf
+scripts/server/*.mjs text eol=lf
