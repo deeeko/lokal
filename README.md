@@ -12,7 +12,7 @@ naira, rupiah or pesos into their own wallet. Two contracts refuse any payment o
 ![The LokalPay landing page: "Send dollars. They receive their lokal money." with the live converter](docs/assets/landing.jpg)
 
 **[Live app](https://lokalpay.vercel.app)** ·
-Demo video (coming soon) ·
+**[Demo video](https://youtu.be/ooTuNiu4xzM)** (1:53) ·
 [Proof page](https://lokalpay.vercel.app/proof.html) ·
 [LokalTags](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) ·
 [LokalPots](https://celoscan.io/address/0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF) ·
