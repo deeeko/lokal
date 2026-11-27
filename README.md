@@ -162,6 +162,22 @@ The demo deploys both contracts on a local chain and plays out 28 payments, ever
 ([the table](docs/CONTRACTS.md)). `node scripts/serve.mjs` previews the site; the agent's commands are in
 [docs/CLI.md](docs/CLI.md).
 
+## For agents and automated checks
+
+Everything public works without a browser or a login. A machine-readable summary is at
+[llms.txt](https://lokalpay.vercel.app/llms.txt).
+
+| Endpoint | What it returns |
+|---|---|
+| [`/api/rate`](https://lokalpay.vercel.app/api/rate) | JSON: live Textile FX rates from USD₮ to cNGN, IDRX, wARS and wCOP, and the current limits |
+| [`/api/status?agent=1`](https://lokalpay.vercel.app/api/status?agent=1) | JSON: the agent's last heartbeat, block lag, CELO gas and auto-refund setting |
+| [`/proof-users.json`](https://lokalpay.vercel.app/proof-users.json) | JSON: real (non-team) payouts, by receipt number |
+| [`/proof-team.json`](https://lokalpay.vercel.app/proof-team.json) | JSON: the builder's own labelled test payouts |
+
+The pages themselves (`/`, `/features.html`, `/proof.html` and the rest) are static HTML. Payments and receipts are
+read from Celo in the visitor's browser, so a crawler sees the page shell, not the live figures; the JSON endpoints
+above give those directly.
+
 ## Docs
 
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): the site, tags, pots, a payout end to end, limits, the code map, the deploy gate, tests

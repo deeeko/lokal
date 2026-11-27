@@ -1,0 +1,26 @@
+# LokalPay
+
+> Send dollars on Celo; the recipient receives their local money (naira, rupiah or pesos) in their own wallet. A payer pays an @tag or link from their own wallet, the LokalTags or LokalPots contract checks every limit before money moves, and an agent converts on Textile FX and pays the recipient. Celo mainnet only.
+
+## Public endpoints (no login, no browser needed)
+
+- [Live rates](https://lokalpay.vercel.app/api/rate): JSON. Textile FX rates for USD₮ to cNGN, IDRX, wARS and wCOP, and the current limits
+- [Agent status](https://lokalpay.vercel.app/api/status?agent=1): JSON. The agent's last heartbeat, block lag, CELO gas balance and whether auto-refund is on
+- [Real users](https://lokalpay.vercel.app/proof-users.json): JSON. Receipts of real (non-team) payouts
+- [Team tests](https://lokalpay.vercel.app/proof-team.json): JSON. Receipts of the builder's own labelled test payouts
+- [Proof page](https://lokalpay.vercel.app/proof.html): every real payout, read live from Celo in the browser
+
+## Onchain (Celo mainnet, chain 42220)
+
+- LokalTags: 0xFF2f8ADC0c97B6E40b201848d378C11325bC7187 (source verified)
+- LokalPots: 0x60F76b5d1dc6a9B1e208fB93f6C0B05De51a7DAF (source verified)
+- Agent wallet: 0x8a695cf54CB44753c8b784EB36d266f748617a1e
+- ERC-8004 agent ID: 10079
+- ERC-8021 attribution tag on every transaction: celo_7360953d1b53
+
+## Docs
+
+- [Repository and README](https://github.com/deeeko/lokal)
+- [Features](https://lokalpay.vercel.app/features.html)
+- [Docs](https://lokalpay.vercel.app/docs.html)
+- [Demo video](https://youtu.be/ooTuNiu4xzM)

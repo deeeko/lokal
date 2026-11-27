@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Machine-readable summary for agents and automated reviewers
+# https://lokalpay.vercel.app/llms.txt
