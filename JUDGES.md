@@ -182,7 +182,7 @@ No money is needed to see every screen up to the signature.
 | Safety stops | If something unexpected happens (a payout fails, a swap brings nothing, a tag is missing) the agent stops on purpose, records why, and stays stopped until a person checks | **Built and tested** (none has happened on the server) |
 | Plain-English payments (`ask`) | `ask "send $10 to ada"` turns into a payment to an allow-listed contact. It works without any AI key; with one, a language model reads looser phrasing. The model only ever returns a name and a number, and the code enforces every limit | **Built and tested**, command line only |
 | Payment requests | The operator creates a request for an exact amount that expires (48 h by default) | **Built and tested** |
-| Alerts | Telegram or webhook messages for payouts, refusals, low gas and stops | **Built and tested**, not switched on yet |
+| Alerts | Telegram or webhook messages for payouts, refusals, low gas and stops | **Built and tested** |
 | `doctor` | Checks the agent's setup, keys, gas and connections in one command | **Built and tested** |
 | Low-gas warning | Warns when the agent holds less than 3 CELO. It holds about 14 CELO now | **Live** |
 | ERC-8004 registration | `register` writes the agent's card onchain | **Live**: agentId 10079 |
@@ -325,4 +325,3 @@ Said plainly, so nothing is a surprise:
   limit is `maxUsd.wcop` in [`/api/rate`](https://lokalpay.vercel.app/api/rate).
 - **The agent holds a payment while it converts it.** Only for the seconds between the contract forwarding it and the
   payout; the contracts themselves hold nothing.
-- **Alerts aren't switched on yet.** The code is built and tested; the Telegram bot still has to be set up.

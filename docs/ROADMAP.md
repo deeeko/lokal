@@ -14,7 +14,7 @@ Three labels, used here and in the README's "What's real" table. The site lists 
   straight through; receipts, the [Proof page](ARCHITECTURE.md#proof) and Verify. First real user: Alvo, Lagos
   (NP-B50B-488C, NP-FFF1-C937). The full labelled list is in [JUDGES.md](../JUDGES.md#everything-lokalpay-has).
 - **Built, not yet used on mainnet:** payment links and Get paid,
-  [pots and the Spray Wall](ARCHITECTURE.md#pots-one-link-many-guests), refunds, ratings, alerts, the `lokal` command
+  [pots and the Spray Wall](ARCHITECTURE.md#pots-one-link-many-guests), refunds, ratings, the `lokal` command
   and paying from CELO (operator).
 - **Planned:** Pay with CELO for payers, "Pay for me" (a payment link
   with a title, note and share message, for someone else to pay), MiniPay mode.
