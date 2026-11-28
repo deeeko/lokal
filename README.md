@@ -13,6 +13,7 @@ naira, rupiah or pesos into their own wallet. Two contracts refuse any payment o
 
 **[Live app](https://lokalpay.vercel.app)** ·
 **[Demo video](https://youtu.be/ooTuNiu4xzM)** (1:53) ·
+**[For judges](JUDGES.md)** ·
 [X @uselokalpay](https://x.com/uselokalpay) ·
 [Proof page](https://lokalpay.vercel.app/proof.html) ·
 [LokalTags](https://celoscan.io/address/0xFF2f8ADC0c97B6E40b201848d378C11325bC7187) ·
@@ -63,7 +64,7 @@ Each row links to its proof on Celo. Everything LokalPay does is on the
 | Contract admin handed to a separate wallet (two-step) | **Live** | [accepted tx](https://celoscan.io/tx/0xbee2dd85e15c4fb664397f06e1a0a932214c6c6a65aaa3aa99e599905c2ec3a6) |
 | First LokalPay tag claimed through LokalTags | **Live** | [claim tx](https://celoscan.io/tx/0x4ae77beb9f14d14a1c39525e617a0d6cc50fd08fab68d07a2f3106c8f5e0aeec) |
 | ERC-8004 identity, agentId 10079, card updated to LokalPay | **Live** | [register tx](https://celoscan.io/tx/0x080d54275f02a722a3b0daa408f02a1af760e29f9e39092a9a48d22b964cf62e) · [card update tx](https://celoscan.io/tx/0x089fcfc3ef04a5ae2fcb4c016f11d37c7955bd4e86bc32fae18eaa1732c1b327) |
-| Payouts in naira, rupiah and pesos; tags, links, pots, refunds, "Who am I paying?" | **Built, not yet used on mainnet** | 379 tests and 135 contract tests, run on every push |
+| Payment links, pots and the Spray Wall, refunds, ratings, alerts, the `lokal` command | **Built, not yet used on mainnet** | 421 tests and 135 contract tests, run on every push |
 | Builder test, 23 Nov: $20 USD₮ paid out as naira, rupiah, Argentine and Colombian pesos (USD₮ → local) | **Live (team test)** | [NP-EF99-2C95](https://lokalpay.vercel.app/receipt.html#NP-EF99-2C95) · [NP-E8A2-959C](https://lokalpay.vercel.app/receipt.html#NP-E8A2-959C) · [NP-6AB5-87F9](https://lokalpay.vercel.app/receipt.html#NP-6AB5-87F9) · [NP-602D-CA67](https://lokalpay.vercel.app/receipt.html#NP-602D-CA67) |
 | Builder test, 23 Nov: all four currencies converted back to dollars (local → USD₮) | **Live (team test)** | [NP-F09B-0274](https://lokalpay.vercel.app/receipt.html#NP-F09B-0274) · [NP-1361-7AB3](https://lokalpay.vercel.app/receipt.html#NP-1361-7AB3) · [NP-D80E-D9FD](https://lokalpay.vercel.app/receipt.html#NP-D80E-D9FD) · [NP-E3F0-6491](https://lokalpay.vercel.app/receipt.html#NP-E3F0-6491) |
 | **First real user (named): Alvo, Lagos**: a loan repaid to him through LokalPay, $4 as naira (₦5,811.35 cNGN, converted on Textile FX) and $15 in dollars, to his own wallet tag @alvo | **Live** | [NP-B50B-488C](https://lokalpay.vercel.app/receipt.html#NP-B50B-488C) · [NP-FFF1-C937](https://lokalpay.vercel.app/receipt.html#NP-FFF1-C937) |
@@ -119,8 +120,8 @@ chain: [docs/PROTOCOL.md](docs/PROTOCOL.md#currencies).
 
 - **Non-custodial.** You pay from your own wallet. The contracts never hold money, and the agent holds a payment only
   while it converts it.
-- **Limits in code.** $25 per payment and $25 per person per day, checked by the contract before money moves; the
-  agent adds its own cap of $100 a day.
+- **Limits in code.** $25 per payment, $25 per person per day and $250 a day overall, checked by the contract before
+  money moves; the agent re-checks with its own caps.
 - **Exactly once.** Every payment is recorded before it is paid, one agent runs at a time, and a refused payment can
   only go back to the wallet that sent it.
 - **No surprises on price.** A firm quote at most 3% worse than the preview, exact approvals, and a payout of what the
@@ -180,6 +181,7 @@ above give those directly.
 
 ## Docs
 
+- [JUDGES.md](JUDGES.md): what to check, in order, and everything LokalPay has, each part labelled Live, Built and tested, or Planned
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): the site, tags, pots, a payout end to end, limits, the code map, the deploy gate, tests
 - [CONTRACTS.md](docs/CONTRACTS.md): LokalTags and LokalPots, the 28-step demo, addresses and admin
 - [PROTOCOL.md](docs/PROTOCOL.md): currencies, LokalPay tag rules and the cutover, payment links, contract payments; the wire specs [NTAGS.md](docs/spec/NTAGS.md) and [REGISTRATIONS.md](docs/spec/REGISTRATIONS.md)

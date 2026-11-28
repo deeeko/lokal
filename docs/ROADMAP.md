@@ -8,13 +8,14 @@ Three labels, used here and in the README's "What's real" table. The site lists 
 **Built, not yet used on mainnet** (code and tests exist; no real payout yet) ·
 **Planned** (not built yet).
 
-- **Live:** the LokalTags and LokalPots contracts are deployed and verified on mainnet (see
-  [The contract has the final say](CONTRACTS.md#the-contract-has-the-final-say)). No real user payout yet.
-- **Built, not yet used on mainnet:** payouts in naira, rupiah and pesos (plus naira → dollars), the currency
-  picker, LokalPay tags, **paying and claiming through the contracts** (site, `lokal` command and autopilot), payment
-  links, Get paid, [pots and the Spray Wall](ARCHITECTURE.md#pots-one-link-many-guests), autopilot, refunds, the `lokal` command,
-  receipts and reviews, the [cash-out guide](https://lokalpay.vercel.app/cash-out.html), the sign-up gateway, the
-  dashboard, "Add to wallet", the ["Who am I paying?"](ARCHITECTURE.md#who-am-i-paying) card and the [Proof page](ARCHITECTURE.md#proof).
+- **Live:** the LokalTags and LokalPots contracts, deployed and verified on mainnet (see
+  [The contract has the final say](CONTRACTS.md#the-contract-has-the-final-say)); claiming and paying tags through
+  LokalTags; autopilot on a 24/7 server; payouts in naira, rupiah and both pesos, all four back to dollars, and dollars
+  straight through; receipts, the [Proof page](ARCHITECTURE.md#proof) and Verify. First real user: Alvo, Lagos
+  (NP-B50B-488C, NP-FFF1-C937). The full labelled list is in [JUDGES.md](../JUDGES.md#everything-lokalpay-has).
+- **Built, not yet used on mainnet:** payment links and Get paid,
+  [pots and the Spray Wall](ARCHITECTURE.md#pots-one-link-many-guests), refunds, ratings, alerts, the `lokal` command
+  and paying from CELO (operator).
 - **Planned:** Pay with CELO for payers, "Pay for me" (a payment link
   with a title, note and share message, for someone else to pay), MiniPay mode.
 
@@ -43,8 +44,9 @@ Three labels, used here and in the README's "What's real" table. The site lists 
 
 The operator steps for these are in [docs/RUNBOOK.md](RUNBOOK.md).
 
-- [ ] Tagged mainnet run: USD₮ to cNGN to a named recipient, with transaction links
-- [ ] Named user and what they used it for
+- [x] Tagged mainnet run: USD₮ to cNGN to a named recipient, with transaction links (NP-B50B-488C)
+- [x] Named user and what they used it for (Alvo, Lagos: a loan repaid)
+- [ ] More real users
 
 **Next**
 
