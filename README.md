@@ -191,7 +191,7 @@ above give those directly.
 - [SERVER.md](docs/SERVER.md): running the agent 24/7 on a free Linux server (systemd, moving from the PC, safety stops)
 - [WHO-ENFORCES-WHAT.md](docs/WHO-ENFORCES-WHAT.md), [REFUNDS.md](docs/REFUNDS.md), [CASH-OUT.md](docs/CASH-OUT.md)
 - [ROADMAP.md](docs/ROADMAP.md) (status, roadmap, business model) and [CHANGELOG.md](docs/CHANGELOG.md)
-- [SECURITY.md](SECURITY.md): reporting a vulnerability
+- [SECURITY.md](.github/SECURITY.md): reporting a vulnerability
 
 ## License
 

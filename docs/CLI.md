@@ -209,7 +209,7 @@ Every command with `--execute` (`watch`, `pay`, `ask`, `retry`, `register`, `ref
 refused while another one holds it; add `--clear-stale-lock` only after checking that no agent is running.
 
 `ID` is `usdt-cngn` (default) or `cngn-usdt`; `pay` and `quote` also take `celo-cngn`. `NAME` must be in `contacts.json`
-(case-insensitive): copy `contacts.example.json` to `contacts.json` and add recipients, plus any `own_wallets` the agent
+(case-insensitive): copy `docs/examples/contacts.example.json` to `contacts.json` and add recipients, plus any `own_wallets` the agent
 must never pay. Autopilot needs a computer that keeps `watch --execute` running with the key file; it pays only while
 running. [SERVER.md](SERVER.md) runs it as a systemd service on a Linux server.
 

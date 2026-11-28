@@ -28,7 +28,7 @@ export function loadContacts() {
   // Read the env at call time too, so tests can point at a temporary file without touching the real one.
   const file = process.env.CONTACTS_FILE ?? CONTACTS_FILE;
   if (!fs.existsSync(file)) {
-    throw new Error(`No contacts file. Copy contacts.example.json to contacts.json and add your recipient.`);
+    throw new Error(`No contacts file. Copy docs/examples/contacts.example.json to contacts.json and add your recipient.`);
   }
   return parseContacts(JSON.parse(fs.readFileSync(file, "utf8")));
 }

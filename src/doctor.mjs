@@ -105,7 +105,7 @@ export async function runDoctor(overrides = {}) {
     } catch (e) { if (e?.code !== "ENOENT") bad.push(`receipts.jsonl (${e.code ?? e.message})`); }
     parsed.receipts = receipts;
     if (bad.length) return fail("state files", `can't be read: ${bad.join(", ")}`);
-    if (missing.length) return warn("state files", `missing: ${missing.join(", ")} (copy contacts.example.json to contacts.json)`);
+    if (missing.length) return warn("state files", `missing: ${missing.join(", ")} (copy docs/examples/contacts.example.json to contacts.json)`);
     return pass("state files", "every state file that exists parses");
   });
 

@@ -8,7 +8,7 @@ setting is in [CLI.md](CLI.md).
 
 1. `node src/agent.mjs keygen` creates the agent wallet; the key stays in `~/.celo-naira-agent/agent.json`, outside the
    repo, and is never printed.
-2. Copy `contacts.example.json` to `contacts.json` for allow-listed recipients and the `own_wallets` the agent must
+2. Copy `docs/examples/contacts.example.json` to `contacts.json` for allow-listed recipients and the `own_wallets` the agent must
    never pay.
 3. Optional: a status secret (`NP_STATUS_SECRET`, or the file `status-secret` next to the agent key) and alerts
    (`ALERT_TELEGRAM_TOKEN` + `ALERT_TELEGRAM_CHAT_ID`, or `ALERT_WEBHOOK_URL`). Check everything with

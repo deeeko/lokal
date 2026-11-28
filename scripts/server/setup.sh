@@ -110,7 +110,7 @@ elif [ -f "$MANIFEST_NAME" ]; then
   for f in $names; do ok "$f matches the PC"; done
   MIGRATE_NOW=1
 elif [ "$FRESH" = 1 ]; then
-  [ -f contacts.json ] || die "contacts.json is missing (copy contacts.example.json to contacts.json and fill it in)."
+  [ -f contacts.json ] || die "contacts.json is missing (copy docs/examples/contacts.example.json to contacts.json and fill it in)."
   warn "--fresh-start: no records from a PC. This is ONLY allowed for an agent that has never run anywhere."
   MIGRATE_NOW=1
 else
